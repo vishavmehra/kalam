@@ -1,0 +1,115 @@
+# Kalam mobile smoke test. Runs on the iOS simulator and the Android emulator in
+# .github/workflows/mobile-smoke.yml, and locally with `maestro test .maestro/smoke.yaml`.
+#
+# Needs no network and no cloud AI: "Expense tracker in ₹" is one of the Create examples and is built from a
+# deterministic template on the device (the "Tailor order book" example is a medium request that goes to the
+# cloud, and "Calculator" stores no records, so neither fits a no-network "add a record" check).
+#
+# Selectors: testIDs where the app has them (onboarding-continue, create-app, save-to-shelf), otherwise
+# accessibility labels or visible text as regexes, so small copy changes do not break the flow.
+# Maestro text matching is a full-string regex.
+appId: com.kalam.app
+name: Kalam smoke
+---
+- launchApp:
+    clearState: true
+
+# 1. Onboarding. A cold Release start on a CI simulator can take a while (fonts and settings hold the splash).
+- extendedWaitUntil:
+    visible: "Draw the app.*"
+    timeout: 120000
+- takeScreenshot: 01-onboarding
+- scrollUntilVisible:
+    element:
+      id: onboarding-continue
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    id: onboarding-continue
+
+# 2. The empty App Shelf.
+- extendedWaitUntil:
+    visible: "Your shelf.*"
+    timeout: 30000
+- takeScreenshot: 02-shelf-empty
+
+# 3. Create, from the expense tracker example.
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "Describe the app you want to create.*"
+    timeout: 30000
+- takeScreenshot: 03-create
+- scrollUntilVisible:
+    element: "Expense tracker.*"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Expense tracker.*"
+- takeScreenshot: 04-create-example-filled
+- tapOn:
+    id: create-app
+
+# 4. Review (template route, built on this device), then save. Phones show "What Kalam understood" as a tab,
+# wider screens as a heading.
+- extendedWaitUntil:
+    visible: ".*Kalam understood.*"
+    timeout: 90000
+- takeScreenshot: 05-review
+- scrollUntilVisible:
+    element:
+      id: save-to-shelf
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: save-to-shelf
+
+# 5. The built app: add one record.
+- extendedWaitUntil:
+    visible: "Add expense.*"
+    timeout: 30000
+- takeScreenshot: 06-app-open
+- tapOn: "Add expense.*"
+- extendedWaitUntil:
+    visible: "Save expense.*"
+    timeout: 15000
+# The number field's accessibility label is "Amount (₹)"; its visible label reads "Amount (₹) (required)".
+- tapOn: "Amount( \\([^)]+\\))?"
+- inputText: "250"
+- hideKeyboard
+- takeScreenshot: 07-record-form
+- scrollUntilVisible:
+    element: "Save expense.*"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Save expense.*"
+- extendedWaitUntil:
+    visible: "Entries: 1"
+    timeout: 15000
+- takeScreenshot: 08-record-added
+
+# 6. Back to the shelf: the new app is listed.
+- tapOn: "Back to your apps"
+- extendedWaitUntil:
+    visible: "Your shelf.*"
+    timeout: 15000
+- takeScreenshot: 09-shelf-with-app
+
+# 7. Settings, including the on-device AI status (Gemini Nano on Android, Apple Foundation Models on iOS).
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Access modes.*"
+    timeout: 15000
+- takeScreenshot: 10-settings
+- scrollUntilVisible:
+    element: "On-device AI.*"
+    direction: DOWN
+    timeout: 30000
+    centerElement: true
+- takeScreenshot: 11-settings-on-device-ai
+
+# 8. Kalam Bazaar. It reads listings from Firestore, so on a runner it may show an error or empty state; the
+# check is only that the tab opens.
+- tapOn: "Bazaar"
+- extendedWaitUntil:
+    visible: "Kalam Bazaar.*"
+    timeout: 30000
+- takeScreenshot: 12-bazaar
