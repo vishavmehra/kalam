@@ -1,0 +1,126 @@
+{
+  "name": "Ramesh Tailors",
+  "description": "Customers, stitching orders and measurements for a small tailoring shop.",
+  "icon": "scissors",
+  "themePreset": "warm_paper",
+  "lang": "en",
+  "collections": [
+    {
+      "id": "customers",
+      "label": "Customers",
+      "fields": [
+        { "id": "name", "type": "text", "label": "Customer name", "required": true },
+        { "id": "phone", "type": "text", "label": "Phone" },
+        { "id": "notes", "type": "text", "label": "Notes", "multiline": true }
+      ]
+    },
+    {
+      "id": "orders",
+      "label": "Orders",
+      "fields": [
+        { "id": "customer", "type": "text", "label": "Customer", "required": true },
+        { "id": "garment", "type": "enum", "label": "Garment", "options": ["Kurta", "Shirt", "Pant", "Blouse", "Sherwani"], "required": true },
+        { "id": "chest", "type": "number", "label": "Chest", "unit": "in", "min": 0, "max": 80 },
+        { "id": "waist", "type": "number", "label": "Waist", "unit": "in", "min": 0, "max": 80 },
+        { "id": "sleeve", "type": "number", "label": "Sleeve", "unit": "in", "min": 0, "max": 40 },
+        { "id": "length", "type": "number", "label": "Length", "unit": "in", "min": 0, "max": 80 },
+        { "id": "delivery", "type": "date", "label": "Delivery date" },
+        { "id": "total", "type": "number", "label": "Total price", "min": 0 },
+        { "id": "advance", "type": "number", "label": "Advance paid", "min": 0, "defaultValue": "0" },
+        { "id": "status", "type": "enum", "label": "Status", "options": ["Pending", "Stitching", "Ready", "Delivered"], "defaultValue": "Pending" }
+      ]
+    }
+  ],
+  "screens": [
+    {
+      "id": "home",
+      "title": "Orders",
+      "components": [
+        { "id": "pending_count", "type": "stat", "label": "Orders not delivered", "expr": "count(filter(orders, status != 'Delivered'))", "format": "integer" },
+        { "id": "advance_total", "type": "stat", "label": "Advance collected", "expr": "sum(orders.advance)", "format": "currency", "currency": "INR" },
+        { "id": "orders_list", "type": "list", "label": "Orders", "source": "orders", "primary": "customer", "secondaryField": "delivery", "sortField": "delivery", "sortDirection": "asc", "emptyText": "No orders yet", "detailScreen": "order_detail" },
+        { "id": "new_order_button", "type": "bigButton", "label": "New order", "action": "go_new_order" },
+        { "id": "customers_button", "type": "bigButton", "label": "Customers", "action": "go_customers", "tone": "secondary" }
+      ]
+    },
+    {
+      "id": "new_order",
+      "title": "New order",
+      "form": "orders",
+      "components": [
+        { "id": "scan_slip", "type": "photo", "label": "Scan measurement slip", "aiBlock": "slip_to_order" },
+        { "id": "customer_input", "type": "textInput", "label": "Customer", "field": "customer", "required": true },
+        { "id": "garment_choice", "type": "choice", "label": "Garment", "field": "garment", "required": true },
+        { "id": "chest_input", "type": "number", "label": "Chest (in)", "field": "chest" },
+        { "id": "waist_input", "type": "number", "label": "Waist (in)", "field": "waist" },
+        { "id": "sleeve_input", "type": "number", "label": "Sleeve (in)", "field": "sleeve" },
+        { "id": "length_input", "type": "number", "label": "Length (in)", "field": "length" },
+        { "id": "delivery_input", "type": "date", "label": "Delivery date", "field": "delivery" },
+        { "id": "total_input", "type": "number", "label": "Total price", "field": "total" },
+        { "id": "advance_input", "type": "number", "label": "Advance paid", "field": "advance" },
+        { "id": "save_order_button", "type": "bigButton", "label": "Save order", "action": "save_order" }
+      ]
+    },
+    {
+      "id": "order_detail",
+      "title": "Order",
+      "form": "orders",
+      "components": [
+        { "id": "detail_customer", "type": "textInput", "label": "Customer", "field": "customer" },
+        { "id": "detail_status", "type": "choice", "label": "Status", "field": "status" },
+        { "id": "detail_delivery", "type": "date", "label": "Delivery date", "field": "delivery" },
+        { "id": "detail_advance", "type": "number", "label": "Advance paid", "field": "advance" },
+        { "id": "update_order_button", "type": "bigButton", "label": "Save changes", "action": "update_order" },
+        { "id": "delete_order_button", "type": "bigButton", "label": "Delete order", "action": "delete_order", "tone": "danger" }
+      ]
+    },
+    {
+      "id": "customers",
+      "title": "Customers",
+      "components": [
+        { "id": "customer_list", "type": "list", "label": "Customers", "source": "customers", "primary": "name", "secondaryField": "phone", "emptyText": "No customers yet" },
+        { "id": "add_customer_button", "type": "bigButton", "label": "Add customer", "action": "go_new_customer" },
+        { "id": "back_button", "type": "bigButton", "label": "Back to orders", "action": "go_home", "tone": "secondary" }
+      ]
+    },
+    {
+      "id": "new_customer",
+      "title": "New customer",
+      "form": "customers",
+      "components": [
+        { "id": "name_input", "type": "textInput", "label": "Customer name", "field": "name", "required": true },
+        { "id": "phone_input", "type": "textInput", "label": "Phone", "field": "phone" },
+        { "id": "notes_input", "type": "textInput", "label": "Notes", "field": "notes", "multiline": true },
+        { "id": "save_customer_button", "type": "bigButton", "label": "Save customer", "action": "saveCustomer" }
+      ]
+    }
+  ],
+  "initialScreen": "home",
+  "actions": [
+    { "id": "go_new_order", "type": "navigate", "screen": "new_order" },
+    { "id": "go_customers", "type": "navigate", "screen": "customers" },
+    { "id": "go_new_customer", "type": "navigate", "screen": "new_customer" },
+    { "id": "go_home", "type": "navigate", "screen": "home" },
+    { "id": "save_order", "type": "insert", "collection": "orders", "thenSpeak": "Order saved", "thenNavigate": "home" },
+    { "id": "update_order", "type": "update", "collection": "orders", "thenFeedback": "Order updated", "thenNavigate": "home" },
+    { "id": "delete_order", "type": "delete", "collection": "orders", "confirm": "Delete this order? This cannot be undone.", "thenNavigate": "home" },
+    { "id": "saveCustomer", "type": "insert", "collection": "customers", "thenFeedback": "Customer saved", "thenNavigate": "customers" }
+  ],
+  "aiBlocks": [
+    {
+      "id": "slip_to_order",
+      "kind": "extractFromPhoto",
+      "prompt": "Read the handwritten tailoring slip and extract the customer name, garment, chest, waist, sleeve, length, delivery date and advance paid.",
+      "target": "orders",
+      "fields": ["customer", "garment", "chest", "waist", "sleeve", "length", "delivery", "advance"]
+    }
+  ],
+  "intents": [
+    { "action": "save_order", "phrases": ["save", "done", "rakh do", "order save karo"] },
+    { "action": "go_new_order", "phrases": ["new order", "naya order"] },
+    { "action": "delete_order", "phrases": ["delete order", "order hatao"] },
+    { "action": "go_customers", "phrases": ["customers", "grahak"] },
+    { "action": "saveCustomer", "phrases": ["save customer"] }
+  ],
+  "assumptions": ["Measurements are in inches.", "Prices are in rupees."]
+}

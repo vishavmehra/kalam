@@ -1,0 +1,197 @@
+import DeviceCheck
+import ExpoModulesCore
+import FirebaseAppCheck
+import FirebaseCore
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
+
+/**
+ Apple Foundation Models on the device, plus App Check tokens from App Attest. Sources, read 2026-11-25:
+  - https://developer.apple.com/documentation/foundationmodels/systemlanguagemodel (iOS 26.0+, availability
+    and its unavailable reasons, supportedLanguages)
+  - https://firebase.google.com/docs/ai-logic/hybrid/ios/get-started (on-device needs Apple Intelligence on,
+    text only, about 4096 tokens, foreground only; the app cannot start the model download)
+  - firebase-ios-sdk FirebaseAI/CHANGELOG.md 13.0.0 (Firebase's own SystemLanguageModel/HybridModel wrapper
+    was removed in favour of Apple's Foundation Models framework, used directly here)
+  - https://firebase.google.com/docs/app-check/ios/app-attest-provider (App Attest, DeviceCheck fallback,
+    factory set before the Firebase app is configured)
+
+ Choosing between the device and the cloud stays in Firebase AI Logic's JS SDK (firebase/ai), as on the web
+ and Android. This module only runs SystemLanguageModel.default, so everything generate() returns was
+ produced on this iPhone or iPad. Not compiled or device-tested yet: see modules/kalam-apple/README.md.
+ */
+public final class KalamAppleModule: Module {
+  private static let appName = "kalam"
+  // Error codes on-device.ios.ts maps to Prompt API error names.
+  private static let notSupported = "ERR_APPLE_NOT_SUPPORTED"
+  private static let notAllowed = "ERR_APPLE_NOT_ALLOWED"
+  private static let tooLarge = "ERR_APPLE_TOO_LARGE"
+  private static let failed = "ERR_APPLE_FAILED"
+
+  private let requests = RunningRequests()
+
+  public func definition() -> ModuleDefinition {
+    Name("KalamApple")
+
+    AsyncFunction("availability") { () -> [String: Any] in
+      Self.availability()
+    }
+
+    AsyncFunction("generate") { (requestId: String, options: GenerateOptions) async throws -> [String: String] in
+      let prompt = options.prompt
+      let temperature = options.temperature
+      let maxTokens = options.maxOutputTokens
+      let task = Task { try await Self.respond(prompt: prompt, temperature: temperature, maxTokens: maxTokens) }
+      self.requests.add(requestId, task)
+      defer { self.requests.remove(requestId) }
+      let text = try await task.value
+      return ["text": text, "source": "on_device"]
+    }
+
+    // ponytail: a cancel that arrives before generate() registered its task is lost; the JS side has already
+    // rejected the request, so the only cost is one wasted on-device answer.
+    Function("cancel") { (requestId: String) -> Bool in
+      self.requests.cancel(requestId)
+    }
+
+    // Public EXPO_PUBLIC_FIREBASE_* identifiers, no secrets. Safe to call more than once.
+    Function("installAppAttest") { (config: FirebaseConfig) in
+      Self.installAppAttest(config)
+    }
+
+    AsyncFunction("getAppCheckToken") { (forceRefresh: Bool) async throws -> [String: Any] in
+      guard let app = FirebaseApp.app(name: Self.appName), let appCheck = AppCheck.appCheck(app: app) else {
+        throw Exception(name: "AppCheckNotReady", description: "App Attest was not set up before asking for a token.", code: Self.failed)
+      }
+      let token = try await appCheck.token(forcingRefresh: forceRefresh)
+      return ["token": token.token, "expireTimeMillis": token.expirationDate.timeIntervalSince1970 * 1000]
+    }
+
+    OnDestroy {
+      self.requests.cancelAll()
+    }
+  }
+
+  /// availability: available | downloading | unavailable, with the reason and the supported languages.
+  private static func availability() -> [String: Any] {
+    #if canImport(FoundationModels)
+    if #available(iOS 26.0, *) {
+      let model = SystemLanguageModel.default
+      switch model.availability {
+      case .available:
+        let languages = Set(model.supportedLanguages.compactMap { $0.languageCode?.identifier.lowercased() })
+        return ["availability": "available", "languages": Array(languages)]
+      case .unavailable(.deviceNotEligible):
+        return ["availability": "unavailable", "reason": "deviceNotEligible"]
+      case .unavailable(.appleIntelligenceNotEnabled):
+        return ["availability": "unavailable", "reason": "appleIntelligenceNotEnabled"]
+      case .unavailable(.modelNotReady):
+        // Apple: "the model isn't ready because it's downloading or because of other system reasons".
+        return ["availability": "downloading", "reason": "modelNotReady"]
+      case .unavailable:
+        return ["availability": "unavailable", "reason": "unknown"]
+      @unknown default:
+        return ["availability": "unavailable", "reason": "unknown"]
+      }
+    }
+    #endif
+    return ["availability": "unavailable", "reason": "osTooOld"]
+  }
+
+  /// One single-turn prompt on SystemLanguageModel.default. Greedy decoding unless a temperature is given.
+  private static func respond(prompt: String, temperature: Double?, maxTokens: Int?) async throws -> String {
+    #if canImport(FoundationModels)
+    if #available(iOS 26.0, *) {
+      let model = SystemLanguageModel.default
+      guard model.isAvailable else {
+        throw Exception(name: "ModelUnavailable", description: "Apple Intelligence is not ready on this device.", code: notSupported)
+      }
+      let session = LanguageModelSession(model: model)
+      let options = GenerationOptions(
+        sampling: temperature == nil ? .greedy : nil,
+        temperature: temperature,
+        maximumResponseTokens: maxTokens
+      )
+      do {
+        return try await session.respond(to: prompt, options: options).content
+      } catch let error as LanguageModelSession.GenerationError {
+        throw promptException(error)
+      }
+    }
+    #endif
+    throw Exception(name: "ModelUnavailable", description: "AI on this device needs iOS 26 or later with Apple Intelligence on.", code: notSupported)
+  }
+
+  #if canImport(FoundationModels)
+  @available(iOS 26.0, *)
+  private static func promptException(_ error: LanguageModelSession.GenerationError) -> Exception {
+    switch error {
+    case .exceededContextWindowSize:
+      return Exception(name: "TooLarge", description: "The request is too long for Apple's on-device model.", code: tooLarge)
+    case .unsupportedLanguageOrLocale, .assetsUnavailable:
+      return Exception(name: "NotSupported", description: "Apple's on-device model cannot take this request: \(error.localizedDescription)", code: notSupported)
+    case .rateLimited:
+      return Exception(name: "NotAllowed", description: "iOS is limiting on-device AI right now, for example while Kalam is in the background.", code: notAllowed)
+    default:
+      return Exception(name: "Failed", description: error.localizedDescription, code: failed)
+    }
+  }
+  #endif
+
+  private static func installAppAttest(_ config: FirebaseConfig) {
+    if FirebaseApp.app(name: appName) != nil { return }
+    // The factory must be set before the Firebase app is configured.
+    AppCheck.setAppCheckProviderFactory(KalamAppCheckProviderFactory())
+    let options = FirebaseOptions(googleAppID: config.appId, gcmSenderID: config.gcmSenderId)
+    options.apiKey = config.apiKey
+    options.projectID = config.projectId
+    FirebaseApp.configure(name: appName, options: options)
+  }
+}
+
+/// App Attest where the device supports it, DeviceCheck otherwise (Firebase App Attest guide).
+private final class KalamAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
+  func createProvider(with app: FirebaseApp) -> AppCheckProvider? {
+    if DCAppAttestService.shared.isSupported { return AppAttestProvider(app: app) }
+    return DeviceCheckProvider(app: app)
+  }
+}
+
+/// Running generate() calls by request id, so a JS AbortSignal can cancel them.
+private final class RunningRequests: @unchecked Sendable {
+  private let lock = NSLock()
+  private var tasks: [String: Task<String, Error>] = [:]
+
+  func add(_ id: String, _ task: Task<String, Error>) {
+    lock.lock(); tasks[id] = task; lock.unlock()
+  }
+
+  func remove(_ id: String) {
+    lock.lock(); tasks[id] = nil; lock.unlock()
+  }
+
+  func cancel(_ id: String) -> Bool {
+    lock.lock(); let task = tasks.removeValue(forKey: id); lock.unlock()
+    task?.cancel()
+    return task != nil
+  }
+
+  func cancelAll() {
+    lock.lock(); let all = Array(tasks.values); tasks = [:]; lock.unlock()
+    all.forEach { $0.cancel() }
+  }
+}
+
+struct GenerateOptions: Record {
+  @Field var prompt: String = ""
+  @Field var temperature: Double? = nil
+  @Field var maxOutputTokens: Int? = nil
+}
+
+struct FirebaseConfig: Record {
+  @Field var apiKey: String = ""
+  @Field var projectId: String = ""
+  @Field var appId: String = ""
+  @Field var gcmSenderId: String = ""
+}

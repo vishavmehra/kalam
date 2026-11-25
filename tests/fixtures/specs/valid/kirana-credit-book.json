@@ -1,0 +1,251 @@
+{
+  "id": "kirana_khata",
+  "schemaVersion": "1.0.0",
+  "version": 1,
+  "name": "Kirana Khata",
+  "lang": "hi-IN",
+  "description": "Credit (udhaar) given to customers and payments received.",
+  "icon": {
+    "glyph": "notebook"
+  },
+  "theme": {
+    "primary": "#8A4B14",
+    "radius": 14,
+    "fontScale": 1,
+    "preset": "warm_paper",
+    "background": "#FBF6EC",
+    "fontFamily": "noto_sans"
+  },
+  "collections": {
+    "ledger": {
+      "label": "Entries",
+      "fields": {
+        "customer": {
+          "type": "text",
+          "label": "Customer",
+          "required": true
+        },
+        "amount": {
+          "type": "number",
+          "label": "Amount",
+          "required": true,
+          "min": 0
+        },
+        "kind": {
+          "type": "enum",
+          "label": "Type",
+          "options": [
+            "Credit",
+            "Payment"
+          ],
+          "defaultValue": "Credit"
+        },
+        "date": {
+          "type": "date",
+          "label": "Date",
+          "defaultValue": "today"
+        },
+        "note": {
+          "type": "text",
+          "label": "Note"
+        }
+      }
+    }
+  },
+  "screens": [
+    {
+      "id": "home",
+      "title": "Khata",
+      "children": [
+        {
+          "id": "credit_total",
+          "type": "stat",
+          "label": "Credit given",
+          "expr": "sum(filter(ledger, kind == 'Credit').amount)",
+          "format": "currency",
+          "currency": "INR"
+        },
+        {
+          "id": "paid_total",
+          "type": "stat",
+          "label": "Payments received",
+          "expr": "sum(filter(ledger, kind == 'Payment').amount)",
+          "format": "currency",
+          "currency": "INR"
+        },
+        {
+          "id": "balance",
+          "type": "stat",
+          "label": "Still to collect",
+          "expr": "sum(filter(ledger, kind == 'Credit').amount) - sum(filter(ledger, kind == 'Payment').amount)",
+          "format": "currency",
+          "currency": "INR"
+        },
+        {
+          "id": "ledger_list",
+          "type": "list",
+          "source": "ledger",
+          "primary": "customer",
+          "secondary": "amount",
+          "sort": {
+            "field": "date",
+            "direction": "desc"
+          },
+          "detailScreen": "entry"
+        },
+        {
+          "id": "add_button",
+          "type": "bigButton",
+          "label": "New entry",
+          "action": "go_add"
+        }
+      ]
+    },
+    {
+      "id": "add",
+      "title": "New entry",
+      "form": "ledger",
+      "children": [
+        {
+          "id": "customer_input_new",
+          "type": "textInput",
+          "label": "Customer",
+          "field": "customer",
+          "required": true
+        },
+        {
+          "id": "amount_input_new",
+          "type": "number",
+          "label": "Amount",
+          "field": "amount",
+          "required": true
+        },
+        {
+          "id": "kind_choice_new",
+          "type": "choice",
+          "label": "Type",
+          "field": "kind"
+        },
+        {
+          "id": "date_input_new",
+          "type": "date",
+          "label": "Date",
+          "field": "date"
+        },
+        {
+          "id": "note_input_new",
+          "type": "textInput",
+          "label": "Note",
+          "field": "note"
+        },
+        {
+          "id": "save_button",
+          "type": "bigButton",
+          "label": "Save entry",
+          "action": "save_entry"
+        }
+      ]
+    },
+    {
+      "id": "entry",
+      "title": "Entry",
+      "form": "ledger",
+      "children": [
+        {
+          "id": "customer_input_edit",
+          "type": "textInput",
+          "label": "Customer",
+          "field": "customer",
+          "required": true
+        },
+        {
+          "id": "amount_input_edit",
+          "type": "number",
+          "label": "Amount",
+          "field": "amount",
+          "required": true
+        },
+        {
+          "id": "kind_choice_edit",
+          "type": "choice",
+          "label": "Type",
+          "field": "kind"
+        },
+        {
+          "id": "date_input_edit",
+          "type": "date",
+          "label": "Date",
+          "field": "date"
+        },
+        {
+          "id": "note_input_edit",
+          "type": "textInput",
+          "label": "Note",
+          "field": "note"
+        },
+        {
+          "id": "update_button",
+          "type": "bigButton",
+          "label": "Save changes",
+          "action": "update_entry"
+        },
+        {
+          "id": "delete_button",
+          "type": "bigButton",
+          "label": "Delete entry",
+          "action": "delete_entry",
+          "tone": "danger"
+        }
+      ]
+    }
+  ],
+  "initialScreen": "home",
+  "actions": {
+    "go_add": {
+      "type": "navigate",
+      "screen": "add"
+    },
+    "save_entry": {
+      "type": "insert",
+      "collection": "ledger",
+      "then": {
+        "speak": "Entry saved",
+        "navigate": "home"
+      }
+    },
+    "update_entry": {
+      "type": "update",
+      "collection": "ledger",
+      "record": "selected",
+      "then": {
+        "navigate": "home"
+      }
+    },
+    "delete_entry": {
+      "type": "delete",
+      "collection": "ledger",
+      "record": "selected",
+      "confirm": "Delete this entry?",
+      "then": {
+        "navigate": "home"
+      }
+    }
+  },
+  "aiBlocks": {},
+  "intents": {
+    "save_entry": [
+      "save",
+      "likh lo"
+    ],
+    "go_add": [
+      "new entry",
+      "naya udhaar"
+    ]
+  },
+  "meta": {
+    "author": "Kalam fixtures",
+    "createdAt": 1794950000000,
+    "description": "Shop credit ledger",
+    "source": "manual"
+  }
+}

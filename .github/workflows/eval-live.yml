@@ -1,0 +1,93 @@
+# Live AI evaluation (docs/13 §9, §20.3). Compiles golden requests with the REAL Firebase AI Logic cloud model and
+# writes a dated report with first-pass validity, validity after repair, semantic checks and latency.
+#
+# Protected on purpose:
+#   - Manual only (workflow_dispatch), and only from main. It never runs on a pull request or a schedule.
+#   - Uses the "live-ai" environment. In the repository settings, add required reviewers to that environment, and put
+#     the values below there, not in repository secrets, so no other workflow can read them.
+#   - A hard cap on model requests ("budget") that is enforced on the network call itself, not only counted.
+#   - Test-only inputs: the golden set is synthetic and holds no private data. Output is redacted: keys and the App
+#     Check debug token are never printed, and the report carries no credentials.
+#   - Real money: Firebase AI Logic on the Blaze plan bills each request. A compile can use 2 requests (draft and one
+#     repair). Start with a small budget.
+#
+# Environment "live-ai" needs:
+#   variables: EXPO_PUBLIC_FIREBASE_PROJECT_ID, EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN, EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+#              EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID, EXPO_PUBLIC_AI_BACKEND, EXPO_PUBLIC_AI_LOCATION
+#   secrets:   EXPO_PUBLIC_FIREBASE_API_KEY, EXPO_PUBLIC_FIREBASE_APP_ID, APPCHECK_DEBUG_TOKEN
+#              (register the debug token in Firebase App Check first; App Check is not enforced on the shared project)
+name: Live AI evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      budget:
+        description: 'Most model requests to make (a compile can use 2). Whole number, 1 to 40.'
+        required: true
+        default: '6'
+      only:
+        description: 'Which set to run'
+        required: true
+        default: all
+        type: choice
+        options: [all, text, sketch, audio, mixed]
+
+concurrency:
+  group: live-ai-eval
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    name: Real model run
+    if: github.ref == 'refs/heads/main'
+    environment: live-ai
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPO_PUBLIC_FIREBASE_API_KEY: ${{ secrets.EXPO_PUBLIC_FIREBASE_API_KEY }}
+      EXPO_PUBLIC_FIREBASE_APP_ID: ${{ secrets.EXPO_PUBLIC_FIREBASE_APP_ID }}
+      EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN: ${{ secrets.APPCHECK_DEBUG_TOKEN }}
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_PROJECT_ID }}
+      EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ vars.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+      EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ vars.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+      EXPO_PUBLIC_AI_BACKEND: ${{ vars.EXPO_PUBLIC_AI_BACKEND }}
+      EXPO_PUBLIC_AI_LOCATION: ${{ vars.EXPO_PUBLIC_AI_LOCATION }}
+      EXPO_PUBLIC_SPECIALIST_ENABLED: 'false' # Firebase only, as in the judging build
+      # Inputs go through the environment, never straight into the shell line.
+      BUDGET: ${{ inputs.budget }}
+      ONLY: ${{ inputs.only }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Check the inputs
+        run: |
+          case "$BUDGET" in ''|*[!0-9]*) echo "::error::budget must be a whole number"; exit 1;; esac
+          if [ "$BUDGET" -lt 1 ] || [ "$BUDGET" -gt 40 ]; then echo "::error::budget must be from 1 to 40"; exit 1; fi
+          case "$ONLY" in all|text|sketch|audio|mixed) ;; *) echo "::error::unknown set"; exit 1;; esac
+
+      - name: Run the evaluation
+        run: |
+          args="--live --budget $BUDGET"
+          if [ "$ONLY" != "all" ]; then args="$args --only $ONLY"; fi
+          status=0
+          node scripts/eval.mjs $args > live.txt || status=$?
+          { echo "### Live AI evaluation (budget $BUDGET, set $ONLY)"; echo '```text'; cat live.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          cat live.txt
+          exit $status
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-eval-report
+          path: tests/evaluation/reports/eval-*-live.json
+          if-no-files-found: ignore
+          retention-days: 365

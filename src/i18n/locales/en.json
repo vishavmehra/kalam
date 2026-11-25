@@ -1,0 +1,340 @@
+{
+  "$meta": { "draft": false },
+  "app": {
+    "name": "Kalam",
+    "tagline": "Draw the app you need. Own it forever."
+  },
+  "common": {
+    "back": "Back",
+    "cancel": "Cancel",
+    "done": "Done",
+    "save": "Save",
+    "delete": "Delete",
+    "discard": "Discard",
+    "continue": "Continue",
+    "close": "Close",
+    "tryAgain": "Try again",
+    "edit": "Edit",
+    "open": "Open",
+    "remove": "Remove",
+    "clear": "Clear",
+    "loading": "Loading…",
+    "undo": "Undo",
+    "redo": "Redo",
+    "restore": "Restore",
+    "refresh": "Refresh",
+    "update": "Update",
+    "today": "Today"
+  },
+  "nav": {
+    "shelf": "Shelf",
+    "create": "Create",
+    "bazaar": "Bazaar",
+    "activity": "Activity",
+    "settings": "Settings",
+    "account": "Account",
+    "home": "Kalam, go to your shelf"
+  },
+  "network": {
+    "online": "Online",
+    "offline": "Offline",
+    "offlineAppsWork": "Offline. Apps still work"
+  },
+  "aiStatus": {
+    "ready": "On-device AI ready",
+    "preparing": "Preparing on-device AI",
+    "notDownloaded": "On-device AI not downloaded",
+    "unavailable": "On-device AI unavailable",
+    "checking": "Checking on-device AI"
+  },
+  "source": {
+    "template": "Template",
+    "onDevice": "On-device",
+    "cloud": "Cloud",
+    "specialist": "Cloud specialist",
+    "noAi": "No AI",
+    "offlineNoAi": "Offline. AI unavailable"
+  },
+  "built": {
+    "template": "From a template",
+    "onDevice": "Built on this device",
+    "cloud": "Built in the cloud",
+    "specialist": "Built by a specialist"
+  },
+  "time": {
+    "justNow": "Just now",
+    "minutesAgo": { "one": "{count} min ago", "other": "{count} min ago" },
+    "hoursAgo": { "one": "{count} h ago", "other": "{count} h ago" },
+    "yesterday": "Yesterday",
+    "daysAgo": { "one": "{count} day ago", "other": "{count} days ago" }
+  },
+  "errors": {
+    "generic": "Something went wrong.",
+    "updateReady": "A new version of Kalam is ready.",
+    "notFound": {
+      "title": "This page isn't on your shelf",
+      "description": "The link may be old, or the app it pointed to was deleted from this device.",
+      "cta": "Go to your shelf"
+    }
+  },
+  "shelf": {
+    "title": "Your shelf",
+    "create": "Create an app",
+    "count": { "one": "{count} app", "other": "{count} apps" },
+    "loading": "Opening your shelf…",
+    "loadError": "Could not read your apps from this device.",
+    "pinned": "Pinned",
+    "search": {
+      "label": "Search your apps",
+      "hint": "Search looks at app names and descriptions.",
+      "clear": "Clear search",
+      "none": "No apps match your search."
+    },
+    "empty": {
+      "title": "Nothing on your shelf yet",
+      "cta": "Create your first app",
+      "ideas": "Or start from an idea",
+      "expenses": "A personal expense tracker",
+      "measurements": "A customer measurement book",
+      "habits": "A daily habit counter"
+    },
+    "actions": {
+      "title": "App actions",
+      "pin": "Pin to top",
+      "unpin": "Unpin",
+      "duplicate": "Duplicate",
+      "export": "Export as JSON",
+      "delete": "Delete…"
+    },
+    "toast": {
+      "pinned": "Pinned to the top of your shelf",
+      "unpinned": "Unpinned",
+      "duplicated": "Made a copy of {name}. Records were not copied.",
+      "exported": "Exported {name}"
+    },
+    "delete": {
+      "title": "Delete “{name}”?",
+      "message": "This removes the app, its saved versions and every record stored in it on this device. Backups you exported stay wherever you saved them."
+    }
+  },
+  "create": {
+    "title": "New app",
+    "intro": "Use one way or mix several. Everything you add goes into the same app.",
+    "cta": "Create app",
+    "review": "Review app",
+    "stopped": "Building stopped. Everything you added is still here.",
+    "ready": "Your app is ready to review.",
+    "addDetails": "Add these details to your description:",
+    "backToCreation": "Back to creation",
+    "empty": "Nothing added yet. You can combine several inputs.",
+    "modality": {
+      "label": "Input method",
+      "describe": "Describe",
+      "photo": "Photo or sketch",
+      "voice": "Voice",
+      "video": "Video",
+      "draw": "Draw"
+    },
+    "heading": {
+      "describe": "What should your app do?",
+      "photo": "Show Kalam a sketch or a page",
+      "voice": "Say what you need",
+      "video": "Show how you work today",
+      "draw": "Draw the screens"
+    },
+    "text": {
+      "placeholder": "Describe the app you want to create",
+      "examples": "Start from an example",
+      "exampleHint": "Replaces the description with this example"
+    },
+    "photo": {
+      "choose": "Choose photos",
+      "limit": "Four photos is the limit. Remove one to add another.",
+      "error": "That image could not be opened. Try a JPEG or PNG."
+    },
+    "voice": {
+      "unavailable": "Speech recognition is not available here. Type your idea in Describe instead.",
+      "transcript": "Transcript",
+      "transcriptPlaceholder": "Your words appear here. Fix anything Kalam misheard.",
+      "play": "Play recording",
+      "remove": "Remove voice note"
+    },
+    "video": {
+      "record": "Record a video",
+      "stop": "Stop",
+      "remove": "Remove video",
+      "error": "This video could not be read. Try an MP4 under 60 seconds."
+    },
+    "draw": {
+      "empty": "Draw something or place a component first.",
+      "screens": "Screens",
+      "screensHint": "Each page becomes one screen of your app."
+    },
+    "prefs": {
+      "title": "App preferences",
+      "hint": "Optional. Kalam picks sensible defaults when these are left empty.",
+      "look": "Look",
+      "language": "App language",
+      "currency": "Currency"
+    },
+    "progress": {
+      "title": "Building your app",
+      "preparing": "Getting your inputs ready",
+      "sketching": "Kalam is sketching your app"
+    },
+    "error": {
+      "cloudTitle": "This app needs the cloud to build",
+      "cloudBody": "You are offline, and this idea is too detailed to build on this device. Your input is kept. Try again when you are connected.",
+      "failedTitle": "Kalam could not build this app yet",
+      "generic": "Something went wrong while building. Your input is kept."
+    }
+  },
+  "review": {
+    "title": "Review before saving",
+    "understood": "Here is what Kalam understood",
+    "tabUnderstood": "What Kalam understood",
+    "tabTry": "Try it",
+    "tryHint": "Try it out here. Nothing you enter in the preview is saved.",
+    "noSummary": "Kalam built this app but has no summary for it. Use the preview to check it.",
+    "save": "Save to Shelf",
+    "askChange": "Ask for a change",
+    "changeLabel": "What should be different?",
+    "changePlaceholder": "e.g. add a phone number field and show the total pending at the top",
+    "changeSubmit": "Rebuild with this change",
+    "saved": "{name} saved to your shelf",
+    "saveError": "The app could not be saved. Your preview is still here. Try again.",
+    "discardTitle": "Discard this app?",
+    "discardMessage": "The generated app is thrown away. Everything you described, photographed or drew stays in your session.",
+    "backToInputs": "Back to your inputs",
+    "empty": {
+      "title": "Nothing to review yet",
+      "description": "Describe, sketch or draw an app first. Kalam shows what it understood here before anything is saved.",
+      "cta": "Start a new app"
+    },
+    "section": {
+      "overview": "Overview",
+      "check": "Worth checking",
+      "screens": "Screens",
+      "fields": "Fields",
+      "actions": "Actions",
+      "data": "Data",
+      "ai": "AI features",
+      "noAi": "None. Everything in this app runs without AI.",
+      "assumptions": "Assumptions"
+    }
+  },
+  "run": {
+    "back": "Back to your apps",
+    "opening": "Opening app",
+    "missing": {
+      "title": "This app isn't on this device",
+      "description": "It may have been deleted, or the link came from another device.",
+      "cta": "Go to your apps"
+    }
+  },
+  "edit": {
+    "back": "Back to the app",
+    "describe": "Describe a change",
+    "placeholder": "Add a phone number field, or make the buttons blue",
+    "previewChange": "Preview change",
+    "keep": "Keep change",
+    "proposed": "Proposed change",
+    "proposedHint": "The preview shows it. Nothing is saved until you keep it.",
+    "tools": "Edit tools",
+    "tab": { "preview": "Preview", "theme": "Theme", "history": "History" },
+    "savedAs": "Saved as version {version}",
+    "discarded": "Change discarded",
+    "saveFailed": "Couldn't save the change. Your app is unchanged.",
+    "historyNone": "No saved versions yet."
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Saved on this device. Changes apply straight away.",
+    "saveError": "Could not save that setting. It was changed back.",
+    "access": {
+      "title": "Access modes",
+      "description": "Applied to Kalam and every app you make. Turn on any mix, and turn them off at any time.",
+      "large": "Large",
+      "largeHint": "Bigger text and touch targets in Kalam and your apps.",
+      "highContrast": "High contrast",
+      "highContrastHint": "Stronger text, borders and focus outlines. Overrides app colours.",
+      "simple": "Simple",
+      "simpleHint": "Fewer options on screen. Hides the Activity page.",
+      "readAloud": "Read aloud",
+      "readAloudHint": "Your apps speak headings and results.",
+      "leftHanded": "Left-handed",
+      "leftHandedHint": "Main actions move to the left in your apps. Text direction never changes."
+    },
+    "appearance": {
+      "title": "Appearance",
+      "theme": "Theme",
+      "system": "Match device",
+      "light": "Light",
+      "dark": "Dark",
+      "motion": "Motion",
+      "reduce": "Reduce motion",
+      "full": "Full motion"
+    },
+    "language": {
+      "title": "Language",
+      "description": "Kalam's screens use this language. Existing apps keep their own language.",
+      "studio": "Kalam language",
+      "newApp": "Language for new apps",
+      "speech": "Speech recognition language",
+      "voice": "Read-aloud language",
+      "draft": "This translation is a draft. Some wording may read wrong."
+    },
+    "about": "About",
+    "storage": {
+      "title": "Storage and backup",
+      "description": "Your apps and their records are stored only on this device. Keep a backup file somewhere safe.",
+      "export": "Export backup",
+      "import": "Import backup",
+      "deleteAll": "Delete all apps and data",
+      "deleteTitle": "Delete everything on this device?",
+      "deleteMessage": "Every app, version, record, drawing and the activity log will be permanently removed from this device. This cannot be undone.",
+      "backupSaved": { "one": "Backup saved with {count} app", "other": "Backup saved with {count} apps" },
+      "imported": { "one": "Imported {count} app", "other": "Imported {count} apps" },
+      "importFailed": "Import failed.",
+      "backupFailed": "Could not create a backup.",
+      "deleted": "All apps and data were deleted from this device",
+      "deleteFailed": "Could not delete everything. Some data may remain."
+    },
+    "ai": {
+      "title": "AI and privacy",
+      "mode": "When Kalam builds or edits an app",
+      "hybrid": "Hybrid",
+      "offlineOnly": "Offline only",
+      "useCloud": "Use cloud AI when needed",
+      "onDevice": "On-device AI"
+    }
+  },
+  "activity": {
+    "title": "Activity",
+    "loading": "Reading activity…",
+    "loadError": "Activity could not be read from this device.",
+    "unavailable": "Activity is unavailable",
+    "clear": "Clear history",
+    "recent": "Recent decisions",
+    "clearTitle": "Clear AI activity?",
+    "clearMessage": "This deletes the activity log on this device. Your apps, their data and the on-device AI counter are not affected.",
+    "cleared": "Activity cleared",
+    "empty": {
+      "title": "No AI activity yet",
+      "description": "Create an app to see its steps here. Each one shows if it used a template, Gemini Nano on this device, or Gemini in the cloud, and how long it took.",
+      "cta": "Create an app"
+    }
+  },
+  "onboarding": {
+    "ways": "Ways to describe your app",
+    "type": "Type it",
+    "say": "Say it",
+    "film": "Film it",
+    "snap": "Snap a sketch",
+    "draw": "Draw it",
+    "language": "Your language",
+    "languageHint": "Used for new apps, voice and read-aloud. Change it any time in Settings.",
+    "local": "Everything you make is saved on this device.",
+    "saveError": "Could not save your choice. Try again."
+  }
+}

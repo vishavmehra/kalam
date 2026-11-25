@@ -1,0 +1,220 @@
+{
+  "id": "ramesh_tailors",
+  "schemaVersion": "1.0.0",
+  "version": 1,
+  "name": "Ramesh Tailors",
+  "lang": "hi",
+  "description": "A local tailoring order and measurement book.",
+  "icon": {
+    "glyph": "scissors",
+    "background": "#315C4C",
+    "foreground": "#FFFFFF"
+  },
+  "theme": {
+    "primary": "#315C4C",
+    "secondary": "#D69B52",
+    "background": "#F8F7F2",
+    "radius": 16,
+    "fontScale": 1.1
+  },
+  "collections": {
+    "orders": {
+      "label": "Orders",
+      "fields": {
+        "customer": {
+          "type": "text",
+          "label": "Customer name",
+          "required": true
+        },
+        "garment": {
+          "type": "enum",
+          "label": "Garment",
+          "options": [
+            "kurta",
+            "shirt",
+            "pant"
+          ]
+        },
+        "chest": {
+          "type": "number",
+          "label": "Chest",
+          "unit": "in"
+        },
+        "waist": {
+          "type": "number",
+          "label": "Waist",
+          "unit": "in"
+        },
+        "sleeve": {
+          "type": "number",
+          "label": "Sleeve",
+          "unit": "in"
+        },
+        "delivery": {
+          "type": "date",
+          "label": "Delivery date"
+        },
+        "advance": {
+          "type": "number",
+          "label": "Advance",
+          "min": 0
+        }
+      }
+    }
+  },
+  "screens": [
+    {
+      "id": "home",
+      "title": "Orders",
+      "children": [
+        {
+          "id": "orders_count",
+          "type": "stat",
+          "label": "Orders",
+          "expr": "count(orders)",
+          "format": "integer"
+        },
+        {
+          "id": "upcoming",
+          "type": "stat",
+          "label": "Deliveries still to do",
+          "expr": "count(filter(orders, delivery >= today))",
+          "format": "integer"
+        },
+        {
+          "id": "advance_total",
+          "type": "stat",
+          "label": "Advance collected",
+          "expr": "sum(orders.advance)",
+          "format": "currency",
+          "currency": "INR"
+        },
+        {
+          "id": "orders_list",
+          "type": "list",
+          "source": "orders",
+          "primary": "customer",
+          "secondary": "delivery",
+          "sort": {
+            "field": "delivery",
+            "direction": "asc"
+          },
+          "emptyText": "No orders yet"
+        },
+        {
+          "id": "new_order",
+          "type": "bigButton",
+          "label": "New order",
+          "action": "go_new_order"
+        }
+      ]
+    },
+    {
+      "id": "new",
+      "title": "New order",
+      "form": "orders",
+      "children": [
+        {
+          "id": "customer_input",
+          "type": "textInput",
+          "label": "Customer name",
+          "field": "customer",
+          "required": true
+        },
+        {
+          "id": "garment_choice",
+          "type": "choice",
+          "label": "Garment",
+          "field": "garment",
+          "options": [
+            "kurta",
+            "shirt",
+            "pant"
+          ]
+        },
+        {
+          "id": "chest_input",
+          "type": "number",
+          "label": "Chest",
+          "field": "chest"
+        },
+        {
+          "id": "waist_input",
+          "type": "number",
+          "label": "Waist",
+          "field": "waist"
+        },
+        {
+          "id": "sleeve_input",
+          "type": "number",
+          "label": "Sleeve",
+          "field": "sleeve"
+        },
+        {
+          "id": "delivery_input",
+          "type": "date",
+          "label": "Delivery date",
+          "field": "delivery"
+        },
+        {
+          "id": "advance_input",
+          "type": "number",
+          "label": "Advance payment",
+          "field": "advance"
+        },
+        {
+          "id": "scan_slip",
+          "type": "photo",
+          "label": "Scan measurement slip",
+          "aiBlock": "slip_to_order"
+        },
+        {
+          "id": "save_button",
+          "type": "bigButton",
+          "label": "Save order",
+          "action": "save_order"
+        }
+      ]
+    }
+  ],
+  "initialScreen": "home",
+  "actions": {
+    "go_new_order": {
+      "type": "navigate",
+      "screen": "new"
+    },
+    "save_order": {
+      "type": "insert",
+      "collection": "orders",
+      "then": {
+        "speak": "Order saved",
+        "navigate": "home"
+      }
+    }
+  },
+  "aiBlocks": {
+    "slip_to_order": {
+      "kind": "extractFromPhoto",
+      "target": "orders",
+      "verified": "unverified",
+      "prompt": "Read the handwritten tailoring slip and extract customer name, garment, chest, waist, sleeve, delivery date and advance payment."
+    }
+  },
+  "intents": {
+    "save_order": [
+      "save",
+      "done",
+      "rakh do"
+    ],
+    "go_new_order": [
+      "new order",
+      "naya order"
+    ]
+  },
+  "meta": {
+    "author": "Kalam fixtures",
+    "createdAt": 1794950000000,
+    "description": "Tailoring orders with measurements",
+    "source": "manual"
+  }
+}

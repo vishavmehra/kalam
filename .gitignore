@@ -1,0 +1,99 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+example
+
+# generated native folders
+/ios
+/android
+
+# Server-side provider secrets (Firebase Functions emulator / local only)
+functions/.secret.local
+*.secret.local
+.secret.*
+.env
+.env.*
+!.env.example
+.env.server*
+
+# Signing keys and service-account credentials
+*.keystore
+*.pfx
+*-adminsdk-*.json
+service-account*.json
+serviceAccount*.json
+
+# Extra build outputs (security / QA scratch builds such as dist-w1 or dist-sec)
+dist-*/
+
+# Firebase CLI / emulator logs and cache
+.firebase/
+firebase-debug*.log
+firestore-debug*.log
+ui-debug*.log
+
+# Test artefacts
+test-results/
+playwright-report/
+blob-report/
+
+# Local agent memory
+.remember/
+
+# Local Firebase project binding (points at a private/shared project); copy .firebaserc.example
+.firebaserc
+
+# Local handoff notes and browser-test artefacts (not for the public repo)
+.handoff/
+.playwright-mcp/
+
+# Firebase client config files and service-account keys (docs/11 §10.1). The web app uses EXPO_PUBLIC_* values instead.
+*-service-account.json
+google-services.json
+GoogleService-Info.plist
+
+# Local tool state and temporary scoped type-check configs
+/tsconfig.*.json
+.vitest/
+.vscode/
+
+# Only README.md is published. Design docs, agent notes and generated reports stay local (owner, 2026-11-25).
+*.md
+!/README.md
+tests/evaluation/reports/
+.playwright-mcp/

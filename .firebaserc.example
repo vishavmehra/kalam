@@ -1,0 +1,4 @@
+{
+  "projects": { "default": "YOUR_FIREBASE_PROJECT_ID" },
+  "targets": { "YOUR_FIREBASE_PROJECT_ID": { "hosting": { "kalam": ["YOUR_KALAM_HOSTING_SITE_ID"] } } }
+}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-labelledby="t">
+  <title id="t">Kalam</title>
+  <rect width="48" height="48" rx="12" fill="#315C4C"/>
+  <path fill="#F8F7F2" d="M8.6 9.4C10.6 8.6 12.6 8 14.6 7.6C14.3 18 14.2 29 14.2 39.2C12.2 39.8 10.2 40.2 8.2 40.6C8.5 30 8.6 20 8.6 9.4Z"/>
+  <path fill="none" stroke="#F8F7F2" stroke-width="2.4" stroke-linecap="round" d="M14.6 26.4C20 20.5 25.5 14.5 31.2 8.6"/>
+  <path fill="#F8F7F2" d="M14.4 24.6C19.6 29.6 24.8 34.8 29.2 40.6L34.8 39.6C29.6 33.4 23.8 27.4 17.4 21.6Z"/>
+  <circle cx="39" cy="38.6" r="2.6" fill="#D69B52"/>
+</svg>

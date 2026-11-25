@@ -1,0 +1,64 @@
+# Firestore security rules tests on the local emulator (docs/13 §10.1 and §10.4, docs/12 §17.8, docs/11 §10.5).
+# Checks the allowed and the denied paths of firestore.rules. Uses a demo project id, so nothing touches a real
+# Firebase project and no credential is needed.
+name: Firestore rules
+
+on:
+  pull_request:
+    paths:
+      - firestore.rules
+      - firestore.indexes.json
+      - firebase.json
+      - tests/rules/**
+      - .github/workflows/rules.yml
+  push:
+    branches: [main]
+    paths:
+      - firestore.rules
+      - firestore.indexes.json
+      - firebase.json
+      - tests/rules/**
+      - .github/workflows/rules.yml
+  workflow_dispatch:
+
+concurrency:
+  group: rules-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rules:
+    name: Rules tests (emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      # The Firestore emulator is a Java program.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache the emulator download
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-15.36.0
+
+      # firebase-tools is pinned and fetched on demand, so it stays out of the app's dependencies.
+      - name: Run the rules tests
+        run: >
+          npx --yes firebase-tools@15.36.0 emulators:exec
+          --only firestore
+          --project demo-kalam
+          "npx vitest run --config tests/rules/vitest.config.ts"
+        env:
+          FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'

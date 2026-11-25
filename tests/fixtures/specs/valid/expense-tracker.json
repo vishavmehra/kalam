@@ -1,0 +1,200 @@
+{
+  "id": "expense_tracker",
+  "schemaVersion": "1.0.0",
+  "version": 1,
+  "name": "Daily Expenses",
+  "lang": "en",
+  "description": "Write down what you spend and see today’s total.",
+  "icon": {
+    "glyph": "wallet"
+  },
+  "theme": {
+    "primary": "#1F6F5C",
+    "radius": 14,
+    "fontScale": 1,
+    "preset": "calm_green"
+  },
+  "collections": {
+    "expenses": {
+      "label": "Expenses",
+      "fields": {
+        "amount": {
+          "type": "number",
+          "label": "Amount",
+          "required": true,
+          "min": 0,
+          "decimals": 2
+        },
+        "category": {
+          "type": "enum",
+          "label": "Category",
+          "options": [
+            "Food",
+            "Travel",
+            "Bills",
+            "Shopping",
+            "Other"
+          ],
+          "defaultValue": "Other"
+        },
+        "date": {
+          "type": "date",
+          "label": "Date",
+          "defaultValue": "today"
+        },
+        "note": {
+          "type": "text",
+          "label": "Note",
+          "placeholder": "What was it for?"
+        }
+      }
+    }
+  },
+  "screens": [
+    {
+      "id": "home",
+      "title": "Expenses",
+      "children": [
+        {
+          "id": "today_total",
+          "type": "stat",
+          "label": "Spent today",
+          "expr": "sum(filter(expenses, date == today).amount)",
+          "format": "currency",
+          "currency": "INR"
+        },
+        {
+          "id": "all_total",
+          "type": "stat",
+          "label": "Spent in total",
+          "expr": "sum(expenses.amount)",
+          "format": "currency",
+          "currency": "INR"
+        },
+        {
+          "id": "expense_list",
+          "type": "list",
+          "source": "expenses",
+          "primary": "note",
+          "secondary": "amount",
+          "sort": {
+            "field": "date",
+            "direction": "desc"
+          },
+          "allowDelete": true,
+          "emptyText": "Nothing spent yet"
+        },
+        {
+          "id": "add_button",
+          "type": "bigButton",
+          "label": "Add expense",
+          "action": "go_add"
+        }
+      ]
+    },
+    {
+      "id": "add",
+      "title": "Add expense",
+      "form": "expenses",
+      "children": [
+        {
+          "id": "amount_input",
+          "type": "number",
+          "label": "Amount",
+          "field": "amount",
+          "required": true
+        },
+        {
+          "id": "note_input",
+          "type": "textInput",
+          "label": "Note",
+          "field": "note"
+        },
+        {
+          "id": "category_choice",
+          "type": "choice",
+          "label": "Category",
+          "field": "category"
+        },
+        {
+          "id": "suggest_button",
+          "type": "bigButton",
+          "label": "Suggest category",
+          "action": "suggest_category",
+          "tone": "secondary",
+          "secondary": true
+        },
+        {
+          "id": "date_input",
+          "type": "date",
+          "label": "Date",
+          "field": "date"
+        },
+        {
+          "id": "save_button",
+          "type": "bigButton",
+          "label": "Save expense",
+          "action": "save_expense"
+        }
+      ]
+    }
+  ],
+  "initialScreen": "home",
+  "actions": {
+    "go_add": {
+      "type": "navigate",
+      "screen": "add"
+    },
+    "suggest_category": {
+      "type": "runAI",
+      "aiBlock": "categorise"
+    },
+    "save_expense": {
+      "type": "insert",
+      "collection": "expenses",
+      "then": {
+        "feedback": "Expense saved",
+        "navigate": "home"
+      }
+    }
+  },
+  "aiBlocks": {
+    "categorise": {
+      "kind": "classify",
+      "verified": "onDevice",
+      "inputField": "note",
+      "outputField": "category",
+      "labels": [
+        "Food",
+        "Travel",
+        "Bills",
+        "Shopping",
+        "Other"
+      ],
+      "prompt": "Choose the spending category that best matches the note.",
+      "verification": {
+        "status": "onDevice",
+        "testCount": 5,
+        "passCount": 5,
+        "model": "gemini-nano"
+      }
+    }
+  },
+  "intents": {
+    "save_expense": [
+      "save",
+      "save expense"
+    ],
+    "go_add": [
+      "add expense",
+      "kharcha likho"
+    ]
+  },
+  "meta": {
+    "author": "Kalam fixtures",
+    "createdAt": 1794950000000,
+    "description": "Daily expense log",
+    "source": "template",
+    "templateId": "expense_tracker"
+  }
+}

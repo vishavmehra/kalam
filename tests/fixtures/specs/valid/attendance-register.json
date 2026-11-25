@@ -1,0 +1,159 @@
+{
+  "id": "attendance_register",
+  "schemaVersion": "1.0.0",
+  "version": 1,
+  "name": "Class Attendance",
+  "lang": "en",
+  "description": "Mark who is present each day.",
+  "icon": {
+    "glyph": "graduation_cap"
+  },
+  "theme": {
+    "primary": "#7A2E2E",
+    "radius": 8,
+    "fontScale": 1
+  },
+  "collections": {
+    "attendance": {
+      "label": "Attendance",
+      "fields": {
+        "student": {
+          "type": "text",
+          "label": "Student",
+          "required": true
+        },
+        "section": {
+          "type": "enum",
+          "label": "Section",
+          "options": [
+            "A",
+            "B",
+            "C"
+          ]
+        },
+        "date": {
+          "type": "date",
+          "label": "Date",
+          "defaultValue": "today"
+        },
+        "present": {
+          "type": "boolean",
+          "label": "Present",
+          "defaultValue": true
+        }
+      }
+    }
+  },
+  "screens": [
+    {
+      "id": "home",
+      "title": "Today",
+      "children": [
+        {
+          "id": "present_today",
+          "type": "stat",
+          "label": "Present today",
+          "expr": "count(filter(attendance, date == today && present))",
+          "format": "integer"
+        },
+        {
+          "id": "absent_today",
+          "type": "stat",
+          "label": "Absent today",
+          "expr": "count(filter(attendance, date == today && !present))",
+          "format": "integer"
+        },
+        {
+          "id": "rate",
+          "type": "stat",
+          "label": "Attendance rate",
+          "expr": "round(count(filter(attendance, present)) / count(attendance) * 100, 1)",
+          "format": "percent"
+        },
+        {
+          "id": "today_list",
+          "type": "list",
+          "source": "attendance",
+          "primary": "student",
+          "secondary": "section",
+          "filter": "date == today",
+          "toggleField": "present",
+          "sort": {
+            "field": "student",
+            "direction": "asc"
+          }
+        },
+        {
+          "id": "mark_button",
+          "type": "bigButton",
+          "label": "Add student",
+          "action": "go_mark"
+        }
+      ]
+    },
+    {
+      "id": "mark",
+      "title": "Add student",
+      "form": "attendance",
+      "children": [
+        {
+          "id": "student_input",
+          "type": "textInput",
+          "label": "Student",
+          "field": "student",
+          "required": true
+        },
+        {
+          "id": "section_choice",
+          "type": "choice",
+          "label": "Section",
+          "field": "section",
+          "options": [
+            "A",
+            "B"
+          ]
+        },
+        {
+          "id": "date_input",
+          "type": "date",
+          "label": "Date",
+          "field": "date"
+        },
+        {
+          "id": "present_toggle",
+          "type": "toggle",
+          "label": "Present",
+          "field": "present"
+        },
+        {
+          "id": "save_button",
+          "type": "bigButton",
+          "label": "Save",
+          "action": "save_mark"
+        }
+      ]
+    }
+  ],
+  "initialScreen": "home",
+  "actions": {
+    "go_mark": {
+      "type": "navigate",
+      "screen": "mark"
+    },
+    "save_mark": {
+      "type": "insert",
+      "collection": "attendance",
+      "then": {
+        "navigate": "home"
+      }
+    }
+  },
+  "aiBlocks": {},
+  "intents": {},
+  "meta": {
+    "author": "Kalam fixtures",
+    "createdAt": 1794950000000,
+    "description": "Daily attendance register",
+    "source": "manual"
+  }
+}

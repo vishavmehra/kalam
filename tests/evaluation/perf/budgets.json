@@ -1,0 +1,56 @@
+{
+  "description": "Performance budgets (docs/13 §17, docs/15 §11.6). The web numbers are a regression guard set about 20% above the first measured build (dist-w1, 2026-11-18: JavaScript 6.63 MB, gzip 1.32 MB, first screen 5.29 MB, largest chunk 4.22 MB). They are not product targets. Product targets are in productTargets and are measured by the CI perf job and on devices.",
+  "web": {
+    "totalJsBytes": 8388608,
+    "totalJsGzipBytes": 2097152,
+    "largestChunkBytes": 5767168,
+    "initialJsBytes": 6815744
+  },
+  "node": {
+    "classify": { "p95Ms": 25 },
+    "templateBuild": { "p95Ms": 300 },
+    "validateSpec": { "p95Ms": 60 },
+    "describeSpec": { "p95Ms": 30 },
+    "summarizeDrawing": { "p95Ms": 60 },
+    "formulas": { "p95Ms": 40 }
+  },
+  "spec": {
+    "maxBytes": 102400,
+    "productTargetBytes": 1048576
+  },
+  "android": {
+    "apkBytes": 26214400
+  },
+  "productTargets": [
+    {
+      "metric": "Cold start",
+      "target": "under 1.5 s",
+      "measuredBy": "Lighthouse in the CI perf job (web). Android: not measured, needs a device or emulator."
+    },
+    {
+      "metric": "Open an app from the shelf",
+      "target": "under 300 ms",
+      "measuredBy": "Not measured yet. Needs a browser trace of the shelf route."
+    },
+    {
+      "metric": "Common on-device AI operation",
+      "target": "under 2 s",
+      "measuredBy": "Not measured in Node. Needs Gemini Nano in Chrome (CDP) or an Android device."
+    },
+    {
+      "metric": "Application compilation",
+      "target": "under 20 s",
+      "measuredBy": "Live eval report latency (eval-live workflow). Template apps: scripts/bench.mjs."
+    },
+    {
+      "metric": "Generated application size",
+      "target": "under 1 MB",
+      "measuredBy": "scripts/bench.mjs (spec JSON size of every built app)."
+    },
+    {
+      "metric": "Initial installation",
+      "target": "under 25 MB",
+      "measuredBy": "Android workflow reports the APK size. Web: scripts/check-bundle-size.mjs."
+    }
+  ]
+}

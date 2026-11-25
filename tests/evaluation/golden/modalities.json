@@ -1,0 +1,515 @@
+{
+  "cases": [
+    {
+      "id": "mi01-photo-tailor-sketch",
+      "modality": "image",
+      "language": "en",
+      "tags": ["image", "photo-of-sketch"],
+      "images": { "count": 1, "source": "photo" },
+      "needsAssets": "A photo of a hand-drawn tailor measurement book sketch on paper.",
+      "expected": {
+        "complexity": "medium",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 2,
+        "minCollections": 1,
+        "requiredFields": [
+          { "anyOf": ["name", "customer"], "type": "text" },
+          { "anyOf": ["chest", "waist", "length"], "type": "number" }
+        ],
+        "requiredComponents": ["list"]
+      }
+    },
+    {
+      "id": "mi02-photo-paper-ledger",
+      "modality": "image",
+      "language": "en",
+      "tags": ["image", "photo-of-document"],
+      "text": "Make this an app",
+      "images": { "count": 1, "source": "photo" },
+      "needsAssets": "A photo of a paper credit ledger page with names and amounts.",
+      "expected": {
+        "complexity": "medium",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 2,
+        "minCollections": 1,
+        "requiredFields": [
+          { "anyOf": ["name", "customer"], "type": "text" },
+          { "anyOf": ["amount", "balance"], "type": "number" }
+        ],
+        "requiredComponents": ["list"]
+      }
+    },
+    {
+      "id": "mi03-two-photos-registration-form",
+      "modality": "image",
+      "language": "en",
+      "tags": ["image", "multi-photo"],
+      "text": "Turn this registration form into an app",
+      "images": { "count": 2, "source": "photo" },
+      "needsAssets": "Two photos, the front and back of a printed registration form.",
+      "expected": {
+        "complexity": "medium",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 2,
+        "minCollections": 1,
+        "requiredFields": [{ "anyOf": ["name"], "type": "text" }, { "anyOf": ["phone", "mobile"] }],
+        "requiredComponents": ["list"]
+      }
+    },
+    {
+      "id": "mi04-screenshot-simplify",
+      "modality": "image",
+      "language": "en",
+      "tags": ["image", "screenshot"],
+      "text": "Same idea as this screen, but simpler",
+      "images": { "count": 1, "source": "screenshot" },
+      "ambiguous": true,
+      "notes": "No way to know the intended app without the screenshot. Complexity is a guess.",
+      "needsAssets": "A screenshot of an expense app's home screen.",
+      "expected": {
+        "complexity": "medium",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 1,
+        "minCollections": 1,
+        "requiredFields": [{ "anyOf": ["amount"], "type": "number" }],
+        "requiredComponents": ["list"]
+      }
+    },
+    {
+      "id": "mi05-photo-plus-crm-text",
+      "modality": "image",
+      "language": "en",
+      "tags": ["image", "complex"],
+      "images": { "count": 1, "source": "photo" },
+      "text": "A CRM for my sales team with leads, deals, follow-up workflow, manager approval and dashboards. The photo is my whiteboard plan.",
+      "needsAssets": "A photo of a whiteboard with a sales pipeline plan.",
+      "expected": {
+        "complexity": "complex",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 5,
+        "minCollections": 3,
+        "requiredFields": [{ "anyOf": ["lead", "name"], "type": "text" }, { "anyOf": ["stage", "status"] }],
+        "requiredComponents": ["list", "stat"]
+      }
+    },
+    {
+      "id": "mi06-bill-photo-read-amount",
+      "modality": "image",
+      "language": "en",
+      "tags": ["image", "field-extraction"],
+      "text": "I want to photograph shop bills and have the shop name, date and amount filled in for me",
+      "images": { "count": 1, "source": "photo" },
+      "needsAssets": "A photo of a printed shop bill (docs/07 §20.1 item 5, image field extraction).",
+      "expected": {
+        "complexity": "medium",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 2,
+        "minCollections": 1,
+        "requiredFields": [
+          { "anyOf": ["shop", "store", "vendor"], "type": "text" },
+          { "anyOf": ["amount", "total"], "type": "number" },
+          { "anyOf": ["date"], "type": "date" }
+        ],
+        "requiredComponents": ["photo", "list"]
+      }
+    },
+    {
+      "id": "ma01-voice-counter-hinglish",
+      "modality": "audio",
+      "language": "hinglish",
+      "tags": ["audio", "hinglish", "template"],
+      "audioTranscript": "Ek counter banao jo mere dukaan mein aane wale grahak ginta rahe",
+      "expected": {
+        "complexity": "simple",
+        "taskType": "create_app",
+        "route": "template",
+        "template": "counter",
+        "minScreens": 1,
+        "minCollections": 0,
+        "requiredFields": [],
+        "requiredComponents": ["counter"]
+      }
+    },
+    {
+      "id": "ma02-voice-expenses",
+      "modality": "audio",
+      "language": "en",
+      "tags": ["audio", "template"],
+      "audioTranscript": "make me a simple expense tracker where I can write what I spent each day in rupees",
+      "expected": {
+        "complexity": "simple",
+        "taskType": "create_app",
+        "route": "template",
+        "template": "expense_tracker",
+        "minScreens": 1,
+        "minCollections": 1,
+        "requiredFields": [
+          { "anyOf": ["amount"], "type": "number" },
+          { "anyOf": ["date"], "type": "date" }
+        ],
+        "requiredComponents": ["list"]
+      }
+    },
+    {
+      "id": "ma03-voice-gst-hinglish",
+      "modality": "audio",
+      "language": "hinglish",
+      "tags": ["audio", "hinglish", "template"],
+      "audioTranscript": "mujhe ek GST calculator chahiye jo total bhi bata de",
+      "expected": {
+        "complexity": "simple",
+        "taskType": "create_app",
+        "route": "template",
+        "template": "calculator",
+        "minScreens": 1,
+        "minCollections": 0,
+        "requiredFields": [],
+        "requiredComponents": ["number", "stat"]
+      }
+    },
+    {
+      "id": "ma04-voice-checklist",
+      "modality": "audio",
+      "language": "en",
+      "tags": ["audio", "template"],
+      "audioTranscript": "I need a checklist for the things I pack when I go on a trip",
+      "expected": {
+        "complexity": "simple",
+        "taskType": "create_app",
+        "route": "template",
+        "template": "checklist",
+        "minScreens": 1,
+        "minCollections": 1,
+        "requiredFields": [{ "anyOf": ["item", "task"], "type": "text" }],
+        "requiredComponents": ["list"]
+      }
+    },
+    {
+      "id": "ma05-voice-text-together",
+      "modality": "audio",
+      "language": "en",
+      "tags": ["audio", "template", "audio-and-text"],
+      "text": "Call it Daily Walk",
+      "audioTranscript": "a habit tracker for walking and drinking water every day",
+      "expected": {
+        "complexity": "simple",
+        "taskType": "create_app",
+        "route": "template",
+        "template": "habit_tracker",
+        "minScreens": 1,
+        "minCollections": 1,
+        "requiredFields": [{ "anyOf": ["habit"] }, { "anyOf": ["done", "completed"], "type": "boolean" }],
+        "requiredComponents": ["list"]
+      }
+    },
+    {
+      "id": "ma06-voice-tailor-orders",
+      "modality": "audio",
+      "language": "en",
+      "tags": ["audio", "medium", "orders"],
+      "audioTranscript": "tailor order book with the customer name phone dress type delivery date and how much advance was paid",
+      "expected": {
+        "complexity": "medium",
+        "taskType": "create_app",
+        "route": "cloud",
+        "minScreens": 2,
+        "minCollections": 1,
+        "requiredFields": [
+          { "anyOf": ["name", "customer"], "type": "text" },
+          { "anyOf": ["delivery", "due"], "type": "date" },
+          { "anyOf": ["advance", "paid"], "type": "number" }
+        ],
+        "requiredComponents": ["list"]
+      }
+    },
+    {
+      "id": "ma07-voice-attendance-summary",
+      "modality": "audio",
+      "language": "en",
+      "tags": ["audio", "medium", "attendance"],
+      "audioTranscript": "attendance register for my tuition class where each student is present or absent and I can see a monthly summary",
+      "expected": {
+        "complexity": "medium",
+        "taskType": "create_app",
+        "route": "cloud",
+        "minScreens": 3,
+        "minCollections": 2,
+        "requiredFields": [
+          { "anyOf": ["student", "name"], "type": "text" },
+          { "anyOf": ["present", "attendance", "status"] },
+          { "anyOf": ["date"], "type": "date" }
+        ],
+        "requiredComponents": ["list", "stat"]
+      }
+    },
+    {
+      "id": "ma08-voice-vague-hinglish",
+      "modality": "audio",
+      "language": "hinglish",
+      "tags": ["audio", "hinglish", "edge", "vague"],
+      "audioTranscript": "kuch banao",
+      "expected": {
+        "complexity": "simple",
+        "taskType": "create_app",
+        "route": "cloud",
+        "lowConfidence": true,
+        "minScreens": 1,
+        "minCollections": 0,
+        "requiredFields": [],
+        "requiredComponents": []
+      },
+      "notes": "Too vague to build. Kalam should ask what the app is for."
+    },
+    {
+      "id": "mv01-video-tap-counter",
+      "modality": "video",
+      "language": "en",
+      "tags": ["video"],
+      "video": {
+        "frames": 3,
+        "durationSec": 12,
+        "summary": "A screen recording of a counter app with plus, minus and reset buttons."
+      },
+      "needsAssets": "A short screen recording of a tap counter app.",
+      "expected": {
+        "complexity": "medium",
+        "taskType": "create_app",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 1,
+        "minCollections": 0,
+        "requiredFields": [],
+        "requiredComponents": ["counter"]
+      },
+      "ambiguous": true,
+      "notes": "Simple by structure. Needing video reasoning may reasonably raise it one level."
+    },
+    {
+      "id": "mv02-video-inventory-walkthrough",
+      "modality": "video",
+      "language": "en",
+      "tags": ["video", "walkthrough"],
+      "video": {
+        "frames": 8,
+        "durationSec": 40,
+        "summary": "A walkthrough of a shop stock app: item list, add item form and a low stock list."
+      },
+      "needsAssets": "A screen recording of a stock app walkthrough.",
+      "ambiguous": true,
+      "notes": "Eight frames is a lot of frames, but the app is a medium inventory app. The classifier counts frames like images.",
+      "expected": {
+        "complexity": "medium",
+        "taskType": "create_app",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 3,
+        "minCollections": 1,
+        "requiredFields": [
+          { "anyOf": ["name", "item"], "type": "text" },
+          { "anyOf": ["quantity", "qty"], "type": "number" }
+        ],
+        "requiredComponents": ["list"]
+      }
+    },
+    {
+      "id": "mv03-video-plus-instruction",
+      "modality": "video",
+      "language": "en",
+      "tags": ["video", "video-and-text"],
+      "text": "Build the app from this video, but in Hindi",
+      "video": { "frames": 4, "durationSec": 20, "summary": "A person taps through a to-do list app." },
+      "needsAssets": "A screen recording of a to-do list app.",
+      "expected": {
+        "complexity": "medium",
+        "taskType": "create_app",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 1,
+        "minCollections": 1,
+        "requiredFields": [{ "anyOf": ["task", "item"], "type": "text" }],
+        "requiredComponents": ["list"]
+      }
+    },
+    {
+      "id": "mv04-video-multi-role-tour",
+      "modality": "video",
+      "language": "en",
+      "tags": ["video", "complex"],
+      "video": {
+        "frames": 12,
+        "durationSec": 90,
+        "summary": "A tour of a clinic system with patients, doctors, appointments, billing and reports for admin and doctor logins."
+      },
+      "needsAssets": "A long screen recording of a clinic management system.",
+      "expected": {
+        "complexity": "complex",
+        "taskType": "create_app",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 5,
+        "minCollections": 3,
+        "requiredFields": [{ "anyOf": ["patient", "name"], "type": "text" }, { "anyOf": ["doctor"] }],
+        "requiredComponents": ["list", "stat"]
+      }
+    },
+    {
+      "id": "mv05-video-whiteboard-flow",
+      "modality": "video",
+      "language": "hinglish",
+      "tags": ["video", "hinglish"],
+      "text": "Isme jaisa dikha raha hai waisa app banao",
+      "video": { "frames": 2, "durationSec": 8, "summary": "A hand drawing screens on a whiteboard." },
+      "needsAssets": "A short video of someone drawing app screens on a whiteboard.",
+      "expected": {
+        "complexity": "medium",
+        "taskType": "create_app",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 2,
+        "minCollections": 1,
+        "requiredFields": [],
+        "requiredComponents": ["list"]
+      },
+      "ambiguous": true,
+      "notes": "The structure depends entirely on the video."
+    },
+    {
+      "id": "mx01-sketch-list-plus-text",
+      "modality": "mixed",
+      "language": "en",
+      "tags": ["mixed", "sketch-and-text"],
+      "sketch": "s03-shopping-list",
+      "text": "Grey out the items I have already bought",
+      "ambiguous": true,
+      "notes": "Simple by structure. Mixed input may reasonably raise it one level.",
+      "expected": {
+        "complexity": "medium",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 1,
+        "minCollections": 1,
+        "requiredFields": [
+          { "anyOf": ["item", "name"], "type": "text" },
+          { "anyOf": ["bought", "done"], "type": "boolean" }
+        ],
+        "requiredComponents": ["list"]
+      }
+    },
+    {
+      "id": "mx02-sketch-expenses-plus-voice",
+      "modality": "mixed",
+      "language": "en",
+      "tags": ["mixed", "sketch-and-audio"],
+      "sketch": "s04-expense-tracker",
+      "audioTranscript": "use rupees and let me pick food, travel or rent as the category",
+      "expected": {
+        "complexity": "medium",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 2,
+        "minCollections": 1,
+        "requiredFields": [
+          { "anyOf": ["amount"], "type": "number" },
+          { "anyOf": ["category"], "type": "enum" }
+        ],
+        "requiredComponents": ["list", "stat"]
+      }
+    },
+    {
+      "id": "mx03-sketch-tailor-plus-hindi",
+      "modality": "mixed",
+      "language": "hinglish",
+      "tags": ["mixed", "sketch-and-text", "hinglish"],
+      "sketch": "s05-tailor-measurements",
+      "text": "Sab labels Hindi mein rakhna",
+      "expected": {
+        "complexity": "medium",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 2,
+        "minCollections": 1,
+        "requiredFields": [
+          { "anyOf": ["name", "customer", "naam"], "type": "text" },
+          { "anyOf": ["chest", "seena"], "type": "number" }
+        ],
+        "requiredComponents": ["list"]
+      }
+    },
+    {
+      "id": "mx04-sketch-credit-book-text-and-voice",
+      "modality": "mixed",
+      "language": "hinglish",
+      "tags": ["mixed", "sketch-text-audio", "hinglish"],
+      "sketch": "s07-kirana-credit-book",
+      "text": "Mere kirana ke liye",
+      "audioTranscript": "har grahak ka udhaar aur wapas aaya paisa alag alag dikhana",
+      "expected": {
+        "complexity": "medium",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 3,
+        "minCollections": 2,
+        "requiredFields": [
+          { "anyOf": ["name", "customer", "grahak"], "type": "text" },
+          { "anyOf": ["amount", "udhaar"], "type": "number" }
+        ],
+        "requiredComponents": ["list", "stat"]
+      }
+    },
+    {
+      "id": "mx05-sketch-clinic-plus-roles",
+      "modality": "mixed",
+      "language": "en",
+      "tags": ["mixed", "sketch-and-text", "roles"],
+      "sketch": "s10-clinic-six-screens",
+      "text": "Doctors should only see their own patients and the admin should see everything",
+      "expected": {
+        "complexity": "complex",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 5,
+        "minCollections": 3,
+        "requiredFields": [{ "anyOf": ["patient", "name"], "type": "text" }, { "anyOf": ["doctor"] }],
+        "requiredComponents": ["list", "stat"]
+      },
+      "notes": "Roles cannot exist in a single-user offline app. The result should say so in its assumptions."
+    },
+    {
+      "id": "mx06-sketch-calculator-plus-gst",
+      "modality": "mixed",
+      "language": "en",
+      "tags": ["mixed", "sketch-and-text"],
+      "sketch": "s01-calculator",
+      "text": "Make it a GST calculator with 18 percent",
+      "ambiguous": true,
+      "notes": "A text request that matches a template, plus a sketch. The sketch makes it a cloud request.",
+      "expected": {
+        "complexity": "medium",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 1,
+        "minCollections": 0,
+        "requiredFields": [],
+        "requiredComponents": ["stat"]
+      }
+    }
+  ]
+}

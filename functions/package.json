@@ -1,0 +1,24 @@
+{
+  "name": "kalam-functions",
+  "private": true,
+  "description": "Kalam server-side specialist adapters (Claude, Nebius) — Cloud Functions 2nd gen. Secrets never reach the client.",
+  "type": "module",
+  "main": "lib/index.js",
+  "engines": { "node": "22" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test \"lib/**/*.test.js\"",
+    "verify:providers": "node scripts/verify-providers.mjs",
+    "serve": "npm run build && firebase emulators:start --only functions"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.9.0",
+    "firebase-admin": "^14.5.1",
+    "firebase-functions": "^7.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "~6.0.3"
+  }
+}

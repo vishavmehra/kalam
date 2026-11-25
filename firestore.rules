@@ -1,0 +1,445 @@
+rules_version = '2';
+
+// Kalam Bazaar rules for the named Firestore database `kalam` (docs/12 §17, docs/11 §10.3).
+// Default deny. Only Bazaar and account data lives here: listings, published specs and their
+// version history, listing media, install/purchase entitlements, likes, reviews, reports, wallets,
+// the credit ledger and optional encrypted backups. Users' app records never leave their device
+// unless they upload an encrypted backup themselves.
+//
+// Trust boundary: clients never set `reviewed`, `featured`, `status: 'suspended'`, wallet balances,
+// ledger entries, paid entitlements or moderation logs. Those are written only by the trusted Cloud
+// Functions in the `kalam` codebase (functions/src/bazaar), which use the Admin SDK. Clients may move
+// counters only by +1/-1 steps (or a review's exact rating change) proven by a matching doc in the
+// same batch, and never read hidden listings or specs they are not entitled to.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+
+    function str(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+    // A list, at most `items` long and `chars` in total once joined (bounds the document size).
+    // Element types are checked by the client's Zod schema, which drops malformed listings.
+    function strList(v, items, chars) { return v is list && v.size() <= items && v.join('|').size() <= chars; }
+    function sha(v) { return v is string && v.matches('^[0-9a-f]{64}$'); }
+    function ts(v) { return v is int && v >= 0; }
+    function noMarkup(v) { return !v.matches('.*[<>].*'); }
+
+    function listingPath(id) { return /databases/$(database)/documents/listings/$(id); }
+    function specPath(id) { return /databases/$(database)/documents/listingSpecs/$(id); }
+    function entitlementPath(uid, id) { return /databases/$(database)/documents/users/$(uid)/purchases/$(id); }
+    function reviewPath(id, uid) { return /databases/$(database)/documents/listings/$(id)/reviews/$(uid); }
+
+    function validSafety(s) {
+      return s is map
+        && s.keys().hasAll(['verdict', 'reasons', 'specHash', 'checkedAt'])
+        && s.keys().hasOnly(['verdict', 'reasons', 'specHash', 'checkedAt', 'model'])
+        && s.verdict in ['pass', 'flagged', 'unavailable']
+        && strList(s.reasons, 5, 1100)
+        && sha(s.specHash)
+        && ts(s.checkedAt)
+        && (!('model' in s) || str(s.model, 0, 80));
+    }
+
+    function validDisclosure(d) {
+      return d is map
+        && d.keys().hasOnly(['stores', 'usesPhotos', 'aiFeatures', 'cloudPossible'])
+        && d.keys().hasAll(['stores', 'usesPhotos', 'aiFeatures', 'cloudPossible'])
+        && strList(d.stores, 10, 1300)
+        && d.usesPhotos is bool
+        && strList(d.aiFeatures, 15, 1300)
+        && d.cloudPossible is bool;
+    }
+
+    function validIcon(d) {
+      return (!('icon' in d) || (
+          d.icon is map
+          && d.icon.keys().hasOnly(['glyph', 'background', 'foreground'])
+          && str(d.icon.glyph, 1, 20)
+          && (!('background' in d.icon) || d.icon.background.matches('^#[0-9a-fA-F]{6}$'))
+          && (!('foreground' in d.icon) || d.icon.foreground.matches('^#[0-9a-fA-F]{6}$'))))
+        // Custom icons are sanitised on the client before writing and again on every read; this is
+        // a coarse second wall (docs/11 §11.6).
+        && (!('iconSvg' in d) || (
+          str(d.iconSvg, 10, 8000)
+          && d.iconSvg.matches('^<svg[\\s\\S]*</svg>$|^<svg[^<]*/>$')
+          && !d.iconSvg.matches('(?i).*(script|href|onload|onerror|onclick|javascript|data:|<!|foreignobject|style).*')));
+    }
+
+    function validLineage(b) {
+      return b == null || (
+        b is map
+        && b.keys().hasOnly(['listingId', 'title', 'makerName'])
+        && b.listingId is string && b.listingId.matches('^l[a-z0-9]{19}$')
+        && str(b.title, 0, 60)
+        && str(b.makerName, 0, 40));
+    }
+
+    function validListing(d) {
+      return d.keys().hasAll([
+          'title', 'description', 'category', 'tags', 'lang', 'price', 'makerUid', 'makerName', 'appColor',
+          'specHash', 'specVersion', 'kalamSpecVersion', 'specBytes', 'changeSummary', 'screenshotCount', 'status',
+          'reviewed', 'featured', 'safety', 'license', 'remixAllowed', 'basedOn', 'capabilities', 'disclosure',
+          'searchKeywords', 'installs', 'likes', 'ratingSum', 'ratingCount', 'ratingAvg', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly([
+          'title', 'description', 'category', 'tags', 'lang', 'price', 'makerUid', 'makerName', 'appColor',
+          'specHash', 'specVersion', 'kalamSpecVersion', 'specBytes', 'changeSummary', 'screenshotCount', 'status',
+          'reviewed', 'featured', 'safety', 'license', 'remixAllowed', 'basedOn', 'capabilities', 'disclosure',
+          'searchKeywords', 'installs', 'likes', 'ratingSum', 'ratingCount', 'ratingAvg', 'createdAt', 'updatedAt',
+          'icon', 'iconSvg'])
+        && str(d.title, 1, 60)
+        && str(d.description, 0, 500)
+        && d.category in ['business', 'education', 'finance', 'productivity', 'health', 'personal', 'field_work', 'utilities', 'creative']
+        && strList(d.tags, 8, 200)
+        && d.lang is string && d.lang.matches('^[a-z]{2,3}(-[A-Za-z]{2,4})?$')
+        // Prototype credits, not money (docs/12 §12). Paid purchases go through the trusted function.
+        && d.price is int && d.price >= 0 && d.price <= 1000
+        && str(d.makerName, 1, 40)
+        && d.appColor is string && d.appColor.matches('^#[0-9a-fA-F]{6}$')
+        && sha(d.specHash)
+        && d.specVersion is int && d.specVersion >= 1
+        && d.kalamSpecVersion is string && d.kalamSpecVersion.matches('^[0-9]+[.][0-9]+[.][0-9]+$')
+        // docs/11 §11.1: published specs stay under 100 KB.
+        && d.specBytes is int && d.specBytes >= 1 && d.specBytes <= 100000
+        && str(d.changeSummary, 0, 200)
+        && d.screenshotCount is int && d.screenshotCount >= 0 && d.screenshotCount <= 3
+        && d.reviewed is bool
+        && d.featured is bool
+        && validSafety(d.safety)
+        && d.license in ['personal', 'remix_allowed', 'all_rights_reserved']
+        && d.remixAllowed == (d.license == 'remix_allowed')
+        && validLineage(d.basedOn)
+        && strList(d.capabilities, 12, 1100)
+        && validDisclosure(d.disclosure)
+        && strList(d.searchKeywords, 40, 1300)
+        && d.installs is int && d.installs >= 0
+        && d.likes is int && d.likes >= 0
+        && d.ratingSum is int && d.ratingSum >= 0
+        && d.ratingCount is int && d.ratingCount >= 0
+        && d.ratingAvg is number
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp
+        && validIcon(d);
+    }
+
+    // Status a maker's client may write. Published requires a passing check on THIS spec hash.
+    function clientStatus(d, allowed) {
+      return d.status in allowed
+        && (d.status != 'published' || (d.safety.verdict == 'pass' && d.safety.specHash == d.specHash));
+    }
+
+    // The spec doc written in the same batch (or already stored) must match the listing.
+    function specMatches(id, d) {
+      return getAfter(specPath(id)).data.specHash == d.specHash
+        && getAfter(specPath(id)).data.specVersion == d.specVersion;
+    }
+
+    function onlyChanged(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    // Average to one decimal place, the same arithmetic as src/core/bazaar/reviews.ts.
+    function avgOf(sum, count) {
+      return count == 0 ? 0 : math.round(float(sum) * 10.0 / count) / 10.0;
+    }
+
+    // A review written, changed or deleted in this batch moves the totals by exactly its rating.
+    function ratingStep(listingId) {
+      let path = reviewPath(listingId, me());
+      let before = exists(path) ? get(path).data.rating : 0;
+      let after = existsAfter(path) ? getAfter(path).data.rating : 0;
+      let countBefore = exists(path) ? 1 : 0;
+      let countAfter = existsAfter(path) ? 1 : 0;
+      let sum = resource.data.ratingSum - before + after;
+      let count = resource.data.ratingCount - countBefore + countAfter;
+      return request.resource.data.ratingSum == sum
+        && request.resource.data.ratingCount == count
+        && request.resource.data.ratingAvg == avgOf(sum, count);
+    }
+
+    function hasEntitlement(listingId) {
+      return signedIn()
+        && exists(entitlementPath(me(), listingId))
+        && get(entitlementPath(me(), listingId)).data.status == 'active';
+    }
+
+    function canReadSpec(listingId) {
+      let listing = get(listingPath(listingId)).data;
+      return (listing.status == 'published' && (listing.price == 0 || hasEntitlement(listingId)))
+        || (signedIn() && listing.makerUid == me());
+    }
+
+    match /listings/{listingId} {
+      allow get, list: if resource.data.status == 'published'
+        || (signedIn() && resource.data.makerUid == me());
+
+      allow create: if signedIn()
+        && listingId.matches('^l[a-z0-9]{19}$')
+        && request.resource.data.makerUid == me()
+        && validListing(request.resource.data)
+        && request.resource.data.reviewed == false
+        && request.resource.data.featured == false
+        && request.resource.data.installs == 0
+        && request.resource.data.likes == 0
+        && request.resource.data.ratingSum == 0
+        && request.resource.data.ratingCount == 0
+        && request.resource.data.ratingAvg == 0
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && clientStatus(request.resource.data, ['pending_review', 'published', 'rejected'])
+        && specMatches(listingId, request.resource.data);
+
+      // 1. The maker edits details, re-checks, publishes a new version or unpublishes. Counters,
+      //    trust flags, owner and creation time are frozen; suspension is final for clients.
+      allow update: if signedIn()
+        && resource.data.makerUid == me()
+        && resource.data.status != 'suspended'
+        && validListing(request.resource.data)
+        && request.resource.data.makerUid == resource.data.makerUid
+        && request.resource.data.reviewed == false
+        && request.resource.data.featured == resource.data.featured
+        && request.resource.data.installs == resource.data.installs
+        && request.resource.data.likes == resource.data.likes
+        && request.resource.data.ratingSum == resource.data.ratingSum
+        && request.resource.data.ratingCount == resource.data.ratingCount
+        && request.resource.data.ratingAvg == resource.data.ratingAvg
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.specVersion >= resource.data.specVersion
+        && clientStatus(request.resource.data, ['pending_review', 'published', 'rejected', 'unpublished'])
+        && specMatches(listingId, request.resource.data);
+
+      // 2. Anyone signed in likes / unlikes a published listing: exactly one step, proven by
+      //    creating / deleting their own like doc in the same batch.
+      allow update: if signedIn()
+        && resource.data.status == 'published'
+        && onlyChanged(['likes'])
+        && request.resource.data.likes == resource.data.likes + 1
+        && !exists(/databases/$(database)/documents/listings/$(listingId)/likes/$(me()))
+        && existsAfter(/databases/$(database)/documents/listings/$(listingId)/likes/$(me()));
+      allow update: if signedIn()
+        && onlyChanged(['likes'])
+        && request.resource.data.likes == resource.data.likes - 1
+        && exists(/databases/$(database)/documents/listings/$(listingId)/likes/$(me()))
+        && !existsAfter(/databases/$(database)/documents/listings/$(listingId)/likes/$(me()));
+
+      // 3. First free install by a signed-in user: +1, proven by their new entitlement doc.
+      //    Paid installs are counted by the purchase function.
+      allow update: if signedIn()
+        && resource.data.status == 'published'
+        && resource.data.price == 0
+        && onlyChanged(['installs'])
+        && request.resource.data.installs == resource.data.installs + 1
+        && !exists(entitlementPath(me(), listingId))
+        && existsAfter(entitlementPath(me(), listingId));
+
+      // 4. A review by this user is created, changed or deleted in the same batch.
+      allow update: if signedIn()
+        && onlyChanged(['ratingSum', 'ratingCount', 'ratingAvg'])
+        && ratingStep(listingId);
+
+      allow delete: if false;
+
+      match /likes/{likerUid} {
+        allow get: if signedIn() && likerUid == me();
+        allow create: if signedIn()
+          && likerUid == me()
+          && request.resource.data.keys().hasOnly(['createdAt'])
+          && request.resource.data.createdAt == request.time
+          && getAfter(listingPath(listingId)).data.likes == get(listingPath(listingId)).data.likes + 1;
+        allow delete: if signedIn()
+          && likerUid == me()
+          && getAfter(listingPath(listingId)).data.likes == get(listingPath(listingId)).data.likes - 1;
+      }
+
+      // Reviews (docs/12 §14): one per person (doc id = uid), only with an install or purchase,
+      // plain text, totals moved in the same batch. Hidden reviews are visible only to their author.
+      match /reviews/{reviewerUid} {
+        function validReview(r) {
+          return r.keys().hasAll(['rating', 'comment', 'authorName', 'appVersion', 'status', 'response', 'respondedAt', 'createdAt', 'updatedAt'])
+            && r.keys().hasOnly(['rating', 'comment', 'authorName', 'appVersion', 'status', 'response', 'respondedAt', 'createdAt', 'updatedAt'])
+            && r.rating is int && r.rating >= 1 && r.rating <= 5
+            && str(r.comment, 0, 500) && noMarkup(r.comment)
+            && str(r.authorName, 0, 40) && noMarkup(r.authorName)
+            && r.appVersion is int && r.appVersion >= 1
+            && (r.response == null || (str(r.response, 1, 500) && noMarkup(r.response)))
+            && (r.respondedAt == null || r.respondedAt is timestamp);
+        }
+        function totalsFollow() {
+          return getAfter(listingPath(listingId)).data.ratingSum
+              == get(listingPath(listingId)).data.ratingSum
+                 - (resource == null ? 0 : resource.data.rating)
+                 + (request.resource == null ? 0 : request.resource.data.rating)
+            && getAfter(listingPath(listingId)).data.ratingCount
+              == get(listingPath(listingId)).data.ratingCount
+                 - (resource == null ? 0 : 1)
+                 + (request.resource == null ? 0 : 1);
+        }
+
+        allow read: if resource.data.status == 'visible' || (signedIn() && reviewerUid == me());
+
+        allow create: if signedIn()
+          && reviewerUid == me()
+          && get(listingPath(listingId)).data.status == 'published'
+          && hasEntitlement(listingId)
+          && validReview(request.resource.data)
+          && request.resource.data.status == 'visible'
+          && request.resource.data.response == null
+          && request.resource.data.respondedAt == null
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && totalsFollow();
+
+        // The reviewer changes their rating or text (never the maker's reply or the status).
+        allow update: if signedIn()
+          && reviewerUid == me()
+          && validReview(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'comment', 'authorName', 'appVersion', 'updatedAt'])
+          && request.resource.data.updatedAt == request.time
+          && totalsFollow();
+
+        // The maker replies in a separate field (docs/12 §14.4) and touches nothing else.
+        allow update: if signedIn()
+          && get(listingPath(listingId)).data.makerUid == me()
+          && reviewerUid != me()
+          && validReview(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['response', 'respondedAt'])
+          && request.resource.data.respondedAt == request.time;
+
+        allow delete: if signedIn() && reviewerUid == me() && totalsFollow();
+      }
+    }
+
+    match /listingSpecs/{listingId} {
+      function validSpecDoc(d) {
+        return d.keys().hasOnly(['specGz', 'specHash', 'specVersion', 'makerUid', 'previousSpecHash', 'changeSummary', 'publishedAt'])
+          && d.keys().hasAll(['specGz', 'specHash', 'specVersion', 'makerUid', 'previousSpecHash', 'changeSummary', 'publishedAt'])
+          && d.makerUid == me()
+          // gzip+base64 of at most 100 KB of JSON (docs/12 §16.2).
+          && str(d.specGz, 24, 140000)
+          && sha(d.specHash)
+          && d.specVersion is int && d.specVersion >= 1
+          && (d.previousSpecHash == null || sha(d.previousSpecHash))
+          && str(d.changeSummary, 0, 200)
+          && d.publishedAt == request.time;
+      }
+
+      // Free + published: anyone may read (install works without an account). Paid: only with an
+      // active entitlement written by the purchase function. The maker may always read their own.
+      allow get: if canReadSpec(listingId);
+
+      allow create, update: if signedIn()
+        && getAfter(listingPath(listingId)).data.makerUid == me()
+        && (resource == null || resource.data.makerUid == me())
+        && validSpecDoc(request.resource.data)
+        && request.resource.data.specHash == getAfter(listingPath(listingId)).data.specHash
+        && request.resource.data.specVersion == getAfter(listingPath(listingId)).data.specVersion
+        && request.resource.data.previousSpecHash == (resource == null ? null : resource.data.specHash);
+
+      allow list, delete: if false;
+
+      // Every published version is kept (docs/12 §10.2): written once, with the current spec.
+      match /versions/{version} {
+        allow get, list: if canReadSpec(listingId);
+        allow create: if signedIn()
+          && getAfter(listingPath(listingId)).data.makerUid == me()
+          && validSpecDoc(request.resource.data)
+          && version == string(request.resource.data.specVersion)
+          && request.resource.data.specHash == getAfter(specPath(listingId)).data.specHash
+          && request.resource.data.specVersion == getAfter(specPath(listingId)).data.specVersion;
+        allow update, delete: if false;
+      }
+    }
+
+    // Screenshots as small inline images (docs/12 §6.2 "approved compact representations").
+    match /listingMedia/{listingId} {
+      function validShot(s) {
+        return s is map
+          && s.keys().hasOnly(['mimeType', 'base64', 'width', 'height'])
+          && s.mimeType in ['image/jpeg', 'image/png', 'image/webp']
+          && str(s.base64, 100, 136000)
+          && s.width is int && s.width >= 64 && s.width <= 1280
+          && s.height is int && s.height >= 64 && s.height <= 1280;
+      }
+      allow get: if get(listingPath(listingId)).data.status == 'published'
+        || (signedIn() && get(listingPath(listingId)).data.makerUid == me());
+      allow create, update: if signedIn()
+        && getAfter(listingPath(listingId)).data.makerUid == me()
+        && request.resource.data.keys().hasOnly(['screenshots', 'updatedAt'])
+        && request.resource.data.screenshots is list
+        && request.resource.data.screenshots.size() <= 3
+        && request.resource.data.screenshots.size() == getAfter(listingPath(listingId)).data.screenshotCount
+        && (request.resource.data.screenshots.size() < 1 || validShot(request.resource.data.screenshots[0]))
+        && (request.resource.data.screenshots.size() < 2 || validShot(request.resource.data.screenshots[1]))
+        && (request.resource.data.screenshots.size() < 3 || validShot(request.resource.data.screenshots[2]))
+        && request.resource.data.updatedAt == request.time;
+      allow list, delete: if false;
+    }
+
+    // Install entitlements (docs/12 §16.3). Free installs are zero-price entitlements written by the
+    // client; paid ones only by the purchase function. Never edited or deleted by clients, so the
+    // install counter cannot be replayed.
+    match /users/{userId}/purchases/{listingId} {
+      allow read: if signedIn() && userId == me();
+      allow create: if signedIn()
+        && userId == me()
+        && request.resource.data.keys().hasOnly(['listingId', 'sellerUid', 'pricePaid', 'currency', 'installedVersion', 'purchasedAt', 'status'])
+        && request.resource.data.keys().hasAll(['listingId', 'sellerUid', 'pricePaid', 'currency', 'installedVersion', 'purchasedAt', 'status'])
+        && request.resource.data.listingId == listingId
+        && get(listingPath(listingId)).data.status == 'published'
+        && request.resource.data.sellerUid == get(listingPath(listingId)).data.makerUid
+        && request.resource.data.pricePaid == 0
+        && request.resource.data.pricePaid == get(listingPath(listingId)).data.price
+        && request.resource.data.currency == 'credits'
+        && request.resource.data.installedVersion == get(listingPath(listingId)).data.specVersion
+        && request.resource.data.purchasedAt == request.time
+        && request.resource.data.status == 'active'
+        && getAfter(listingPath(listingId)).data.installs == get(listingPath(listingId)).data.installs + 1;
+      allow update, delete: if false;
+    }
+
+    // Optional encrypted backups (docs/12 §16.7, docs/11 §12.6): only the owner, ciphertext only.
+    match /users/{userId}/backups/{appId} {
+      allow read, delete: if signedIn() && userId == me();
+      allow create, update: if signedIn()
+        && userId == me()
+        && request.resource.data.keys().hasOnly(['format', 'formatVersion', 'ciphertext', 'manifest', 'updatedAt'])
+        && request.resource.data.format == 'kalam-encrypted-backup'
+        && request.resource.data.formatVersion == 1
+        && str(request.resource.data.ciphertext, 1, 900000)
+        && request.resource.data.manifest is map
+        && request.resource.data.manifest.size() <= 12
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    // Credits (docs/12 §12.4-12.5): read your own; every write goes through the trusted functions.
+    match /wallets/{userId} {
+      allow read: if signedIn() && userId == me();
+      allow write: if false;
+    }
+    match /walletTransactions/{transactionId} {
+      allow read: if signedIn() && (resource.data.buyerUid == me() || resource.data.sellerUid == me());
+      allow write: if false;
+    }
+
+    // Reports: write-only for clients, one per user per listing (id = listingId_uid).
+    match /reports/{reportId} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['listingId', 'reporterUid', 'reason', 'note', 'createdAt'])
+        && request.resource.data.keys().hasAll(['listingId', 'reporterUid', 'reason', 'note', 'createdAt'])
+        && request.resource.data.listingId is string
+        && reportId == request.resource.data.listingId + '_' + me()
+        && request.resource.data.reporterUid == me()
+        && request.resource.data.reason in ['malicious', 'misleading', 'privacy', 'copyright', 'spam', 'inappropriate', 'broken']
+        && str(request.resource.data.note, 0, 500)
+        && request.resource.data.createdAt == request.time
+        && exists(listingPath(request.resource.data.listingId));
+      allow read, update, delete: if false;
+    }
+
+    // Moderation audit log (docs/12 §14.5, §18.4): written by the trusted function only.
+    match /moderationLog/{entryId} {
+      allow read, write: if false;
+    }
+  }
+}

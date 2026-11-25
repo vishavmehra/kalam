@@ -1,0 +1,286 @@
+# Kalam CI (docs/13 §20.1 and §20.2, docs/04 §22.4, docs/15 §11.8).
+#
+# Every pull request and every push to main runs the same jobs. The last job, "Release gate", is the one required
+# status check: it passes only when every job the release gates in docs/13 §20.4 depend on has passed.
+#
+# Nothing here calls a real AI model and no secret is needed. Live model checks are a separate protected workflow
+# (eval-live.yml). Firestore rules tests are in rules.yml, secret and dependency scans in security.yml, and the
+# Android build in android.yml (main only, it is slow).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Public client configuration only. Set these as repository variables if you want the build to use a real
+  # Firebase project. Without them the build is "not configured" and the browser tests still work offline.
+  EXPO_PUBLIC_FIREBASE_API_KEY: ${{ vars.EXPO_PUBLIC_FIREBASE_API_KEY }}
+  EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ vars.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+  EXPO_PUBLIC_FIREBASE_PROJECT_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_PROJECT_ID }}
+  EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ vars.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+  EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+  EXPO_PUBLIC_FIREBASE_APP_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_APP_ID }}
+  EXPO_PUBLIC_AI_BACKEND: ${{ vars.EXPO_PUBLIC_AI_BACKEND }}
+  EXPO_PUBLIC_AI_LOCATION: ${{ vars.EXPO_PUBLIC_AI_LOCATION }}
+  EXPO_PUBLIC_SPECIALIST_ENABLED: 'false'
+
+jobs:
+  static:
+    name: Types, lint and format
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      # Errors fail the build. Warnings (including the React Native accessibility rules) are listed, not blocking.
+      # Rules: eslint.config.js (no eval, hooks, src/core boundary, accessibility).
+      - name: Lint
+        run: npx eslint . --max-warnings 100000
+
+      # Files written under this policy are held to Prettier now. The rest of the repo has not been reformatted yet,
+      # so the second step reports without failing. Move paths into the first step as they are formatted.
+      - name: Format check (formatted paths)
+        run: >
+          npx prettier --check
+          tests/evaluation scripts/eval.mjs scripts/bench.mjs scripts/check-bundle-size.mjs
+          eslint.config.js .prettierrc.json .github
+      - name: Format check (whole repo, report only)
+        continue-on-error: true
+        run: npx prettier --check .
+
+  unit:
+    name: Unit and security tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # KalamSpec validation, the formula evaluator (including the attack strings), the dispatcher, the AI
+      # orchestrator, storage and the rest of the Vitest suite.
+      - name: Unit tests
+        run: npx vitest run --maxWorkers=2
+      # The evaluation runner, the golden files and the lint policy. Also run here so they cannot be left out of
+      # the root Vitest include.
+      - name: Evaluation tests
+        run: npx vitest run --config tests/evaluation/vitest.config.ts --maxWorkers=2
+
+  web-build:
+    name: Production web build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Build (expo export and PWA)
+        run: npm run build:web
+
+      # Budgets in tests/evaluation/perf/budgets.json (docs/13 §17.2). A regression guard, not a product target.
+      - name: Bundle size budget
+        run: node scripts/check-bundle-size.mjs dist --write
+
+      # No provider key may ever reach the client bundle (docs/11 §14, docs/16 R-031).
+      - name: Scan the bundle for provider secrets
+        run: |
+          if grep -rEl 'sk-ant-[A-Za-z0-9_-]{20,}|(ANTHROPIC|NEBIUS)_API_KEY["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"']{12,}' dist; then
+            echo "::error::A provider API key appears in the web bundle. Remove it and rotate the key."
+            exit 1
+          fi
+          echo "No provider keys found in dist."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bundle-report
+          path: tests/evaluation/reports/bundle-*.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+  e2e:
+    name: Browser tests (Playwright)
+    needs: web-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+      # Playwright's bundled Chromium has no Gemini Nano, so on-device tests are skipped here. They run against the
+      # dedicated Chrome profile on a developer machine (see tests/e2e and docs/17 §12). This keeps the claim honest:
+      # CI proves the deterministic, offline and cloud-unavailable paths, not on-device inference.
+      - run: npx playwright install --with-deps chromium
+      - name: Run browser tests
+        run: npx playwright test
+        env:
+          E2E_SKIP_ON_DEVICE: '1'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: |
+            tests/e2e/.artifacts/report
+            tests/e2e/.artifacts/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
+  functions:
+    name: Cloud Functions build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # functions/package.json engines.node
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+  eval:
+    name: Deterministic evaluation and benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Golden set through the real classifier, template pipeline, validateSpec, describeSpec, drawing summary and
+      # runtime smoke check. No model is called (docs/13 §6-9, §19). Fails when a quality floor is missed.
+      - name: Golden evaluation
+        run: |
+          status=0
+          node scripts/eval.mjs --check > eval.txt || status=$?
+          { echo '### Golden evaluation (deterministic)'; echo '```text'; cat eval.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          cat eval.txt
+          exit $status
+      # Latency of the core and the size of every generated app (docs/13 §17). Fails on a missed budget.
+      - name: Benchmarks
+        run: |
+          status=0
+          node scripts/bench.mjs --check --runs 100 > bench.txt || status=$?
+          { echo '### Benchmarks'; echo '```text'; cat bench.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          cat bench.txt
+          exit $status
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-reports
+          path: tests/evaluation/reports
+          if-no-files-found: ignore
+          retention-days: 90
+
+  perf:
+    name: Lighthouse (report only)
+    needs: web-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Lighthouse numbers on a shared runner vary too much to gate a merge. They are recorded so a trend is visible.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+      - name: Serve the build and run Lighthouse
+        run: |
+          node tests/e2e/serve.mjs dist 4173 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:4173/manifest.webmanifest > /dev/null && break; sleep 1; done
+          npx --yes lighthouse@13.6.0 http://127.0.0.1:4173/ \
+            --chrome-flags="--headless=new --no-sandbox" \
+            --only-categories=performance,accessibility,best-practices \
+            --output=json --output-path=lighthouse.json --quiet
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync("lighthouse.json", "utf8"));
+            const a = r.audits;
+            const n = (k) => Math.round(a[k].numericValue);
+            const lines = [
+              "### Lighthouse (mobile defaults, shared runner)",
+              "- Performance score: " + Math.round(r.categories.performance.score * 100),
+              "- Accessibility score: " + Math.round(r.categories.accessibility.score * 100),
+              "- First contentful paint: " + n("first-contentful-paint") + " ms",
+              "- Largest contentful paint: " + n("largest-contentful-paint") + " ms",
+              "- Time to interactive (cold start proxy, target under 1500 ms): " + n("interactive") + " ms",
+              "- Total blocking time: " + n("total-blocking-time") + " ms",
+              "- Transferred: " + Math.round(a["total-byte-weight"].numericValue / 1024) + " KB",
+            ];
+            console.log(lines.join("\n"));
+            require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
+          '
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse
+          path: lighthouse.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # docs/13 §20.4 and docs/15 §11.8: a release is blocked when type checking, critical tests, spec validation,
+  # unsafe expression checks (the unit job), the production web build, or the evaluation floors fail.
+  # Android build and the secret and dependency checks live in their own workflows and gate main separately.
+  release-gate:
+    name: Release gate
+    if: always()
+    needs: [static, unit, web-build, e2e, functions, eval]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every required job passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for r in $RESULTS; do
+            if [ "$r" != "success" ]; then
+              echo "::error::A required job did not pass ($r). This build is not ready to release."
+              exit 1
+            fi
+          done

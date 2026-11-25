@@ -1,0 +1,88 @@
+{
+  "id": "gst_calculator",
+  "schemaVersion": "1.0.0",
+  "version": 1,
+  "name": "GST Calculator",
+  "lang": "en",
+  "description": "Work out GST and the final price.",
+  "icon": {
+    "glyph": "calculator"
+  },
+  "theme": {
+    "primary": "#3D3A8C",
+    "radius": 14,
+    "fontScale": 1,
+    "preset": "soft_lavender"
+  },
+  "collections": {},
+  "screens": [
+    {
+      "id": "calc",
+      "title": "GST",
+      "children": [
+        {
+          "id": "amount_input",
+          "type": "number",
+          "label": "Price before tax",
+          "field": "amount",
+          "placeholder": "0"
+        },
+        {
+          "id": "rate_choice",
+          "type": "choice",
+          "label": "GST rate (%)",
+          "field": "rate",
+          "options": [
+            "5",
+            "12",
+            "18",
+            "28"
+          ]
+        },
+        {
+          "id": "gst_amount",
+          "type": "stat",
+          "label": "GST",
+          "expr": "round(form.amount * form.rate / 100, 2)",
+          "format": "currency",
+          "currency": "INR"
+        },
+        {
+          "id": "final_price",
+          "type": "stat",
+          "label": "Final price",
+          "expr": "round(form.amount + form.amount * form.rate / 100, 2)",
+          "format": "currency",
+          "currency": "INR"
+        },
+        {
+          "id": "clear_button",
+          "type": "bigButton",
+          "label": "Clear",
+          "action": "clear",
+          "tone": "secondary"
+        }
+      ]
+    }
+  ],
+  "initialScreen": "calc",
+  "actions": {
+    "clear": {
+      "type": "clearForm"
+    }
+  },
+  "aiBlocks": {},
+  "intents": {
+    "clear": [
+      "clear",
+      "saaf karo"
+    ]
+  },
+  "meta": {
+    "author": "Kalam fixtures",
+    "createdAt": 1794950000000,
+    "description": "GST calculator",
+    "source": "template",
+    "templateId": "calculator"
+  }
+}

@@ -1,0 +1,35 @@
+# Secret scanning rules for Kalam (docs/16 R-031: a debug token or secret leaks).
+# Built on gitleaks' default rules, plus the things this project must never commit.
+title = "Kalam gitleaks rules"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "kalam-appcheck-debug-token"
+description = "A Firebase App Check debug token assigned to a variable or env entry. Keep it in .env.local, never in a commit."
+regex = '''(?i)APPCHECK_DEBUG_TOKEN["']?\s*[:=]\s*["']?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'''
+keywords = ["debug_token"]
+tags = ["firebase", "app-check"]
+
+[[rules]]
+id = "kalam-anthropic-api-key"
+description = "An Anthropic API key. Provider keys live only in Cloud Functions secrets, never in the repo or the client."
+regex = '''sk-ant-[A-Za-z0-9_-]{20,}'''
+keywords = ["sk-ant-"]
+tags = ["provider", "server-side-only"]
+
+[[rules]]
+id = "kalam-nebius-api-key"
+description = "A Nebius Token Factory API key assigned in a file."
+regex = '''(?i)NEBIUS[A-Z_]*KEY["']?\s*[:=]\s*["']?[A-Za-z0-9._-]{20,}'''
+keywords = ["nebius"]
+tags = ["provider", "server-side-only"]
+
+[[allowlists]]
+description = "Placeholders and documentation examples"
+paths = [
+  '''(^|/)\.env\.example$''',
+  '''(^|/)\.firebaserc\.example$''',
+  '''\.github/gitleaks\.toml$''',
+]

@@ -1,0 +1,32 @@
+﻿{
+  "name": "kalam-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that lets AI assistants build, check and package Kalam apps.",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "kalam-mcp": "dist/server.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node dist/server.js",
+    "test": "vitest run --maxWorkers=1",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@types/node": "^22.20.5",
+    "esbuild": "^0.28.2",
+    "typescript": "~6.0.3",
+    "vitest": "^5.1.0",
+    "zod": "^4.6.7"
+  },
+  "author": "Vishav Mehra",
+  "license": "MIT"
+}

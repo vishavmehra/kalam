@@ -1,0 +1,25 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.kalam'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.kalamnano"
+  defaultConfig {
+    versionCode 1
+    versionName '0.1.0'
+  }
+}
+
+dependencies {
+  // Firebase AI Logic hybrid inference for Android (Experimental) and App Check with Play Integrity.
+  // Versions from https://firebase.google.com/docs/ai-logic/hybrid/android/get-started and Google Maven
+  // maven-metadata.xml (both read 2026-11-18). firebase-ai-ondevice is not in the Firebase BoM yet and
+  // needs minSdk 26: app.plugin.js raises android.minSdkVersion.
+  implementation "com.google.firebase:firebase-ai:18.2.0"
+  implementation "com.google.firebase:firebase-ai-ondevice:16.0.0-beta08"
+  implementation "com.google.firebase:firebase-appcheck-playintegrity:20.1.0"
+}

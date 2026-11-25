@@ -1,0 +1,231 @@
+{
+  "id": "notes_app",
+  "schemaVersion": "1.0.0",
+  "version": 1,
+  "name": "My Notes",
+  "lang": "en",
+  "icon": {
+    "glyph": "book"
+  },
+  "theme": {
+    "primary": "#444444",
+    "radius": 14,
+    "fontScale": 1,
+    "preset": "minimal_neutral",
+    "fontFamily": "serif"
+  },
+  "collections": {
+    "notes": {
+      "label": "Notes",
+      "fields": {
+        "title": {
+          "type": "text",
+          "label": "Title",
+          "required": true
+        },
+        "body": {
+          "type": "text",
+          "label": "Note",
+          "multiline": true,
+          "maxLength": 4000
+        },
+        "tag": {
+          "type": "enum",
+          "label": "Tag",
+          "options": [
+            "Personal",
+            "Work",
+            "Ideas"
+          ]
+        },
+        "summary": {
+          "type": "text",
+          "label": "Short summary",
+          "multiline": true
+        }
+      }
+    }
+  },
+  "screens": [
+    {
+      "id": "home",
+      "title": "Notes",
+      "children": [
+        {
+          "id": "note_count",
+          "type": "stat",
+          "label": "Notes",
+          "expr": "count(notes)",
+          "format": "integer"
+        },
+        {
+          "id": "note_list",
+          "type": "list",
+          "source": "notes",
+          "primary": "title",
+          "secondary": "tag",
+          "detailScreen": "view",
+          "emptyText": "Write your first note"
+        },
+        {
+          "id": "new_button",
+          "type": "bigButton",
+          "label": "New note",
+          "action": "go_new"
+        }
+      ]
+    },
+    {
+      "id": "new",
+      "title": "New note",
+      "form": "notes",
+      "children": [
+        {
+          "id": "title_input_new",
+          "type": "textInput",
+          "label": "Title",
+          "field": "title",
+          "required": true
+        },
+        {
+          "id": "body_input_new",
+          "type": "textInput",
+          "label": "Note",
+          "field": "body",
+          "multiline": true
+        },
+        {
+          "id": "tag_choice_new",
+          "type": "choice",
+          "label": "Tag",
+          "field": "tag"
+        },
+        {
+          "id": "summary_input_new",
+          "type": "textInput",
+          "label": "Short summary",
+          "field": "summary",
+          "multiline": true
+        },
+        {
+          "id": "summarise_button_new",
+          "type": "bigButton",
+          "label": "Summarise",
+          "action": "summarise",
+          "tone": "secondary"
+        },
+        {
+          "id": "save_button",
+          "type": "bigButton",
+          "label": "Save note",
+          "action": "save_note"
+        }
+      ]
+    },
+    {
+      "id": "view",
+      "title": "Note",
+      "form": "notes",
+      "children": [
+        {
+          "id": "title_input_edit",
+          "type": "textInput",
+          "label": "Title",
+          "field": "title",
+          "required": true
+        },
+        {
+          "id": "body_input_edit",
+          "type": "textInput",
+          "label": "Note",
+          "field": "body",
+          "multiline": true
+        },
+        {
+          "id": "tag_choice_edit",
+          "type": "choice",
+          "label": "Tag",
+          "field": "tag"
+        },
+        {
+          "id": "summary_input_edit",
+          "type": "textInput",
+          "label": "Short summary",
+          "field": "summary",
+          "multiline": true
+        },
+        {
+          "id": "update_button",
+          "type": "bigButton",
+          "label": "Save changes",
+          "action": "update_note"
+        },
+        {
+          "id": "delete_button",
+          "type": "bigButton",
+          "label": "Delete note",
+          "action": "delete_note",
+          "tone": "danger"
+        }
+      ]
+    }
+  ],
+  "initialScreen": "home",
+  "actions": {
+    "go_new": {
+      "type": "navigate",
+      "screen": "new"
+    },
+    "summarise": {
+      "type": "runAI",
+      "aiBlock": "summarise_note"
+    },
+    "save_note": {
+      "type": "insert",
+      "collection": "notes",
+      "then": {
+        "navigate": "home"
+      }
+    },
+    "update_note": {
+      "type": "update",
+      "collection": "notes",
+      "record": "selected",
+      "then": {
+        "feedback": "Saved",
+        "navigate": "home"
+      }
+    },
+    "delete_note": {
+      "type": "delete",
+      "collection": "notes",
+      "record": "selected",
+      "confirm": "Delete this note?",
+      "then": {
+        "navigate": "home"
+      }
+    }
+  },
+  "aiBlocks": {
+    "summarise_note": {
+      "kind": "summarise",
+      "inputField": "body",
+      "outputField": "summary",
+      "maxWords": 40,
+      "verified": "onDevice",
+      "prompt": "Summarise the note in plain words."
+    }
+  },
+  "intents": {
+    "go_new": [
+      "new note"
+    ]
+  },
+  "meta": {
+    "author": "Kalam fixtures",
+    "createdAt": 1794950000000,
+    "description": "Notes with on-device summaries",
+    "source": "template",
+    "templateId": "notes"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "kalam-golden",
+  "datasetVersion": "1.1.0",
+  "description": "Golden evaluation set for Kalam's compiler stages (docs/13 §6-9, §18). text-requests.json: 25 text requests (English, Hinglish, Hindi). sketches.json: 25 Drawing Studio sketches (docs/13 §7 calls for 25). modalities.json: 25 image, audio, video and mixed-input cases (docs/13 §7.4). Sketches are written in a small layout language (stamps and text) and expanded into real DrawingDocuments by tests/evaluation/runner/sketch-builder.ts, so they match what the Studio produces and never drift. Media is described, not stored: see needsAssets.",
+  "rules": [
+    "Expected results are written from the request, by the level definitions in docs/07 §3.1, before any model or classifier run.",
+    "Do not edit an expectation to make Kalam pass (docs/13 §7.3). Fix Kalam, or record the case as ambiguous with a note.",
+    "Ambiguous cases are kept and flagged. Reports show accuracy with and without them.",
+    "Each modality is reported on its own and never blended into one score (docs/13 §7.4, §18).",
+    "A sketch's complexity label follows its structure. Any sketch needs cloud vision, so route is always cloud, and a simple-looking sketch may legitimately be classified one level higher (docs/07 §3.2, item 7).",
+    "Every input is synthetic. No private user data appears in this set or in its reports.",
+    "This set is the benchmark, not training data. Do not copy these requests into templates, keyword lists or prompts.",
+    "Independence caveat: the first version was written by the same team that built the classifier and templates, so it measures regressions and boundary behaviour, not generalisation. Before quoting an accuracy as a product claim, add a held-out set written by people who have not seen the classifier (docs/13 §7.3).",
+    "Human review: every expected result here is machine-authored and carries no review field, which the report counts as needs_human_review. A person marks a case reviewed by adding review { status: human_reviewed, reviewer, date, notes } and scores it on the rubric in the report (docs/13 §18.1, §18.2). Keep evaluator disagreements in notes.",
+    "Placeholder media (needsAssets) tests routing only. It is never sent to a model, and live runs skip those cases until a person supplies the real photo, recording or video."
+  ],
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "note": "Initial set: 25 text requests (5 Hinglish or Hindi, 1 prompt-injection edge, 1 vague edge) and 10 sketches."
+    },
+    {
+      "version": "1.1.0",
+      "note": "Sketches grown to 25. Added 25 image, audio, video and mixed-input cases. Added review and needsAssets fields. Text requests unchanged."
+    }
+  ],
+  "handDrawnPhotos": {
+    "required": 25,
+    "present": 0,
+    "note": "docs/13 §7 asks for 25 hand-drawn sketches kept as the original photos. Nobody has drawn and photographed them yet. The 25 sketches here are Drawing Studio documents, which is what the Studio route sends. Photos of paper sketches need a person with paper and a camera, and each needs a reviewed expected result."
+  }
+}

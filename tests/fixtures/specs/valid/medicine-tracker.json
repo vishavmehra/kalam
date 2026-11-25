@@ -1,0 +1,169 @@
+{
+  "id": "medicine_tracker",
+  "schemaVersion": "1.0.0",
+  "version": 1,
+  "name": "Medicine Tracker",
+  "lang": "en",
+  "description": "Remember which doses were taken today.",
+  "icon": {
+    "glyph": "pill"
+  },
+  "theme": {
+    "primary": "#0B6E79",
+    "radius": 14,
+    "fontScale": 1.3,
+    "preset": "high_contrast"
+  },
+  "collections": {
+    "doses": {
+      "label": "Doses",
+      "fields": {
+        "medicine": {
+          "type": "text",
+          "label": "Medicine",
+          "required": true
+        },
+        "time": {
+          "type": "enum",
+          "label": "Time",
+          "options": [
+            "Morning",
+            "Afternoon",
+            "Night"
+          ]
+        },
+        "date": {
+          "type": "date",
+          "label": "Date",
+          "defaultValue": "today"
+        },
+        "taken": {
+          "type": "boolean",
+          "label": "Taken",
+          "defaultValue": false
+        }
+      }
+    }
+  },
+  "screens": [
+    {
+      "id": "home",
+      "title": "Today’s medicines",
+      "children": [
+        {
+          "id": "taken_today",
+          "type": "stat",
+          "label": "Doses taken today",
+          "expr": "count(filter(doses, date == today && taken))",
+          "format": "integer"
+        },
+        {
+          "id": "left_today",
+          "type": "stat",
+          "label": "Doses left today",
+          "expr": "count(filter(doses, date == today && !taken))",
+          "format": "integer"
+        },
+        {
+          "id": "dose_list",
+          "type": "list",
+          "source": "doses",
+          "primary": "medicine",
+          "secondary": "time",
+          "filter": "date == today",
+          "toggleField": "taken",
+          "emptyText": "No doses for today"
+        },
+        {
+          "id": "add_button",
+          "type": "bigButton",
+          "label": "Add dose",
+          "action": "go_add"
+        }
+      ]
+    },
+    {
+      "id": "add",
+      "title": "Add dose",
+      "form": "doses",
+      "children": [
+        {
+          "id": "label_photo",
+          "type": "photo",
+          "label": "Photo of the medicine strip",
+          "aiBlock": "read_label"
+        },
+        {
+          "id": "medicine_input",
+          "type": "textInput",
+          "label": "Medicine",
+          "field": "medicine",
+          "required": true
+        },
+        {
+          "id": "time_choice",
+          "type": "choice",
+          "label": "Time",
+          "field": "time"
+        },
+        {
+          "id": "date_input",
+          "type": "date",
+          "label": "Date",
+          "field": "date"
+        },
+        {
+          "id": "taken_toggle",
+          "type": "toggle",
+          "label": "Already taken",
+          "field": "taken"
+        },
+        {
+          "id": "save_button",
+          "type": "bigButton",
+          "label": "Save dose",
+          "action": "save_dose"
+        }
+      ]
+    }
+  ],
+  "initialScreen": "home",
+  "actions": {
+    "go_add": {
+      "type": "navigate",
+      "screen": "add"
+    },
+    "save_dose": {
+      "type": "insert",
+      "collection": "doses",
+      "then": {
+        "speak": "Dose added",
+        "navigate": "home"
+      }
+    }
+  },
+  "aiBlocks": {
+    "read_label": {
+      "kind": "extractFromPhoto",
+      "target": "doses",
+      "fields": [
+        "medicine"
+      ],
+      "verified": "cloudPreferred",
+      "prompt": "Read the medicine name printed on the strip or box."
+    }
+  },
+  "intents": {
+    "save_dose": [
+      "save",
+      "done"
+    ]
+  },
+  "meta": {
+    "author": "Kalam fixtures",
+    "createdAt": 1794950000000,
+    "description": "Medicine dose tracker",
+    "source": "template",
+    "templateId": "checklist"
+  }
+}

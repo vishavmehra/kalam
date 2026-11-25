@@ -1,0 +1,104 @@
+/**
+ * iOS on-device AI (docs/17 §3.2: "iOS, integrating Apple Foundation Models through Firebase AI Logic").
+ * Apple's on-device model (FoundationModels SystemLanguageModel) runs in the kalam-apple native module;
+ * Firebase AI Logic's JS SDK chooses device or cloud, exactly as on the web and Android: the adapter from
+ * prompt-api.native.ts goes in as globalThis.LanguageModel, firebase/ai's hybrid router calls it, and
+ * response.inferenceSource says which one ran. firebase-provider.ts has no iOS branch, and the cloud leg
+ * (with App Check) is the same JS SDK every platform uses, so the orchestrator keeps its one cloud fallback.
+ *
+ * Sources, read 2026-11-25:
+ * - https://firebase.google.com/docs/ai-logic/hybrid/ios/get-started and .../hybrid/ios/configuration-options:
+ *   on-device runs only with Apple Intelligence on, text input only, about 4096 tokens, foreground only;
+ *   the app cannot start the model download, only check availability and ask the person to turn on
+ *   Apple Intelligence.
+ * - firebase-ios-sdk FirebaseAI/CHANGELOG.md 13.0.0: the interim SystemLanguageModel/HybridModel wrapper of
+ *   12.13 was removed; Firebase now says to use Apple's Foundation Models framework directly, which is what
+ *   the Swift module does.
+ * - https://developer.apple.com/documentation/foundationmodels/systemlanguagemodel: iOS 26.0+, availability
+ *   .unavailable(.deviceNotEligible | .appleIntelligenceNotEnabled | .modelNotReady), supportedLanguages.
+ * Structured output: the JSON Schema goes in the prompt and the caller's Zod parse decides, as on Android.
+ */
+import type { OnDeviceStatus } from '@/core/contracts';
+import { loadKalamApple, type AppleUnavailableReason, type KalamAppleModule } from '../../../modules/kalam-apple';
+import type { LanguageModelStatic } from './on-device.web';
+import { createPromptLanguageModel, errorMessage as message, promptError, type PromptLanguageModel } from './prompt-api.native';
+
+export { TEXT_IO, type LanguageModelStatic } from './on-device.web';
+
+/** The name Firebase AI Logic gives this model (rawResponse.modelVersion, hybrid configuration options page). */
+export const ON_DEVICE_MODEL_NAME = 'apple-foundation-models-system-language-model';
+
+// CONTRACT CHANGE REQUEST: OnDeviceStatus.platform has no 'ios' yet, so iOS reports 'other' until it does.
+const PLATFORM: OnDeviceStatus['platform'] = 'other';
+
+const KNOWN = new Set<string>(['unavailable', 'downloading', 'available']);
+
+export const UNAVAILABLE_DETAIL: Record<AppleUnavailableReason, string> = {
+  deviceNotEligible: 'This iPhone or iPad cannot run Apple Intelligence, so Kalam uses the cloud when you allow it.',
+  appleIntelligenceNotEnabled: 'Apple Intelligence is off. Turn it on in Settings, Apple Intelligence and Siri, to run AI on this device.',
+  modelNotReady: 'Apple Intelligence is still getting its model ready. iOS downloads it by itself, which can take a while.',
+  osTooOld: 'AI on this device needs iOS 26 or later with Apple Intelligence on.',
+  unknown: 'Apple Intelligence is not available right now.',
+};
+
+/** Swift error codes (KalamAppleModule.swift) to Prompt API error names, which errors.ts maps to Kalam codes. */
+const PROMPT_ERROR_BY_CODE: Record<string, string> = {
+  ERR_APPLE_NOT_SUPPORTED: 'NotSupportedError',
+  ERR_APPLE_NOT_ALLOWED: 'NotAllowedError',
+  ERR_APPLE_TOO_LARGE: 'QuotaExceededError',
+};
+
+let adapter: PromptLanguageModel | undefined;
+
+/** Kalam's adapter, or undefined without the native module. Never another global LanguageModel. */
+export function getLanguageModel(): LanguageModelStatic | undefined {
+  if (!adapter) {
+    const apple = loadKalamApple();
+    if (!apple.module) return undefined;
+    adapter = createPromptLanguageModel(appleEngine(apple.module), 'apple');
+    (globalThis as { LanguageModel?: LanguageModelStatic }).LanguageModel = adapter;
+  }
+  return adapter;
+}
+
+// firebase/ai reads globalThis.LanguageModel whenever a GenerativeModel is made, so it goes in at load.
+getLanguageModel();
+
+export async function onDeviceStatus(): Promise<OnDeviceStatus> {
+  const apple = loadKalamApple();
+  if (!apple.module) return { platform: PLATFORM, apiExposed: false, availability: 'unavailable', detail: apple.reason };
+  try {
+    const s = await apple.module.availability();
+    const availability = KNOWN.has(s.availability) ? s.availability : 'unknown';
+    const detail = availability === 'available' ? undefined : UNAVAILABLE_DETAIL[s.reason ?? 'unknown'] ?? UNAVAILABLE_DETAIL.unknown;
+    return { platform: PLATFORM, apiExposed: true, availability, detail };
+  } catch (e) {
+    return { platform: PLATFORM, apiExposed: true, availability: 'unknown', detail: message(e) };
+  }
+}
+
+/**
+ * iOS downloads Apple's model by itself once Apple Intelligence is on; an app cannot start or follow that
+ * download. So this only reports the current state.
+ */
+export async function prepareOnDevice(_onProgress?: (p: number) => void): Promise<OnDeviceStatus> {
+  return onDeviceStatus();
+}
+
+/** iOS loads the model when a request needs it and does not say whether it is in memory, so no `warm`. */
+export function warmUpOnDevice(): Promise<OnDeviceStatus> {
+  return onDeviceStatus();
+}
+
+function appleEngine(native: KalamAppleModule) {
+  return {
+    async ready(languages: string[]) {
+      const s = await native.availability();
+      const supported = new Set(s.languages ?? []);
+      return s.availability === 'available' && languages.every((l) => supported.has(l));
+    },
+    generate: (id: string, options: { prompt: string }) => native.generate(id, options),
+    cancel: (id: string) => native.cancel(id),
+    toPromptError: (e: unknown) => promptError(PROMPT_ERROR_BY_CODE[(e as { code?: string })?.code ?? ''] ?? 'UnknownError', message(e)),
+  };
+}

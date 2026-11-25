@@ -1,0 +1,20 @@
+/** Every sentence of the formula helper screen, in one place for the later language work. */
+export const COPY = {
+  inputLabel: 'What should this number show?',
+  hint: 'Say it in your own words. You see the formula, what it means and an example before anything changes. Your entries stay on this device. If AI is needed, only your words and the names of your fields are used.',
+  placeholder: 'For example: total amount this month',
+  suggest: 'Suggest a formula',
+  working: 'Working it out',
+  useThis: 'Use this',
+  useHint: 'Changes what this number shows. You can undo it from the history.',
+  clear: 'Clear',
+  now: 'It shows this now',
+  formula: 'Formula',
+  uses: 'Uses',
+  tryIt: 'Try it',
+  result: 'Result',
+  example: 'Example',
+  yours: 'Your entries',
+  warning: 'Check this',
+  summary: (label: string): string => `Changed what “${label}” shows`,
+} as const;

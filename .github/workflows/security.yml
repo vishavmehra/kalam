@@ -1,0 +1,75 @@
+# Secret scan and dependency audit (docs/13 §16, §20.2; docs/11 §14; docs/15 §11.5; docs/16 R-031).
+#
+#  - Secret scan: blocking. A leaked key, token or App Check debug token fails the run. Findings are redacted in the
+#    log, so the log itself never leaks the value.
+#  - Dependency audit: a report. It never fails the run, because a new advisory in a transitive dependency should not
+#    block unrelated work. High and critical findings are raised as warnings and listed in the run summary.
+name: Security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 3 * * 1' # Mondays 03:17 UTC, so new advisories show up without a code change
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the whole history, because a secret removed later is still a leaked secret
+      # The official image, so no licence key or third-party action is needed. Rules: .github/gitleaks.toml.
+      - name: gitleaks
+        run: >
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest
+          git /repo --config /repo/.github/gitleaks.toml --redact --verbose --no-banner
+
+  audit:
+    name: Dependency audit (report only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # Reads the lock files only. Nothing is installed or run.
+      - name: Audit the app and the Cloud Functions
+        run: |
+          npm audit --omit=dev --package-lock-only --json > audit-app.json || true
+          npm --prefix functions audit --omit=dev --package-lock-only --json > audit-functions.json || true
+          node -e '
+            const fs = require("fs");
+            const out = ["### Dependency audit (production dependencies, report only)", ""];
+            let urgent = 0;
+            for (const [name, file] of [["App", "audit-app.json"], ["Cloud Functions", "audit-functions.json"]]) {
+              let v;
+              try { v = JSON.parse(fs.readFileSync(file, "utf8")).metadata?.vulnerabilities; } catch { v = undefined; }
+              if (!v) { out.push("- " + name + ": the audit did not return a result"); continue; }
+              urgent += (v.high ?? 0) + (v.critical ?? 0);
+              out.push("- " + name + ": " + ["critical", "high", "moderate", "low"].map((k) => (v[k] ?? 0) + " " + k).join(", "));
+            }
+            console.log(out.join("\n"));
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, out.join("\n") + "\n");
+            if (urgent > 0) console.log("::warning::" + urgent + " high or critical advisories in production dependencies. See the run summary.");
+          '
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit
+          path: |
+            audit-app.json
+            audit-functions.json
+          retention-days: 30

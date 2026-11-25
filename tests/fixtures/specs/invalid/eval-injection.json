@@ -1,0 +1,95 @@
+{
+  "id": "fixture_app",
+  "schemaVersion": "1.0.0",
+  "version": 1,
+  "name": "Fixture App",
+  "lang": "en",
+  "theme": {
+    "primary": "#1F6F5C",
+    "radius": 14,
+    "fontScale": 1
+  },
+  "collections": {
+    "items": {
+      "label": "Items",
+      "fields": {
+        "name": {
+          "type": "text",
+          "label": "Name",
+          "required": true
+        },
+        "price": {
+          "type": "number",
+          "label": "Price"
+        }
+      }
+    }
+  },
+  "screens": [
+    {
+      "id": "home",
+      "title": "Items",
+      "children": [
+        {
+          "id": "item_list",
+          "type": "list",
+          "source": "items",
+          "primary": "name"
+        },
+        {
+          "id": "pwn",
+          "type": "stat",
+          "label": "Total",
+          "expr": "constructor.constructor('return process')()"
+        },
+        {
+          "id": "add_button",
+          "type": "bigButton",
+          "label": "Add item",
+          "action": "go_add"
+        }
+      ]
+    },
+    {
+      "id": "add",
+      "title": "Add item",
+      "form": "items",
+      "children": [
+        {
+          "id": "name_input",
+          "type": "textInput",
+          "label": "Name",
+          "field": "name"
+        },
+        {
+          "id": "save_button",
+          "type": "bigButton",
+          "label": "Save",
+          "action": "save_item"
+        }
+      ]
+    }
+  ],
+  "initialScreen": "home",
+  "actions": {
+    "go_add": {
+      "type": "navigate",
+      "screen": "add"
+    },
+    "save_item": {
+      "type": "insert",
+      "collection": "items",
+      "then": {
+        "navigate": "home"
+      }
+    }
+  },
+  "aiBlocks": {},
+  "intents": {},
+  "meta": {
+    "author": "Kalam fixtures",
+    "createdAt": 1794950000000,
+    "description": "Invalid fixture",
+    "source": "manual"
+  }
+}

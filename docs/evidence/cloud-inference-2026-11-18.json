@@ -1,0 +1,30 @@
+{
+  "kind": "cloud-inference",
+  "recordedAt": "2026-11-17T23:30:09.280Z",
+  "command": "node scripts/verify-firebase-ai.mjs",
+  "exitCode": 0,
+  "environment": {
+    "node": "v24.18.1",
+    "os": "win32 x64",
+    "sdk": {
+      "firebase": "13.4.0",
+      "@firebase/ai": "3.1.0"
+    }
+  },
+  "result": {
+    "ok": true,
+    "model": "gemini-3.8-flash",
+    "appCheck": "debug_token_exchanged",
+    "inferenceSource": "in_cloud",
+    "latencyMs": 3383,
+    "output": {
+      "category": "shopping",
+      "confidence": "high"
+    },
+    "usage": {
+      "prompt": 123,
+      "output": 9,
+      "total": 132
+    }
+  }
+}

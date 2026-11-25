@@ -1,0 +1,93 @@
+{
+  "id": "habit_counter",
+  "schemaVersion": "1.0.0",
+  "version": 1,
+  "name": "Water and Push-ups",
+  "lang": "en",
+  "icon": {
+    "glyph": "dumbbell"
+  },
+  "theme": {
+    "primary": "#2B5FA8",
+    "radius": 14,
+    "fontScale": 1,
+    "preset": "ocean_blue",
+    "spacing": "spacious"
+  },
+  "collections": {},
+  "screens": [
+    {
+      "id": "home",
+      "title": "Today",
+      "children": [
+        {
+          "id": "water",
+          "type": "counter",
+          "label": "Glasses of water",
+          "min": 0,
+          "max": 20
+        },
+        {
+          "id": "pushups",
+          "type": "counter",
+          "label": "Push-ups",
+          "min": 0,
+          "step": 5
+        },
+        {
+          "id": "progress",
+          "type": "stat",
+          "label": "Water goal",
+          "expr": "if(state.water >= 8, 'Done for today', concat(8 - state.water, ' glasses to go'))",
+          "format": "text"
+        },
+        {
+          "id": "add_glass_button",
+          "type": "bigButton",
+          "label": "One more glass",
+          "action": "add_glass"
+        },
+        {
+          "id": "reset_button",
+          "type": "bigButton",
+          "label": "Start a new day",
+          "action": "reset_water",
+          "tone": "secondary"
+        }
+      ]
+    }
+  ],
+  "initialScreen": "home",
+  "actions": {
+    "add_glass": {
+      "type": "increment",
+      "target": "water"
+    },
+    "reset_water": {
+      "type": "reset",
+      "target": "water"
+    },
+    "more_pushups": {
+      "type": "increment",
+      "target": "pushups",
+      "by": 5
+    }
+  },
+  "aiBlocks": {},
+  "intents": {
+    "add_glass": [
+      "one more glass",
+      "ek glass"
+    ],
+    "more_pushups": [
+      "five more push-ups"
+    ]
+  },
+  "meta": {
+    "author": "Kalam fixtures",
+    "createdAt": 1794950000000,
+    "description": "Counts daily habits",
+    "source": "template",
+    "templateId": "counter"
+  }
+}

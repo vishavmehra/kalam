@@ -1,0 +1,30 @@
+{
+  "kind": "on-device-inference",
+  "recordedAt": "2026-11-17T23:23:47.076Z",
+  "command": "node scripts/verify-firebase-ai.mjs --on-device --cdp-port 9333",
+  "exitCode": 0,
+  "environment": {
+    "node": "v24.18.1",
+    "os": "win32 x64",
+    "sdk": {
+      "firebase": "13.4.0",
+      "@firebase/ai": "3.1.0"
+    },
+    "chrome": "Chrome/157.0.8103.79",
+    "cdpPort": "9333"
+  },
+  "result": {
+    "apiExposed": true,
+    "availability": "available",
+    "classify": {
+      "createMs": 120358,
+      "promptMs": 8229,
+      "text": "{\"category\": \"shopping\", \"confidence\": \"high\"}"
+    },
+    "voice": {
+      "createMs": 896,
+      "promptMs": 6388,
+      "text": "{\"action\": \"createOrder\", \"fields\": [{\"name\": \"customer\", \"value\": \"Raju\"}, {\"name\": \"item\", \"value\": \"kurta\"}, {\"name\": \"size\", \"value\": \"chest 40\"}], \"note\": null}"
+    }
+  }
+}

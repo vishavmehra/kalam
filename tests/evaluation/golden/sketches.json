@@ -1,0 +1,2099 @@
+{
+  "cases": [
+    {
+      "id": "s01-calculator",
+      "title": "Calculator",
+      "category": "calculators",
+      "tags": ["simple", "one-page"],
+      "ambiguous": true,
+      "notes": "Simple by structure. Needing vision may reasonably raise it one level (docs/07 §3.2).",
+      "pages": [
+        {
+          "title": "Calculator",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Calculator"
+            },
+            {
+              "stamp": "textInput",
+              "label": "First number"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Second number"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Add"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Subtract"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Multiply"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Divide"
+            },
+            {
+              "stamp": "stat",
+              "label": "Result"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "complexity": "simple",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 1,
+        "minCollections": 0,
+        "requiredFields": [],
+        "requiredComponents": ["bigButton", "stat"],
+        "labels": ["Calculator", "First number", "Second number", "Add", "Subtract", "Multiply", "Divide", "Result"],
+        "stamps": {
+          "heading": 1,
+          "textInput": 2,
+          "bigButton": 4,
+          "stat": 1
+        }
+      }
+    },
+    {
+      "id": "s02-water-counter",
+      "title": "Water counter",
+      "category": "trackers",
+      "tags": ["simple", "one-page"],
+      "ambiguous": true,
+      "notes": "Simple by structure. Needing vision may reasonably raise it one level.",
+      "pages": [
+        {
+          "title": "Water today",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Water today"
+            },
+            {
+              "stamp": "stat",
+              "label": "Glasses"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Add a glass"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Reset"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "complexity": "simple",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 1,
+        "minCollections": 0,
+        "requiredFields": [],
+        "requiredComponents": ["bigButton", "stat"],
+        "labels": ["Water today", "Glasses", "Add a glass", "Reset"],
+        "stamps": {
+          "heading": 1,
+          "stat": 1,
+          "bigButton": 2
+        }
+      }
+    },
+    {
+      "id": "s03-shopping-list",
+      "title": "Shopping list",
+      "category": "lists",
+      "tags": ["simple", "one-page"],
+      "ambiguous": true,
+      "notes": "Simple by structure. Needing vision may reasonably raise it one level.",
+      "pages": [
+        {
+          "title": "Shopping list",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Shopping list"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Item"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Add"
+            },
+            {
+              "stamp": "list",
+              "label": "Items"
+            },
+            {
+              "stamp": "toggle",
+              "label": "Bought"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "complexity": "simple",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 1,
+        "minCollections": 1,
+        "requiredFields": [
+          {
+            "anyOf": ["item", "name"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["bought", "done"],
+            "type": "boolean"
+          }
+        ],
+        "requiredComponents": ["list"],
+        "labels": ["Shopping list", "Item", "Add", "Items", "Bought"],
+        "stamps": {
+          "heading": 1,
+          "textInput": 1,
+          "bigButton": 1,
+          "list": 1,
+          "toggle": 1
+        }
+      }
+    },
+    {
+      "id": "s04-expense-tracker",
+      "title": "Expense tracker",
+      "category": "trackers",
+      "tags": ["simple", "two-pages"],
+      "ambiguous": true,
+      "notes": "docs/07 §3.1 lists a basic expense tracker as simple. Two screens and a total are borderline.",
+      "pages": [
+        {
+          "title": "Add expense",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Add expense"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Amount"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Category"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Note"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Save"
+            }
+          ]
+        },
+        {
+          "title": "All expenses",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Expenses"
+            },
+            {
+              "stamp": "stat",
+              "label": "Total spent"
+            },
+            {
+              "stamp": "list",
+              "label": "Expenses"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "complexity": "simple",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 2,
+        "minCollections": 1,
+        "requiredFields": [
+          {
+            "anyOf": ["amount"],
+            "type": "number"
+          },
+          {
+            "anyOf": ["category"]
+          }
+        ],
+        "requiredComponents": ["list", "stat", "bigButton"],
+        "labels": ["Add expense", "Amount", "Category", "Note", "Save", "All expenses", "Expenses", "Total spent"],
+        "stamps": {
+          "heading": 2,
+          "textInput": 3,
+          "bigButton": 1,
+          "stat": 1,
+          "list": 1
+        }
+      }
+    },
+    {
+      "id": "s05-tailor-measurements",
+      "title": "Tailor measurement book",
+      "category": "forms",
+      "tags": ["medium", "two-pages"],
+      "ambiguous": true,
+      "notes": "A customer list with a measurement form. Basic measurement forms are simple, a book with a customer list sits near medium.",
+      "pages": [
+        {
+          "title": "Customers",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Customers"
+            },
+            {
+              "stamp": "list",
+              "label": "Customers"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "New customer"
+            }
+          ]
+        },
+        {
+          "title": "New measurement",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "New measurement"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Name"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Phone"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Chest"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Waist"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Length"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Delivery date"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Save"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "complexity": "medium",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 2,
+        "minCollections": 1,
+        "requiredFields": [
+          {
+            "anyOf": ["name", "customer"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["chest"],
+            "type": "number"
+          },
+          {
+            "anyOf": ["waist"],
+            "type": "number"
+          },
+          {
+            "anyOf": ["length"],
+            "type": "number"
+          },
+          {
+            "anyOf": ["delivery"],
+            "type": "date"
+          }
+        ],
+        "requiredComponents": ["list", "bigButton"],
+        "labels": [
+          "Customers",
+          "New customer",
+          "New measurement",
+          "Name",
+          "Phone",
+          "Chest",
+          "Waist",
+          "Length",
+          "Delivery date",
+          "Save"
+        ],
+        "stamps": {
+          "heading": 2,
+          "list": 1,
+          "bigButton": 2,
+          "textInput": 6
+        }
+      }
+    },
+    {
+      "id": "s06-medicine-tracker",
+      "title": "Medicine tracker",
+      "category": "trackers",
+      "tags": ["medium", "three-pages"],
+      "pages": [
+        {
+          "title": "Today",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Medicines today"
+            },
+            {
+              "stamp": "stat",
+              "label": "Taken today"
+            },
+            {
+              "stamp": "list",
+              "label": "Medicines"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Add medicine"
+            }
+          ]
+        },
+        {
+          "title": "Add medicine",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Add medicine"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Medicine name"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Dose"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Time"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Save"
+            }
+          ]
+        },
+        {
+          "title": "History",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "History"
+            },
+            {
+              "stamp": "list",
+              "label": "Doses taken"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "complexity": "medium",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 3,
+        "minCollections": 2,
+        "requiredFields": [
+          {
+            "anyOf": ["medicine", "name"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["dose"]
+          },
+          {
+            "anyOf": ["time"]
+          }
+        ],
+        "requiredComponents": ["list", "stat"],
+        "labels": [
+          "Today",
+          "Medicines today",
+          "Taken today",
+          "Medicines",
+          "Add medicine",
+          "Medicine name",
+          "Dose",
+          "Time",
+          "Save",
+          "History",
+          "Doses taken"
+        ],
+        "stamps": {
+          "heading": 3,
+          "stat": 1,
+          "list": 2,
+          "bigButton": 2,
+          "textInput": 3
+        }
+      }
+    },
+    {
+      "id": "s07-kirana-credit-book",
+      "title": "Kirana credit book",
+      "category": "ledgers",
+      "tags": ["medium", "three-pages"],
+      "pages": [
+        {
+          "title": "Customers",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Customers"
+            },
+            {
+              "stamp": "stat",
+              "label": "Total udhaar"
+            },
+            {
+              "stamp": "list",
+              "label": "Customers"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "New customer"
+            }
+          ]
+        },
+        {
+          "title": "Customer",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Customer name"
+            },
+            {
+              "stamp": "stat",
+              "label": "Balance"
+            },
+            {
+              "stamp": "list",
+              "label": "Entries"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Gave credit"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Got payment"
+            }
+          ]
+        },
+        {
+          "title": "New entry",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "New entry"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Amount"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Note"
+            },
+            {
+              "stamp": "toggle",
+              "label": "Payment received"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Save"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "complexity": "medium",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 3,
+        "minCollections": 2,
+        "requiredFields": [
+          {
+            "anyOf": ["name", "customer"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["amount"],
+            "type": "number"
+          }
+        ],
+        "requiredComponents": ["list", "stat", "bigButton"],
+        "labels": [
+          "Customers",
+          "Total udhaar",
+          "New customer",
+          "Customer",
+          "Customer name",
+          "Balance",
+          "Entries",
+          "Gave credit",
+          "Got payment",
+          "New entry",
+          "Amount",
+          "Note",
+          "Payment received",
+          "Save"
+        ],
+        "stamps": {
+          "heading": 3,
+          "stat": 2,
+          "list": 2,
+          "bigButton": 4,
+          "textInput": 2,
+          "toggle": 1
+        }
+      }
+    },
+    {
+      "id": "s08-student-attendance",
+      "title": "Student attendance",
+      "category": "registers",
+      "tags": ["medium", "three-pages"],
+      "pages": [
+        {
+          "title": "Classes",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Classes"
+            },
+            {
+              "stamp": "list",
+              "label": "Classes"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "New class"
+            }
+          ]
+        },
+        {
+          "title": "Take attendance",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Take attendance"
+            },
+            {
+              "stamp": "list",
+              "label": "Students"
+            },
+            {
+              "stamp": "toggle",
+              "label": "Present"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Save attendance"
+            }
+          ]
+        },
+        {
+          "title": "Summary",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Summary"
+            },
+            {
+              "stamp": "stat",
+              "label": "Present today"
+            },
+            {
+              "stamp": "stat",
+              "label": "Absent today"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "complexity": "medium",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 3,
+        "minCollections": 2,
+        "requiredFields": [
+          {
+            "anyOf": ["student", "name"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["present", "attendance"],
+            "type": "boolean"
+          }
+        ],
+        "requiredComponents": ["list", "toggle", "stat"],
+        "labels": [
+          "Classes",
+          "New class",
+          "Take attendance",
+          "Students",
+          "Present",
+          "Save attendance",
+          "Summary",
+          "Present today",
+          "Absent today"
+        ],
+        "stamps": {
+          "heading": 3,
+          "list": 2,
+          "bigButton": 2,
+          "toggle": 1,
+          "stat": 2
+        }
+      }
+    },
+    {
+      "id": "s09-receipt-photo",
+      "title": "Bill reader",
+      "category": "forms",
+      "tags": ["medium", "two-pages", "photo"],
+      "pages": [
+        {
+          "title": "Add bill",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Add bill"
+            },
+            {
+              "stamp": "photo",
+              "label": "Bill photo"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Read bill"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Shop"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Amount"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Date"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Save"
+            }
+          ]
+        },
+        {
+          "title": "All bills",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "All bills"
+            },
+            {
+              "stamp": "list",
+              "label": "Bills"
+            },
+            {
+              "stamp": "stat",
+              "label": "Total"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "complexity": "medium",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 2,
+        "minCollections": 1,
+        "requiredFields": [
+          {
+            "anyOf": ["shop", "store", "vendor"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["amount"],
+            "type": "number"
+          },
+          {
+            "anyOf": ["date"],
+            "type": "date"
+          }
+        ],
+        "requiredComponents": ["photo", "list"],
+        "labels": [
+          "Add bill",
+          "Bill photo",
+          "Read bill",
+          "Shop",
+          "Amount",
+          "Date",
+          "Save",
+          "All bills",
+          "Bills",
+          "Total"
+        ],
+        "stamps": {
+          "heading": 2,
+          "photo": 1,
+          "bigButton": 2,
+          "textInput": 3,
+          "list": 1,
+          "stat": 1
+        }
+      }
+    },
+    {
+      "id": "s10-clinic-six-screens",
+      "title": "Clinic",
+      "category": "multi-screen",
+      "tags": ["complex", "six-pages", "box-label"],
+      "notes": "Six screens, three linked collections and a hand-drawn note box. Complex by docs/07 §3.1 (more screens, related collections).",
+      "pages": [
+        {
+          "title": "Home",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Clinic"
+            },
+            {
+              "stamp": "stat",
+              "label": "Appointments today"
+            },
+            {
+              "stamp": "stat",
+              "label": "Patients"
+            },
+            {
+              "stamp": "list",
+              "label": "Next appointments"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "New appointment"
+            }
+          ]
+        },
+        {
+          "title": "Patients",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Patients"
+            },
+            {
+              "stamp": "list",
+              "label": "Patients"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Add patient"
+            }
+          ]
+        },
+        {
+          "title": "Add patient",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Add patient"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Name"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Phone"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Age"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Allergies"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Save"
+            }
+          ]
+        },
+        {
+          "title": "Appointments",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Appointments"
+            },
+            {
+              "stamp": "list",
+              "label": "Appointments"
+            },
+            {
+              "box": "rect",
+              "label": "Tap an appointment to add visit notes"
+            }
+          ]
+        },
+        {
+          "title": "New appointment",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "New appointment"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Patient"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Doctor"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Date"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Time"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Save"
+            }
+          ]
+        },
+        {
+          "title": "Visit notes",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Visit notes"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Diagnosis"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Medicine given"
+            },
+            {
+              "stamp": "toggle",
+              "label": "Follow up needed"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Save notes"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "complexity": "complex",
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "minScreens": 5,
+        "minCollections": 3,
+        "requiredFields": [
+          {
+            "anyOf": ["patient", "name"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["phone"]
+          },
+          {
+            "anyOf": ["doctor"]
+          },
+          {
+            "anyOf": ["date"],
+            "type": "date"
+          },
+          {
+            "anyOf": ["diagnosis", "notes"]
+          }
+        ],
+        "requiredComponents": ["list", "stat", "bigButton"],
+        "labels": [
+          "Clinic",
+          "Appointments today",
+          "Patients",
+          "Next appointments",
+          "New appointment",
+          "Add patient",
+          "Name",
+          "Phone",
+          "Age",
+          "Allergies",
+          "Save",
+          "Appointments",
+          "Tap an appointment to add visit notes",
+          "Patient",
+          "Doctor",
+          "Date",
+          "Time",
+          "Visit notes",
+          "Diagnosis",
+          "Medicine given",
+          "Follow up needed",
+          "Save notes"
+        ],
+        "stamps": {
+          "heading": 6,
+          "stat": 2,
+          "list": 3,
+          "bigButton": 5,
+          "textInput": 10,
+          "toggle": 1
+        }
+      }
+    },
+    {
+      "id": "s11-gst-calculator",
+      "title": "GST calculator",
+      "category": "calculators",
+      "tags": ["simple", "one-page"],
+      "ambiguous": true,
+      "notes": "Simple by structure. Needing vision may reasonably raise it one level (docs/07 §3.2).",
+      "pages": [
+        {
+          "title": "GST calculator",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "GST calculator"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Amount before tax"
+            },
+            {
+              "stamp": "textInput",
+              "label": "GST rate percent"
+            },
+            {
+              "stamp": "stat",
+              "label": "GST amount"
+            },
+            {
+              "stamp": "stat",
+              "label": "Total with GST"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "requiredFields": [],
+        "complexity": "simple",
+        "minScreens": 1,
+        "minCollections": 0,
+        "requiredComponents": ["stat"]
+      }
+    },
+    {
+      "id": "s12-bmi-calculator",
+      "title": "BMI calculator",
+      "category": "calculators",
+      "tags": ["simple", "one-page"],
+      "ambiguous": true,
+      "notes": "Simple by structure. Needing vision may reasonably raise it one level (docs/07 §3.2).",
+      "pages": [
+        {
+          "title": "BMI",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "BMI"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Weight in kg"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Height in cm"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Work it out"
+            },
+            {
+              "stamp": "stat",
+              "label": "Your BMI"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "requiredFields": [],
+        "complexity": "simple",
+        "minScreens": 1,
+        "minCollections": 0,
+        "requiredComponents": ["bigButton", "stat"]
+      }
+    },
+    {
+      "id": "s13-inches-to-cm",
+      "title": "Inches to centimetres",
+      "category": "calculators",
+      "tags": ["simple", "one-page"],
+      "ambiguous": true,
+      "notes": "Simple by structure. Needing vision may reasonably raise it one level (docs/07 §3.2).",
+      "pages": [
+        {
+          "title": "Inches to cm",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Inches to cm"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Inches"
+            },
+            {
+              "stamp": "stat",
+              "label": "Centimetres"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "requiredFields": [],
+        "complexity": "simple",
+        "minScreens": 1,
+        "minCollections": 0,
+        "requiredComponents": ["stat"]
+      }
+    },
+    {
+      "id": "s14-packing-checklist",
+      "title": "Packing checklist",
+      "category": "lists",
+      "tags": ["simple", "one-page"],
+      "ambiguous": true,
+      "notes": "Simple by structure. Needing vision may reasonably raise it one level (docs/07 §3.2).",
+      "pages": [
+        {
+          "title": "Packing list",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Packing list"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Thing to pack"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Add"
+            },
+            {
+              "stamp": "list",
+              "label": "Things"
+            },
+            {
+              "stamp": "toggle",
+              "label": "Packed"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "requiredFields": [
+          {
+            "anyOf": ["thing", "item"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["packed", "done"],
+            "type": "boolean"
+          }
+        ],
+        "complexity": "simple",
+        "minScreens": 1,
+        "minCollections": 1,
+        "requiredComponents": ["list"]
+      }
+    },
+    {
+      "id": "s15-todo-priority",
+      "title": "To-do list with priority",
+      "category": "lists",
+      "tags": ["simple", "one-page"],
+      "ambiguous": true,
+      "notes": "Simple by structure. Needing vision may reasonably raise it one level (docs/07 §3.2).",
+      "pages": [
+        {
+          "title": "My tasks",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "My tasks"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Task"
+            },
+            {
+              "stamp": "toggle",
+              "label": "Important"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Add task"
+            },
+            {
+              "stamp": "list",
+              "label": "Tasks"
+            },
+            {
+              "stamp": "stat",
+              "label": "Tasks left"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "requiredFields": [
+          {
+            "anyOf": ["task"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["important", "priority"],
+            "type": "boolean"
+          }
+        ],
+        "complexity": "simple",
+        "minScreens": 1,
+        "minCollections": 1,
+        "requiredComponents": ["list", "stat"]
+      }
+    },
+    {
+      "id": "s16-reading-list",
+      "title": "Reading list",
+      "category": "lists",
+      "tags": ["simple", "one-page"],
+      "ambiguous": true,
+      "notes": "Simple by structure. Needing vision may reasonably raise it one level (docs/07 §3.2).",
+      "pages": [
+        {
+          "title": "Books to read",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Books to read"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Book title"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Author"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Add book"
+            },
+            {
+              "stamp": "list",
+              "label": "Books"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "requiredFields": [
+          {
+            "anyOf": ["title", "book"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["author"],
+            "type": "text"
+          }
+        ],
+        "complexity": "simple",
+        "minScreens": 1,
+        "minCollections": 1,
+        "requiredComponents": ["list"]
+      }
+    },
+    {
+      "id": "s17-visitor-register",
+      "title": "Visitor register",
+      "category": "forms",
+      "tags": ["simple", "one-page"],
+      "ambiguous": true,
+      "notes": "Simple by structure. Needing vision may reasonably raise it one level (docs/07 §3.2).",
+      "pages": [
+        {
+          "title": "Visitor register",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Visitor register"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Visitor name"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Phone"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Whom to meet"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Purpose"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Sign in"
+            },
+            {
+              "stamp": "list",
+              "label": "Today visitors"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "requiredFields": [
+          {
+            "anyOf": ["name", "visitor"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["phone"]
+          },
+          {
+            "anyOf": ["purpose"]
+          }
+        ],
+        "complexity": "simple",
+        "minScreens": 1,
+        "minCollections": 1,
+        "requiredComponents": ["list", "bigButton"]
+      }
+    },
+    {
+      "id": "s18-feedback-form",
+      "title": "Customer feedback form",
+      "category": "forms",
+      "tags": ["simple", "one-page"],
+      "ambiguous": true,
+      "notes": "Simple by structure. Needing vision may reasonably raise it one level (docs/07 §3.2).",
+      "pages": [
+        {
+          "title": "Customer feedback",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Customer feedback"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Name"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Rating out of 5"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Comments"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Submit"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "requiredFields": [
+          {
+            "anyOf": ["name"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["rating"],
+            "type": "number"
+          },
+          {
+            "anyOf": ["comments", "comment"]
+          }
+        ],
+        "complexity": "simple",
+        "minScreens": 1,
+        "minCollections": 1,
+        "requiredComponents": ["bigButton"]
+      }
+    },
+    {
+      "id": "s19-household-inventory",
+      "title": "Household inventory",
+      "category": "inventory",
+      "tags": ["medium", "two-pages", "photo"],
+      "ambiguous": true,
+      "notes": "A room list with an item form and photo sits between simple and medium.",
+      "pages": [
+        {
+          "title": "Rooms",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Rooms"
+            },
+            {
+              "stamp": "list",
+              "label": "Rooms"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Add room"
+            }
+          ]
+        },
+        {
+          "title": "Add item",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Add item"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Item name"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Room"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Quantity"
+            },
+            {
+              "stamp": "photo",
+              "label": "Item photo"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Save"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "requiredFields": [
+          {
+            "anyOf": ["item", "name"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["quantity", "qty"],
+            "type": "number"
+          },
+          {
+            "anyOf": ["room"]
+          }
+        ],
+        "complexity": "medium",
+        "minScreens": 2,
+        "minCollections": 1,
+        "requiredComponents": ["list", "photo"]
+      }
+    },
+    {
+      "id": "s20-appointment-register",
+      "title": "Appointment register",
+      "category": "registers",
+      "tags": ["medium", "three-pages"],
+      "pages": [
+        {
+          "title": "Today",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Appointments today"
+            },
+            {
+              "stamp": "stat",
+              "label": "Booked"
+            },
+            {
+              "stamp": "list",
+              "label": "Appointments"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Book"
+            }
+          ]
+        },
+        {
+          "title": "Book",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Book appointment"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Client name"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Phone"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Date"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Time"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Reason"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Save"
+            }
+          ]
+        },
+        {
+          "title": "Details",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Details"
+            },
+            {
+              "stamp": "stat",
+              "label": "Status"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Mark done"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Cancel"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "requiredFields": [
+          {
+            "anyOf": ["name", "client"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["phone"]
+          },
+          {
+            "anyOf": ["date"],
+            "type": "date"
+          },
+          {
+            "anyOf": ["time"]
+          },
+          {
+            "anyOf": ["reason"]
+          }
+        ],
+        "complexity": "medium",
+        "minScreens": 3,
+        "minCollections": 1,
+        "requiredComponents": ["list", "stat", "bigButton"]
+      }
+    },
+    {
+      "id": "s21-habit-tracker",
+      "title": "Habit tracker",
+      "category": "trackers",
+      "tags": ["simple", "two-pages"],
+      "ambiguous": true,
+      "notes": "docs/07 §3.1 lists a daily habit tracker as simple. Two screens and a streak are borderline.",
+      "pages": [
+        {
+          "title": "Today",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Habits today"
+            },
+            {
+              "stamp": "list",
+              "label": "Habits"
+            },
+            {
+              "stamp": "toggle",
+              "label": "Done today"
+            },
+            {
+              "stamp": "stat",
+              "label": "Streak"
+            }
+          ]
+        },
+        {
+          "title": "Add habit",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Add habit"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Habit name"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Save"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "requiredFields": [
+          {
+            "anyOf": ["habit", "name"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["done"],
+            "type": "boolean"
+          }
+        ],
+        "complexity": "simple",
+        "minScreens": 2,
+        "minCollections": 1,
+        "requiredComponents": ["list", "stat"]
+      }
+    },
+    {
+      "id": "s22-savings-goals",
+      "title": "Savings goals",
+      "category": "trackers",
+      "tags": ["medium", "two-pages"],
+      "ambiguous": true,
+      "notes": "Goals and deposits are two linked collections, but each is simple.",
+      "pages": [
+        {
+          "title": "Goals",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Savings goals"
+            },
+            {
+              "stamp": "list",
+              "label": "Goals"
+            },
+            {
+              "stamp": "stat",
+              "label": "Total saved"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "New goal"
+            }
+          ]
+        },
+        {
+          "title": "Add money",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Add money"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Goal"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Amount"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Date"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Save"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "requiredFields": [
+          {
+            "anyOf": ["goal"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["amount"],
+            "type": "number"
+          },
+          {
+            "anyOf": ["date"],
+            "type": "date"
+          }
+        ],
+        "complexity": "medium",
+        "minScreens": 2,
+        "minCollections": 2,
+        "requiredComponents": ["list", "stat"]
+      }
+    },
+    {
+      "id": "s23-fee-ledger",
+      "title": "Student fee ledger",
+      "category": "ledgers",
+      "tags": ["medium", "three-pages"],
+      "pages": [
+        {
+          "title": "Students",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Students"
+            },
+            {
+              "stamp": "stat",
+              "label": "Pending fees"
+            },
+            {
+              "stamp": "list",
+              "label": "Students"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "New student"
+            }
+          ]
+        },
+        {
+          "title": "Student",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Student fees"
+            },
+            {
+              "stamp": "stat",
+              "label": "Balance"
+            },
+            {
+              "stamp": "list",
+              "label": "Payments"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Collect fee"
+            }
+          ]
+        },
+        {
+          "title": "Collect fee",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Collect fee"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Amount"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Date"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Mode of payment"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Save"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "requiredFields": [
+          {
+            "anyOf": ["student", "name"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["amount"],
+            "type": "number"
+          },
+          {
+            "anyOf": ["date"],
+            "type": "date"
+          }
+        ],
+        "complexity": "medium",
+        "minScreens": 3,
+        "minCollections": 2,
+        "requiredComponents": ["list", "stat", "bigButton"]
+      }
+    },
+    {
+      "id": "s24-workout-log",
+      "title": "Workout log",
+      "category": "trackers",
+      "tags": ["medium", "two-pages"],
+      "ambiguous": true,
+      "notes": "A workout log with sets and reps is a simple tracker with a weekly total. Borderline.",
+      "pages": [
+        {
+          "title": "Log",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Workout log"
+            },
+            {
+              "stamp": "list",
+              "label": "Workouts"
+            },
+            {
+              "stamp": "stat",
+              "label": "This week"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Add workout"
+            }
+          ]
+        },
+        {
+          "title": "Add workout",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Add workout"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Exercise"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Sets"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Reps"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Weight in kg"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Date"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Save"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "requiredFields": [
+          {
+            "anyOf": ["exercise"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["sets"],
+            "type": "number"
+          },
+          {
+            "anyOf": ["reps"],
+            "type": "number"
+          },
+          {
+            "anyOf": ["weight"],
+            "type": "number"
+          }
+        ],
+        "complexity": "medium",
+        "minScreens": 2,
+        "minCollections": 1,
+        "requiredComponents": ["list", "stat"]
+      }
+    },
+    {
+      "id": "s25-shop-sales-stock",
+      "title": "Shop sales and stock",
+      "category": "multi-screen",
+      "tags": ["complex", "five-pages"],
+      "notes": "Five screens, sales, stock, suppliers and reports. Complex by docs/07 §3.1 (more screens, related collections, reports).",
+      "pages": [
+        {
+          "title": "Home",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "My shop"
+            },
+            {
+              "stamp": "stat",
+              "label": "Sales today"
+            },
+            {
+              "stamp": "stat",
+              "label": "Low stock items"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "New sale"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Add stock"
+            }
+          ]
+        },
+        {
+          "title": "New sale",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "New sale"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Customer"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Item"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Quantity"
+            },
+            {
+              "stamp": "textInput",
+              "label": "Price"
+            },
+            {
+              "stamp": "toggle",
+              "label": "Paid"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Save sale"
+            }
+          ]
+        },
+        {
+          "title": "Stock",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Stock"
+            },
+            {
+              "stamp": "list",
+              "label": "Items in stock"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "Add item"
+            }
+          ]
+        },
+        {
+          "title": "Suppliers",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Suppliers"
+            },
+            {
+              "stamp": "list",
+              "label": "Suppliers"
+            },
+            {
+              "stamp": "bigButton",
+              "label": "New purchase"
+            }
+          ]
+        },
+        {
+          "title": "Reports",
+          "items": [
+            {
+              "stamp": "heading",
+              "label": "Reports"
+            },
+            {
+              "stamp": "stat",
+              "label": "Sales this month"
+            },
+            {
+              "stamp": "stat",
+              "label": "Profit"
+            },
+            {
+              "stamp": "list",
+              "label": "Top items"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "taskType": "interpret_sketch",
+        "route": "cloud",
+        "multimodal": true,
+        "requiredFields": [
+          {
+            "anyOf": ["item", "name"],
+            "type": "text"
+          },
+          {
+            "anyOf": ["quantity", "qty"],
+            "type": "number"
+          },
+          {
+            "anyOf": ["price"],
+            "type": "number"
+          },
+          {
+            "anyOf": ["supplier"]
+          },
+          {
+            "anyOf": ["customer"]
+          }
+        ],
+        "complexity": "complex",
+        "minScreens": 5,
+        "minCollections": 3,
+        "requiredComponents": ["list", "stat", "bigButton", "toggle"]
+      }
+    }
+  ]
+}

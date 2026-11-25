@@ -1,0 +1,28 @@
+# Build output and generated files
+node_modules
+dist
+dist-*
+web-build
+.expo
+.firebase
+android
+ios
+functions/lib
+functions/node_modules
+expo-env.d.ts
+package-lock.json
+functions/package-lock.json
+
+# Test output and evaluation reports (machine written)
+test-results
+playwright-report
+blob-report
+tests/e2e/.artifacts
+tests/evaluation/reports
+
+# Logs and local state
+*.log
+.remember
+
+# Documentation is edited by hand, and is not reformatted by tooling
+docs
