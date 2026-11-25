@@ -1,0 +1,18 @@
+# Settings, including the on-device AI status (Gemini Nano on Android, Apple Foundation Models on iOS).
+appId: com.kalam.app
+name: Settings
+---
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Access modes.*"
+    timeout: 15000
+- takeScreenshot: 10-settings
+- runFlow: ../common/pause.yaml
+- scrollUntilVisible:
+    element: "On-device AI.*"
+    direction: DOWN
+    timeout: 30000
+    centerElement: true
+- takeScreenshot: 11-settings-on-device-ai
+- runFlow: ../common/pause.yaml
+- runFlow: ../common/pause.yaml

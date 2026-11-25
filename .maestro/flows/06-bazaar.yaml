@@ -1,0 +1,12 @@
+# Kalam Bazaar. It reads listings from Firestore, so on a CI machine it may show an error or empty state; the
+# check is only that the tab opens.
+appId: com.kalam.app
+name: Bazaar
+---
+- tapOn: "Bazaar"
+- extendedWaitUntil:
+    visible: "Kalam Bazaar.*"
+    timeout: 30000
+- runFlow: ../common/pause.yaml
+- takeScreenshot: 12-bazaar
+- runFlow: ../common/pause.yaml

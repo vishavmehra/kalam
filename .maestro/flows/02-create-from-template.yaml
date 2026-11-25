@@ -1,0 +1,43 @@
+# Create an app from the "Expense tracker in ₹" example. It is built from a deterministic template on the device:
+# no network and no cloud AI. ("Tailor order book" is a medium request that goes to the cloud, and "Calculator"
+# stores no records, so neither fits a no-network "add a record" check.)
+appId: com.kalam.app
+name: Create from the example template
+---
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "Describe the app you want to create.*"
+    timeout: 30000
+- takeScreenshot: 03-create
+- runFlow: ../common/pause.yaml
+- scrollUntilVisible:
+    element: "Expense tracker.*"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Expense tracker.*"
+- takeScreenshot: 04-create-example-filled
+- runFlow: ../common/pause.yaml
+- tapOn:
+    id: create-app
+
+# Review. Phones show "What Kalam understood" as a tab, wider screens as a heading.
+- extendedWaitUntil:
+    visible: ".*Kalam understood.*"
+    timeout: 90000
+- takeScreenshot: 05-review
+- runFlow: ../common/pause.yaml
+- scrollUntilVisible:
+    element:
+      id: save-to-shelf
+    direction: DOWN
+    timeout: 30000
+- runFlow: ../common/pause.yaml
+- tapOn:
+    id: save-to-shelf
+
+# The saved app opens.
+- extendedWaitUntil:
+    visible: "Add expense.*"
+    timeout: 30000
+- takeScreenshot: 06-app-open
+- runFlow: ../common/pause.yaml
