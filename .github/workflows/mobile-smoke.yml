@@ -144,12 +144,12 @@ jobs:
             kill -INT "$rec" && wait "$rec" || true
             if [ "$status" != 0 ]; then
               echo "::error::Maestro flow $name failed"
-              find "$OUT/maestro-debug/$name" -name '*.png' -exec cp {} "$OUT/screenshots/" \; || true
+              find "$OUT/maestro-debug/$name" "$OUT/maestro" -name 'step-*.png' ! -name '*demo_pause*' -exec cp {} "$OUT/screenshots/" \; || true
               break
             fi
           done
           xcrun simctl io "$SIM_UDID" screenshot "$OUT/screenshots/99-final.png" || true
-          find "$OUT/maestro" -name '*.png' -exec cp {} "$OUT/screenshots/" \; || true
+          find "$OUT/maestro" -name '*.png' ! -name 'step-*' -exec cp {} "$OUT/screenshots/" \; || true
           ls -l "$OUT/recordings"
           exit $status
 
@@ -283,7 +283,7 @@ jobs:
           # For demo recordings: show taps, and a clean status bar (fixed clock, full battery, no notifications).
           adb shell settings put system show_touches 1 || true
           adb shell settings put global sysui_demo_allowed 1 || true
-          for cmd in "enter" "clock -e hhmm 0941" "battery -e level 100 -e plugged false" "notifications -e visible false" "network -e wifi show -e level 4"; do
+          for cmd in "enter" "clock -e hhmm 0941" "battery -e level 100 -e plugged false" "notifications -e visible false" "network -e wifi show -e level 4 -e fully true" "network -e mobile hide"; do
             adb shell am broadcast -a com.android.systemui.demo -e command $cmd >/dev/null || true
           done
           adb install -r "$OUT/kalam-release.apk"
@@ -310,13 +310,13 @@ jobs:
             adb shell rm -f "/sdcard/$name.mp4" || true
             if [ "$status" != 0 ]; then
               echo "::error::Maestro flow $name failed"
-              find "$OUT/maestro-debug/$name" -name '*.png' -exec cp {} "$OUT/screenshots/" \; || true
+              find "$OUT/maestro-debug/$name" "$OUT/maestro" -name 'step-*.png' ! -name '*demo_pause*' -exec cp {} "$OUT/screenshots/" \; || true
               break
             fi
           done
           adb exec-out screencap -p > "$OUT/screenshots/99-final.png" || true
           adb logcat -d -v time > "$OUT/logs/logcat.txt" 2>&1 || true
-          find "$OUT/maestro" -name '*.png' -exec cp {} "$OUT/screenshots/" \; || true
+          find "$OUT/maestro" -name '*.png' ! -name 'step-*' -exec cp {} "$OUT/screenshots/" \; || true
           ls -l "$OUT/recordings"
           exit $status
           EOF

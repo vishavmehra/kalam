@@ -4,7 +4,7 @@ name: Settings
 ---
 - tapOn: "Settings"
 - extendedWaitUntil:
-    visible: "Access modes.*"
+    visible: "(AI and privacy|Access modes).*"
     timeout: 15000
 - takeScreenshot: 10-settings
 - runFlow: ../common/pause.yaml
