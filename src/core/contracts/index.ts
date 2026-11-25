@@ -434,13 +434,25 @@ export interface AIExecutionResult<T> {
   uncertainFields?: string[];
 }
 
+/**
+ * Why on-device AI cannot run right now, where the platform can tell (Android: AICore through ML Kit, reported by
+ * modules/kalam-nano). `detail` says the same in plain English.
+ */
+export type OnDeviceReason =
+  | 'aicore_missing' | 'binding_failure' | 'aicore_not_ready' | 'needs_system_update' | 'device_not_supported'
+  | 'model_downloadable' | 'model_downloading' | 'low_storage' | 'battery_or_network_conditions' | 'unknown';
+
 export interface OnDeviceStatus {
-  platform: 'web' | 'android' | 'other';
+  platform: 'web' | 'android' | 'ios' | 'other';
   /** Prompt API / native on-device bridge exists on this platform. */
   apiExposed: boolean;
   availability: 'unavailable' | 'downloadable' | 'downloading' | 'available' | 'unknown';
   progress?: number;
   detail?: string;
+  /** Set when the model cannot run now and the platform said why. */
+  reason?: OnDeviceReason;
+  /** The AICore or ML Kit error code behind `reason`, for example 601 (AICore could not be bound). */
+  reasonCode?: number;
   /**
    * Model is loaded in memory (a session exists), so a prompt answers in about a second instead of
    * waiting for the first-load cost. Only reported where the platform can tell (web Prompt API).

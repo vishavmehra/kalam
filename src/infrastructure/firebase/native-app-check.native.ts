@@ -9,6 +9,16 @@
  *   handed over by a CustomProvider. A release build never uses the debug token.
  * 'active' is reported only after the provider returned a real token. Until then the status is
  * 'not_configured' with no detail, which Settings shows as "starts with the first cloud request".
+ *
+ * Lazy: nothing here contacts Google until the first cloud request, so on-device-only work never reaches the
+ * attestation service (Play Integrity, App Attest) or the App Check exchange.
+ * - setupAppCheck() runs when Firebase starts. It only registers App Check with the JS SDK, with automatic
+ *   refresh off: with it on, initializeAppCheck() fetches a token straight away (@firebase/app-check 0.13).
+ *   Registering this early is still needed, because firebase/ai reads the App Check instance once, when the AI
+ *   instance is made (AIService in @firebase/ai 3.1), and an only_on_device request makes it first.
+ * - The native attestation provider is installed on the first token request. Only a cloud request asks for one:
+ *   firebase-provider's appCheckReady() before the request, and firebase/ai itself before every cloud call. Every
+ *   cloud request still carries a token, fetched again when the last one expires.
  */
 import type { FirebaseApp } from 'firebase/app';
 import { CustomProvider, getToken, initializeAppCheck, type AppCheck, type AppCheckToken } from 'firebase/app-check';
@@ -26,7 +36,7 @@ export interface NativeAppCheckConfig<M extends AttestingModule> {
   appId(): string | undefined;
   /** For example "EXPO_PUBLIC_FIREBASE_ANDROID_APP_ID, the Android app registered in Firebase". */
   appIdHint: string;
-  /** Installs the provider in the native Firebase App Check SDK. May throw. */
+  /** Installs the provider in the native Firebase App Check SDK, once, on the first token request. May throw. */
   install(module: M, appId: string): void;
 }
 
@@ -39,9 +49,14 @@ export function createNativeAppCheck<M extends AttestingModule>(cfg: NativeAppCh
   let status: AppCheckStatus = 'not_configured';
   let detail: string | undefined;
   let instance: AppCheck | undefined;
+  let installed = false;
 
-  async function nativeToken(native: M): Promise<AppCheckToken> {
+  async function nativeToken(native: M, appId: string): Promise<AppCheckToken> {
     try {
+      if (!installed) {
+        cfg.install(native, appId);
+        installed = true;
+      }
       const token = await native.getAppCheckToken(false);
       status = 'active';
       detail = undefined;
@@ -59,7 +74,7 @@ export function createNativeAppCheck<M extends AttestingModule>(cfg: NativeAppCh
     try {
       if (dev && debugToken) {
         (globalThis as { FIREBASE_APPCHECK_DEBUG_TOKEN?: string }).FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken;
-        instance = initializeAppCheck(app, { provider: new CustomProvider({ getToken: debugOnly }), isTokenAutoRefreshEnabled: true });
+        instance = initializeAppCheck(app, { provider: new CustomProvider({ getToken: debugOnly }), isTokenAutoRefreshEnabled: false });
         status = 'debug';
         detail = undefined;
         return;
@@ -77,10 +92,9 @@ export function createNativeAppCheck<M extends AttestingModule>(cfg: NativeAppCh
         return;
       }
       const native = found.module;
-      cfg.install(native, appId);
       instance = initializeAppCheck(app, {
-        provider: new CustomProvider({ getToken: () => nativeToken(native) }),
-        isTokenAutoRefreshEnabled: true,
+        provider: new CustomProvider({ getToken: () => nativeToken(native, appId) }),
+        isTokenAutoRefreshEnabled: false,
       });
       status = 'not_configured';
       detail = undefined;

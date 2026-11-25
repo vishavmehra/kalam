@@ -28,18 +28,19 @@ export { TEXT_IO, type LanguageModelStatic } from './on-device.web';
 /** The name Firebase AI Logic gives this model (rawResponse.modelVersion, hybrid configuration options page). */
 export const ON_DEVICE_MODEL_NAME = 'apple-foundation-models-system-language-model';
 
-// CONTRACT CHANGE REQUEST: OnDeviceStatus.platform has no 'ios' yet, so iOS reports 'other' until it does.
-const PLATFORM: OnDeviceStatus['platform'] = 'other';
-
-const KNOWN = new Set<string>(['unavailable', 'downloading', 'available']);
+const PLATFORM: OnDeviceStatus['platform'] = 'ios';
 
 export const UNAVAILABLE_DETAIL: Record<AppleUnavailableReason, string> = {
   deviceNotEligible: 'This iPhone or iPad cannot run Apple Intelligence, so Kalam uses the cloud when you allow it.',
   appleIntelligenceNotEnabled: 'Apple Intelligence is off. Turn it on in Settings, Apple Intelligence and Siri, to run AI on this device.',
   modelNotReady: 'Apple Intelligence is still getting its model ready. iOS downloads it by itself, which can take a while.',
   osTooOld: 'AI on this device needs iOS 26 or later with Apple Intelligence on.',
+  simulatorNoModel: 'This simulator has no working Apple Intelligence. A simulator uses the one on its Mac, and this Mac has it turned off or cannot run it (for example a cloud build machine).',
   unknown: 'Apple Intelligence is not available right now.',
 };
+
+const unavailableDetail = (reason?: string | null) =>
+  reason && Object.hasOwn(UNAVAILABLE_DETAIL, reason) ? UNAVAILABLE_DETAIL[reason as AppleUnavailableReason] : UNAVAILABLE_DETAIL.unknown;
 
 /** Swift error codes (KalamAppleModule.swift) to Prompt API error names, which errors.ts maps to Kalam codes. */
 const PROMPT_ERROR_BY_CODE: Record<string, string> = {
@@ -64,16 +65,20 @@ export function getLanguageModel(): LanguageModelStatic | undefined {
 // firebase/ai reads globalThis.LanguageModel whenever a GenerativeModel is made, so it goes in at load.
 getLanguageModel();
 
+/**
+ * 'available' only when SystemLanguageModel itself says so (on a simulator, after one real answer: see
+ * KalamAppleModule.swift). Anything else, including a value this build does not know or a failed check, is
+ * 'unavailable' with a reason, so Kalam never claims on-device AI it cannot run.
+ */
 export async function onDeviceStatus(): Promise<OnDeviceStatus> {
   const apple = loadKalamApple();
   if (!apple.module) return { platform: PLATFORM, apiExposed: false, availability: 'unavailable', detail: apple.reason };
   try {
     const s = await apple.module.availability();
-    const availability = KNOWN.has(s.availability) ? s.availability : 'unknown';
-    const detail = availability === 'available' ? undefined : UNAVAILABLE_DETAIL[s.reason ?? 'unknown'] ?? UNAVAILABLE_DETAIL.unknown;
-    return { platform: PLATFORM, apiExposed: true, availability, detail };
+    if (s.availability === 'available') return { platform: PLATFORM, apiExposed: true, availability: 'available', detail: undefined };
+    return { platform: PLATFORM, apiExposed: true, availability: 'unavailable', detail: unavailableDetail(s.reason) };
   } catch (e) {
-    return { platform: PLATFORM, apiExposed: true, availability: 'unknown', detail: message(e) };
+    return { platform: PLATFORM, apiExposed: true, availability: 'unavailable', detail: `${UNAVAILABLE_DETAIL.unknown} ${message(e)}` };
   }
 }
 

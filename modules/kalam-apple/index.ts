@@ -6,8 +6,12 @@
  */
 
 export type AppleAvailability = 'unavailable' | 'downloading' | 'available';
-/** SystemLanguageModel.Availability.UnavailableReason, plus 'osTooOld' below iOS 26. */
-export type AppleUnavailableReason = 'deviceNotEligible' | 'appleIntelligenceNotEnabled' | 'modelNotReady' | 'osTooOld' | 'unknown';
+/**
+ * SystemLanguageModel.Availability.UnavailableReason, plus 'osTooOld' below iOS 26 and 'simulatorNoModel' for a
+ * simulator that says .available but cannot answer (its Mac has no Apple Intelligence, for example a CI runner).
+ */
+export type AppleUnavailableReason =
+  | 'deviceNotEligible' | 'appleIntelligenceNotEnabled' | 'modelNotReady' | 'osTooOld' | 'simulatorNoModel' | 'unknown';
 
 export interface AppleStatus {
   availability: AppleAvailability;

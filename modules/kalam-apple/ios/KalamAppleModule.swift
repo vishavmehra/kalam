@@ -34,8 +34,8 @@ public final class KalamAppleModule: Module {
   public func definition() -> ModuleDefinition {
     Name("KalamApple")
 
-    AsyncFunction("availability") { () -> [String: Any] in
-      Self.availability()
+    AsyncFunction("availability") { () async -> [String: Any] in
+      await Self.availability()
     }
 
     AsyncFunction("generate") { (requestId: String, options: GenerateOptions) async throws -> [String: String] in
@@ -68,18 +68,31 @@ public final class KalamAppleModule: Module {
       return ["token": token.token, "expireTimeMillis": token.expirationDate.timeIntervalSince1970 * 1000]
     }
 
+    // Simulator only: settles the Apple Intelligence check at launch, so a status question does not wait on it.
+    OnCreate {
+      Self.startSimulatorCheck()
+    }
+
     OnDestroy {
       self.requests.cancelAll()
     }
   }
 
   /// availability: available | downloading | unavailable, with the reason and the supported languages.
-  private static func availability() -> [String: Any] {
+  private static func availability() async -> [String: Any] {
     #if canImport(FoundationModels)
     if #available(iOS 26.0, *) {
       let model = SystemLanguageModel.default
       switch model.availability {
       case .available:
+        #if targetEnvironment(simulator)
+        // A simulator uses its Mac's Apple Intelligence. In a Mac virtual machine, which cannot turn it on, the
+        // simulator still says .available and then every request fails (Apple Developer Forums thread 787199);
+        // GitHub run 45615319769 showed "On-device AI ready" on a macOS runner. One short real answer decides.
+        guard await simulatorAnswers() else {
+          return ["availability": "unavailable", "reason": "simulatorNoModel"]
+        }
+        #endif
         let languages = Set(model.supportedLanguages.compactMap { $0.languageCode?.identifier.lowercased() })
         return ["availability": "available", "languages": Array(languages)]
       case .unavailable(.deviceNotEligible):
@@ -98,6 +111,48 @@ public final class KalamAppleModule: Module {
     #endif
     return ["availability": "unavailable", "reason": "osTooOld"]
   }
+
+  private static func startSimulatorCheck() {
+    #if targetEnvironment(simulator) && canImport(FoundationModels)
+    if #available(iOS 26.0, *) {
+      if case .available = SystemLanguageModel.default.availability {
+        Task { _ = await simulatorAnswers() }
+      }
+    }
+    #endif
+  }
+
+  #if targetEnvironment(simulator) && canImport(FoundationModels)
+  private static let simulatorCheck = SimulatorCheck()
+
+  /// True when the model really answers. One check per launch, shared by every caller.
+  @available(iOS 26.0, *)
+  private static func simulatorAnswers() async -> Bool {
+    await simulatorCheck.run { await askOnce() }.value
+  }
+
+  /// One short real prompt, at most 20 seconds.
+  @available(iOS 26.0, *)
+  private static func askOnce() async -> Bool {
+    await withTaskGroup(of: Bool.self) { group in
+      group.addTask {
+        let model = SystemLanguageModel.default
+        let session = LanguageModelSession(model: model)
+        let prompt = "Reply with the word OK."
+        let options = GenerationOptions(sampling: .greedy, temperature: nil, maximumResponseTokens: 8)
+        let reply = try? await session.respond(to: prompt, options: options)
+        return !(reply?.content.isEmpty ?? true)
+      }
+      group.addTask {
+        try? await Task.sleep(nanoseconds: 20_000_000_000)
+        return false
+      }
+      let first = await group.next() ?? false
+      group.cancelAll()
+      return first
+    }
+  }
+  #endif
 
   /// One single-turn prompt on SystemLanguageModel.default. Greedy decoding unless a temperature is given.
   private static func respond(prompt: String, temperature: Double?, maxTokens: Int?) async throws -> String {
@@ -157,6 +212,24 @@ private final class KalamAppCheckProviderFactory: NSObject, AppCheckProviderFact
     return DeviceCheckProvider(app: app)
   }
 }
+
+#if targetEnvironment(simulator)
+/// The simulator's one Apple Intelligence check for this launch (simulatorAnswers()).
+private final class SimulatorCheck: @unchecked Sendable {
+  private let lock = NSLock()
+  private var task: Task<Bool, Never>?
+
+  /// The running or finished check; the first caller starts it.
+  func run(_ start: @escaping @Sendable () async -> Bool) -> Task<Bool, Never> {
+    lock.lock()
+    defer { lock.unlock() }
+    if let task { return task }
+    let created = Task { await start() }
+    task = created
+    return created
+  }
+}
+#endif
 
 /// Running generate() calls by request id, so a JS AbortSignal can cancel them.
 private final class RunningRequests: @unchecked Sendable {

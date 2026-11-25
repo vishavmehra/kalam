@@ -10,6 +10,11 @@ export interface NativeStatus {
   availability: NativeAvailability;
   /** AICore model name, for example nano-v3 or nano-v4-full, when the model is available. */
   model?: string | null;
+  /** When the model cannot run now: why, as an OnDeviceReason (src/core/contracts). */
+  reason?: string | null;
+  /** The AICore or ML Kit error code behind `reason`, for example 601 (AICore could not be bound). */
+  code?: number | null;
+  /** The raw error text from AICore or ML Kit, for logs; on-device.native.ts writes the plain-English detail. */
   detail?: string | null;
 }
 

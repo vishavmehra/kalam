@@ -1,2 +1,6 @@
-<manifest>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Lets KalamNanoModule see whether Android AICore is installed (package visibility, Android 11 and later). -->
+  <queries>
+    <package android:name="com.google.android.aicore" />
+  </queries>
 </manifest>

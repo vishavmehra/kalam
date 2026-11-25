@@ -160,6 +160,8 @@ const sizeOf = (v: unknown) => (v === undefined ? undefined : JSON.stringify(v)?
 export function createOrchestrator(deps: OrchestratorDeps): AIOrchestrator {
   const now = deps.now ?? Date.now;
   const platform = deps.platform ?? detectPlatform();
+  // A slow or failed status check still names this platform (iOS showed "other" in Settings, CI run 45615319769).
+  const unknownDevice: OnDeviceStatus = { ...UNKNOWN_DEVICE, platform };
   const cache = deps.cacheResults === false ? undefined : createResultCache({ now, store: deps.aiCache });
   const buckets = deps.rateLimit === false ? undefined : createTokenBuckets(now);
   const inflight = createInflight<Execution>(() => ({ res: { ...CANCELLED } }));
@@ -188,10 +190,10 @@ export function createOrchestrator(deps: OrchestratorDeps): AIOrchestrator {
   async function onDeviceStatus(): Promise<OnDeviceStatus> {
     try {
       return await withBudget(deps.firebase.onDeviceStatus(), deps.statusBudgetMs ?? STATUS_BUDGET_MS, {
-        ...UNKNOWN_DEVICE, detail: 'On-device status check timed out',
+        ...unknownDevice, detail: 'On-device status check timed out',
       });
     } catch {
-      return UNKNOWN_DEVICE; // a provider that throws synchronously
+      return unknownDevice; // a provider that throws synchronously
     }
   }
 
@@ -434,7 +436,7 @@ export function createOrchestrator(deps: OrchestratorDeps): AIOrchestrator {
       try {
         return deps.firebase.warmUpOnDevice ? await deps.firebase.warmUpOnDevice() : await onDeviceStatus();
       } catch {
-        return UNKNOWN_DEVICE; // warm-up is best effort
+        return unknownDevice; // warm-up is best effort
       }
     },
   };

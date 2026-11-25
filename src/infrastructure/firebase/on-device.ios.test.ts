@@ -55,7 +55,7 @@ describe('iOS bridge: no native module (Expo Go, unit tests)', () => {
   it('reports unavailable with the reason and installs no adapter, so requests go to the cloud', async () => {
     const mod = await load();
     expect(await mod.onDeviceStatus()).toEqual({
-      platform: 'other', apiExposed: false, availability: 'unavailable', detail: expect.stringMatching(/kalam-apple.*Expo Go/),
+      platform: 'ios', apiExposed: false, availability: 'unavailable', detail: expect.stringMatching(/kalam-apple.*Expo Go/),
     });
     expect(mod.getLanguageModel()).toBeUndefined();
     expect(g.LanguageModel).toBeUndefined();
@@ -77,27 +77,43 @@ describe('iOS bridge: availability mapping', () => {
     [AVAILABLE, { availability: 'available', detail: undefined }],
     [{ availability: 'unavailable', reason: 'deviceNotEligible' }, { availability: 'unavailable', detail: expect.stringMatching(/cannot run Apple Intelligence/) }],
     [{ availability: 'unavailable', reason: 'appleIntelligenceNotEnabled' }, { availability: 'unavailable', detail: expect.stringMatching(/Apple Intelligence is off/) }],
-    [{ availability: 'downloading', reason: 'modelNotReady' }, { availability: 'downloading', detail: expect.stringMatching(/getting its model ready/) }],
+    // Apple's modelNotReady does not prove a download is running, so it is unavailable, with the reason.
+    [{ availability: 'downloading', reason: 'modelNotReady' }, { availability: 'unavailable', detail: expect.stringMatching(/getting its model ready/) }],
     [{ availability: 'unavailable', reason: 'osTooOld' }, { availability: 'unavailable', detail: expect.stringMatching(/iOS 26/) }],
     [{ availability: 'unavailable', reason: 'something-new' }, { availability: 'unavailable', detail: 'Apple Intelligence is not available right now.' }],
-    [{ availability: 'something-new' }, { availability: 'unknown' }],
+    [{ availability: 'unavailable', reason: 'constructor' }, { availability: 'unavailable', detail: 'Apple Intelligence is not available right now.' }],
+    // A simulator whose Mac has no Apple Intelligence (GitHub macOS runner, run 45615319769).
+    [{ availability: 'unavailable', reason: 'simulatorNoModel' }, { availability: 'unavailable', detail: expect.stringMatching(/simulator has no working Apple Intelligence/) }],
+    // Anything but Apple's own "available" is unavailable with a reason, never "ready" and never "unknown".
+    [{ availability: 'something-new' }, { availability: 'unavailable', detail: 'Apple Intelligence is not available right now.' }],
+    [{ availability: 'Available' }, { availability: 'unavailable' }],
   ] as const)('maps native %j to %j', async (native, expected) => {
     const mod = await load(fakeApple(native as AppleStatus));
-    expect(await mod.onDeviceStatus()).toMatchObject({ platform: 'other', apiExposed: true, ...expected });
+    expect(await mod.onDeviceStatus()).toMatchObject({ platform: 'ios', apiExposed: true, ...expected });
   });
 
-  it('reports unknown with the reason when the native check throws', async () => {
+  it('reports unavailable with the reason when the native check throws', async () => {
     const native = fakeApple();
     native.availability.mockRejectedValue(new Error('model service crashed'));
     const mod = await load(native);
-    expect(await mod.onDeviceStatus()).toMatchObject({ apiExposed: true, availability: 'unknown', detail: 'model service crashed' });
+    expect(await mod.onDeviceStatus()).toMatchObject({
+      platform: 'ios', apiExposed: true, availability: 'unavailable', detail: 'Apple Intelligence is not available right now. model service crashed',
+    });
+  });
+
+  it('always names the platform ios, so Settings never shows "other"', async () => {
+    for (const status of [AVAILABLE, { availability: 'unavailable', reason: 'deviceNotEligible' }] as AppleStatus[]) {
+      const mod = await load(fakeApple(status));
+      expect((await mod.onDeviceStatus()).platform).toBe('ios');
+    }
+    expect((await (await load()).onDeviceStatus()).platform).toBe('ios');
   });
 
   it('prepare and warm-up only report: iOS downloads the model itself and Kalam claims no warm state', async () => {
     const mod = await load(fakeApple({ availability: 'downloading', reason: 'modelNotReady' }));
-    expect(await mod.prepareOnDevice()).toMatchObject({ availability: 'downloading' });
+    expect(await mod.prepareOnDevice()).toMatchObject({ availability: 'unavailable' });
     const warm = await mod.warmUpOnDevice();
-    expect(warm.availability).toBe('downloading');
+    expect(warm.availability).toBe('unavailable');
     expect(warm).not.toHaveProperty('warm');
   });
 

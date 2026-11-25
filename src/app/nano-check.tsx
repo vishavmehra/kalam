@@ -3,15 +3,19 @@
  * Firebase Test Lab runs and demo recordings. No screen links here.
  *
  * On open it reports Gemini Nano's availability from the kalam-nano module (AICore through Firebase AI Logic's
- * Android on-device SDK), starts the model download when the phone offers one and waits up to 10 minutes, loads
+ * Android on-device SDK) and, when the model cannot run, why (the AICore reason, in plain English). When the phone
+ * offers a download it asks first, and downloads only if the person agrees, waiting up to 10 minutes. Then it loads
  * the model, runs one small structured prompt through Kalam's orchestrator with mode only_on_device, and shows
  * where the answer came from, the model, the latency and the schema-checked answer, plus the App Check status.
  * Every step is also one logcat line (tag ReactNativeJS) that starts with KALAM_NANO_CHECK.
  *
- * No Gemini cloud request: the orchestrator never widens only_on_device to the cloud (routing.ts), and this
- * screen does not touch Remote Config, Firestore or Auth. Two things outside Kalam's code may still use the
- * network: AICore downloads the model from Google, and the first Firebase initialisation (inside the provider)
- * starts App Check, which asks Play Integrity for a token. The App Check row shows the outcome of the latter.
+ * Only in development builds, or a build made with EXPO_PUBLIC_DIAGNOSTICS=true (the Test Lab APK). A store
+ * build shows a short note and runs nothing.
+ *
+ * No cloud request: the orchestrator never widens only_on_device to the cloud (routing.ts), this screen does not
+ * touch Remote Config, Firestore or Auth, and App Check asks Play Integrity for nothing until the first cloud
+ * request (native-app-check.native.ts), so its row should stay "no token requested yet". The one network use left
+ * is AICore downloading the model from Google, and only after the person said yes.
  */
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, View } from 'react-native';
@@ -19,7 +23,7 @@ import { z } from 'zod';
 
 import { withBudget } from '@/core/ai/orchestrator';
 import type { AIExecutionResult, AIOrchestrator, OnDeviceStatus, StructuredRequest } from '@/core/contracts';
-import { Screen, Text, useKalamTheme } from '@/design';
+import { Button, Screen, Text, useKalamTheme } from '@/design';
 import { appCheckStatus } from '@/infrastructure/firebase/app';
 import { onDeviceStatus } from '@/infrastructure/firebase/on-device';
 import { getServices } from '@/services';
@@ -28,6 +32,16 @@ import { getServices } from '@/services';
 
 export const NANO_CHECK_TAG = 'KALAM_NANO_CHECK';
 export const DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
+/** Google publishes no size for Gemini Nano, only that it is gigabytes (AICore help, read 2026-11-25). */
+export const DOWNLOAD_LABEL = 'Download the on-device model (a few GB, Wi-Fi recommended)';
+
+/**
+ * Development builds, or a build made with EXPO_PUBLIC_DIAGNOSTICS=true (the Test Lab APK), the same rule as /lab
+ * plus that one opt-in for test builds. A store build has neither.
+ */
+export function nanoCheckAllowed(dev: boolean, diagnostics: string | undefined): boolean {
+  return dev || diagnostics === 'true';
+}
 const PROMPT_TIMEOUT_MS = 90_000;
 
 const CATEGORIES = ['shopping', 'work', 'health', 'travel'] as const;
@@ -66,8 +80,8 @@ export interface DeviceInfo {
   apiLevel?: string;
 }
 
-export type NanoCheckStep = 'status' | 'download' | 'warmup' | 'prompt' | 'app_check' | 'done';
-export type DownloadOutcome = 'not_needed' | 'running' | 'completed' | 'timed_out' | 'failed';
+export type NanoCheckStep = 'status' | 'confirm' | 'download' | 'warmup' | 'prompt' | 'app_check' | 'done';
+export type DownloadOutcome = 'not_needed' | 'declined' | 'running' | 'completed' | 'timed_out' | 'failed';
 
 export interface NanoCheckReport {
   device: DeviceInfo;
@@ -91,6 +105,8 @@ export interface NanoCheckDeps {
   device: DeviceInfo;
   /** Straight from the native module, without the orchestrator's 1.5 s budget (a first AICore bind can be slower). */
   status(): Promise<OnDeviceStatus>;
+  /** Asks the person before a model download starts. Resolves true only on their yes. */
+  confirmDownload(): Promise<boolean>;
   prepare(onProgress: (p: number) => void): Promise<OnDeviceStatus>;
   warmUp(): Promise<OnDeviceStatus>;
   run: AIOrchestrator['run'];
@@ -124,9 +140,21 @@ export async function runNanoCheck(deps: NanoCheckDeps, onChange: (r: NanoCheckR
 
     const first = await status();
     set({ status: first });
-    log('status', { availability: first.availability, apiExposed: first.apiExposed, detail: first.detail });
+    log('status', { availability: first.availability, apiExposed: first.apiExposed, reason: first.reason, reasonCode: first.reasonCode, detail: first.detail });
 
-    if (first.availability === 'downloadable' || first.availability === 'downloading') {
+    // A download that is already running needs no new consent; starting one does.
+    let agreed = first.availability === 'downloading';
+    if (first.availability === 'downloadable') {
+      step('confirm');
+      log('download', { event: 'asked' });
+      agreed = await deps.confirmDownload().catch(() => false);
+      if (!agreed) {
+        set({ download: 'declined' });
+        log('download', { event: 'declined' });
+      }
+    }
+
+    if (agreed) {
       step('download');
       set({ download: 'running', downloadProgress: first.progress });
       log('download', { event: 'start', from: first.availability, timeoutMs: deps.downloadTimeoutMs ?? DOWNLOAD_TIMEOUT_MS });
@@ -153,7 +181,7 @@ export async function runNanoCheck(deps: NanoCheckDeps, onChange: (r: NanoCheckR
 
     const after = await status();
     set({ statusAfter: after });
-    log('status_after', { availability: after.availability, detail: after.detail });
+    log('status_after', { availability: after.availability, reason: after.reason, reasonCode: after.reasonCode, detail: after.detail });
 
     if (after.availability === 'available') {
       step('warmup');
@@ -199,6 +227,8 @@ export function evidenceSummary(r: NanoCheckReport) {
   return {
     device: r.device,
     availability: r.status?.availability,
+    availabilityReason: r.status?.reason,
+    availabilityReasonCode: r.status?.reasonCode,
     availabilityDetail: r.status?.detail,
     download: r.download,
     downloadPercent: r.downloadProgress === undefined ? undefined : Math.round(r.downloadProgress * 100),
@@ -247,6 +277,7 @@ export function downloadText(r: NanoCheckReport): string {
   const pct = r.downloadProgress === undefined ? '' : ` (${Math.round(r.downloadProgress * 100)}%)`;
   switch (r.download) {
     case 'not_needed': return r.status?.availability === 'available' ? 'Not needed, already on the phone' : 'Not offered';
+    case 'declined': return 'Not started: you chose not to download';
     case 'running': return `Downloading${pct}`;
     case 'completed': return 'Completed';
     case 'timed_out': return `Still downloading after ${DOWNLOAD_TIMEOUT_MS / 60_000} min${pct}`;
@@ -264,6 +295,7 @@ export function appCheckText(a: NanoCheckReport['appCheck']): string {
 
 const STEP_TEXT: Record<NanoCheckStep, string> = {
   status: 'Asking the phone about Gemini Nano',
+  confirm: 'Waiting for your answer',
   download: 'Downloading Gemini Nano',
   warmup: 'Loading Gemini Nano',
   prompt: 'Asking Gemini Nano on this phone',
@@ -273,45 +305,59 @@ const STEP_TEXT: Record<NanoCheckStep, string> = {
 
 // ─── Screen ──────────────────────────────────────────────────────────────────────────────
 
-/** Waits up to 5 s for an App Check attempt that already started to settle. Starts none itself. */
-async function settledAppCheck(): Promise<{ status: string; detail?: string }> {
-  for (let i = 0; i < 10; i++) {
-    const s = appCheckStatus();
-    if (s.status !== 'not_configured' || s.detail) return s;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  return appCheckStatus();
-}
-
-function realDeps(): NanoCheckDeps {
+function realDeps(confirmDownload: () => Promise<boolean>): NanoCheckDeps {
   // Looked up per call, so a composition-root failure shows up as the check's error instead of a crash.
   const ai = () => getServices().ai;
   return {
     device: deviceInfo(Platform),
     status: onDeviceStatus,
+    confirmDownload,
     prepare: (onProgress) => ai().prepareOnDevice(onProgress),
     warmUp: () => ai().warmUpOnDevice(),
     run: (req, ctx) => ai().run(req, ctx),
-    appCheck: settledAppCheck,
+    // Read, never started here: on-device work requests no App Check token (native-app-check.native.ts).
+    appCheck: async () => appCheckStatus(),
     now: Date.now,
     // Release builds keep console.log: React Native writes it to logcat under the ReactNativeJS tag.
     log: (line) => console.log(line),
   };
 }
 
+// Expo inlines EXPO_PUBLIC_* only when each one is read literally.
+const ALLOWED = nanoCheckAllowed(typeof __DEV__ !== 'undefined' && __DEV__, process.env.EXPO_PUBLIC_DIAGNOSTICS);
+
 export default function NanoCheckRoute() {
+  return ALLOWED ? <NanoCheck /> : (
+    <Screen safeBottom testID="nano-check-unavailable">
+      <View style={{ gap: 8, paddingVertical: 20 }}>
+        <Text variant="h1">Gemini Nano self-check</Text>
+        <Text variant="bodyLarge" tone="secondary">This check is only in development and diagnostics builds of Kalam.</Text>
+      </View>
+    </Screen>
+  );
+}
+
+function NanoCheck() {
   const theme = useKalamTheme();
   const c = theme.colors;
   const [report, setReport] = useState<NanoCheckReport>();
   const [now, setNow] = useState(() => Date.now());
+  // Set while the check waits for the person's answer about the download.
+  const [answer, setAnswer] = useState<(yes: boolean) => void>();
   const started = useRef(false);
   const done = report?.step === 'done';
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    void runNanoCheck(realDeps(), setReport);
+    const ask = () => new Promise<boolean>((resolve) => setAnswer(() => resolve));
+    void runNanoCheck(realDeps(ask), setReport);
   }, []);
+
+  const reply = (yes: boolean) => {
+    answer?.(yes);
+    setAnswer(undefined);
+  };
 
   useEffect(() => {
     if (done) return;
@@ -350,12 +396,32 @@ export default function NanoCheckRoute() {
               </Text>
             </View>
           )}
-          <Text variant="h3" tone="secondary" numeric>
-            {done && p?.success
-              ? `${onDevice ? `Gemini Nano${model ? ` (${model})` : ''}` : p.model ?? 'Unknown model'} · ${Math.round(p.latencyMs).toLocaleString('en')} ms`
-              : !done && report ? `${Math.max(0, Math.round((now - report.stepStartedAt) / 1000))} s` : ' '}
-          </Text>
+          {done && p?.success ? (
+            <Text variant="h3" tone="secondary" numeric>
+              {`${onDevice ? `Gemini Nano${model ? ` (${model})` : ''}` : p.model ?? 'Unknown model'} · ${Math.round(p.latencyMs).toLocaleString('en')} ms`}
+            </Text>
+          ) : null}
+          {!done && report ? (
+            <Text variant="h3" tone="secondary" numeric>{`${Math.max(0, Math.round((now - report.stepStartedAt) / 1000))} s`}</Text>
+          ) : null}
+          {/* Near the top on purpose: Test Lab's Robo script waits for this label, and Robo only sees what is on screen. */}
+          {done && report ? (
+            <Text variant="h4" tone="secondary" numeric accessibilityLabel="nano-check-finished" testID="nano-check-finished">
+              Check finished in {Math.round(((report.finishedAt ?? now) - report.startedAt) / 1000)} s
+            </Text>
+          ) : null}
         </View>
+
+        {answer ? (
+          <View accessibilityLabel="nano-check-download-question" style={{ backgroundColor: c.surface, borderColor: c.border, borderWidth: 1, borderRadius: theme.radius.xl, padding: 20, gap: 12 }}>
+            <Text variant="h3">Download Gemini Nano to this phone?</Text>
+            <Text variant="bodyLarge" tone="secondary">
+              Android AICore can download the model now. It takes a few GB of storage and data, so Wi-Fi is recommended. Nothing downloads unless you choose to.
+            </Text>
+            <Button label={DOWNLOAD_LABEL} onPress={() => reply(true)} testID="nano-check-download-yes" />
+            <Button label="Not now" variant="ghost" onPress={() => reply(false)} testID="nano-check-download-no" />
+          </View>
+        ) : null}
 
         <View accessibilityLabel="nano-check-answer" style={{ backgroundColor: c.surface, borderColor: c.border, borderWidth: 1, borderRadius: theme.radius.xl, padding: 20, gap: 6 }}>
           <Text variant="h4" tone="secondary">Note</Text>
@@ -373,19 +439,13 @@ export default function NanoCheckRoute() {
           value={report?.status ? AVAILABILITY_TEXT[report.status.availability] : 'Checking'}
           note={report?.status?.availability === 'available' ? undefined : report?.status?.detail} />
         <Row id="download" label="Model download" value={report ? downloadText(report) : 'Checking'} />
-        {report?.statusAfter && report.download !== 'not_needed'
+        {report?.statusAfter && report.download !== 'not_needed' && report.download !== 'declined'
           ? <Row id="availability-after" label="After the download" value={AVAILABILITY_TEXT[report.statusAfter.availability]} note={report.statusAfter.detail} />
           : null}
         <Row id="model" label="Model" value={model ?? p?.model ?? 'Not loaded'} />
         <Row id="cloud" label="Cloud AI requests" value="None (mode only_on_device)" />
         <Row id="app-check" label="Firebase App Check" value={appCheckText(report?.appCheck)} />
         {report?.error ? <Row id="error" label="Error" value={report.error} /> : null}
-
-        {done && report ? (
-          <Text variant="h3" tone="secondary" accessibilityLabel="nano-check-finished">
-            Check finished in {Math.round(((report.finishedAt ?? now) - report.startedAt) / 1000)} s
-          </Text>
-        ) : null}
       </View>
     </Screen>
   );

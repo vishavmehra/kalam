@@ -292,6 +292,11 @@ describe('status time-box and warm-up', () => {
     expect(s.cloudConfigured).toBe(true);
   });
 
+  it('a slow status check still names the platform it runs on (iOS, never "other")', async () => {
+    const ai = createOrchestrator({ ...deps({ ...base, onDeviceStatus: () => new Promise<OnDeviceStatus>(() => {}) }), platform: 'ios' });
+    expect((await ai.status()).onDevice).toMatchObject({ platform: 'ios', availability: 'unknown' });
+  });
+
   it('warmUpOnDevice delegates to the provider and never throws', async () => {
     let warmed = 0;
     const ok = createOrchestrator(deps({
