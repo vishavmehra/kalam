@@ -201,8 +201,9 @@ jobs:
       # built with Kotlin 2.4, and React Native 0.88's default Kotlin 2.2 compiler cannot read it ("Module was
       # compiled with an incompatible version of Kotlin"). android/build.gradle from Expo prebuild takes the Kotlin
       # Gradle plugin version from the `android.kotlinVersion` property, so it is passed to Gradle below unless the
-      # app already sets it in gradle.properties (the lasting fix belongs in the kalam-nano config plugin).
-      ANDROID_KOTLIN_VERSION: 2.4.21
+      # app already sets it in gradle.properties (the lasting fix belongs in the kalam-nano config plugin). It must be
+      # a version Expo publishes its Kotlin compiler plugins for (io.github.expo.pika, expo-modules-v2-compiler-plugin).
+      ANDROID_KOTLIN_VERSION: 2.4.20
     steps:
       - name: Enable KVM
         run: |
