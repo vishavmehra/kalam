@@ -188,6 +188,17 @@ jobs:
           java-version: '17'
       - run: npm ci
 
+      # The first run lost the runner mid-build ("starves it for CPU/Memory"): Gradle, the Kotlin daemon, R8 and
+      # parallel C++ compiles together outgrow the runner's 16 GB. Extra swap and capped JVM heaps keep it alive.
+      - name: Add swap
+        run: |
+          sudo swapoff -a || true
+          sudo fallocate -l 12G /mnt/kalam.swap
+          sudo chmod 600 /mnt/kalam.swap
+          sudo mkswap /mnt/kalam.swap >/dev/null
+          sudo swapon /mnt/kalam.swap
+          free -h
+
       - name: Generate the native project
         run: npx expo prebuild --platform android --no-install --clean
 
@@ -198,7 +209,12 @@ jobs:
           GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
         run: |
           mkdir -p "$OUT/screenshots" "$OUT/logs"
-          ./gradlew assembleRelease --no-daemon --stacktrace -PreactNativeArchitectures=arm64-v8a,x86_64 2>&1 | tee "$OUT/logs/gradle.log"
+          # Memory and disk every two minutes, so a starved runner shows up in the log.
+          (while sleep 120; do echo "[resources] $(date -u +%H:%M) $(free -m | awk '/Mem/{print "mem " $3 "/" $2 " MB"} /Swap/{print "swap " $3 "/" $2 " MB"}' | tr '\n' ' ')$(df -h / | awk 'NR==2{print "disk " $3 "/" $2}')"; done) &
+          mon=$!
+          ./gradlew assembleRelease --no-daemon --stacktrace -PreactNativeArchitectures=arm64-v8a,x86_64 \
+            -Pkotlin.daemon.jvmargs=-Xmx2g 2>&1 | tee "$OUT/logs/gradle.log"
+          kill "$mon" || true
           apk=$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)
           if [ -z "$apk" ]; then echo "::error::No APK was produced"; exit 1; fi
           cp "$apk" "$OUT/kalam-release.apk"

@@ -74,7 +74,9 @@ name: Kalam smoke
 # The number field's accessibility label is "Amount (₹)"; its visible label reads "Amount (₹) (required)".
 - tapOn: "Amount( \\([^)]+\\))?"
 - inputText: "250"
-- hideKeyboard
+# iOS's decimal pad has no dismiss key, so Maestro's hideKeyboard fails there. Tapping the screen title (plain
+# text in a ScrollView with keyboardShouldPersistTaps="handled") closes the keyboard on both platforms.
+- tapOn: "Add expense"
 - takeScreenshot: 07-record-form
 - scrollUntilVisible:
     element: "Save expense.*"
