@@ -209,6 +209,8 @@ jobs:
           GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
         run: |
           mkdir -p "$OUT/screenshots" "$OUT/logs"
+          # Resolve Gradle plugins first, with retries: a plugin download from the Gradle Plugin Portal failed once.
+          for i in 1 2 3; do ./gradlew help --no-daemon -q && break; [ "$i" = 3 ] && exit 1; sleep 30; done
           # Memory and disk every two minutes, so a starved runner shows up in the log.
           (while sleep 120; do echo "[resources] $(date -u +%H:%M) $(free -m | awk '/Mem/{print "mem " $3 "/" $2 " MB"} /Swap/{print "swap " $3 "/" $2 " MB"}' | tr '\n' ' ')$(df -h / | awk 'NR==2{print "disk " $3 "/" $2}')"; done) &
           mon=$!

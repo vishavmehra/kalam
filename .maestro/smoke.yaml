@@ -90,6 +90,15 @@ name: Kalam smoke
 
 # 6. Back to the shelf: the new app is listed.
 - tapOn: "Back to your apps"
+# After a fresh save the app sits on top of Create in the navigation stack (review replaces itself with the app),
+# so "Back to your apps" lands on Create. One more Back reaches the shelf.
+- waitForAnimationToEnd:
+    timeout: 5000
+- runFlow:
+    when:
+      visible: "New app"
+    commands:
+      - tapOn: "Back"
 - extendedWaitUntil:
     visible: "Your shelf.*"
     timeout: 15000
