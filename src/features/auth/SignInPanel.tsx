@@ -136,6 +136,7 @@ export function SignInPanel({ initialMode = 'signin', onDone }: SignInPanelProps
       ) : null}
       <TextField
         label={t('auth.email')}
+        testID="auth-email"
         icon={Mail}
         value={email}
         onChangeText={setEmail}
@@ -147,6 +148,7 @@ export function SignInPanel({ initialMode = 'signin', onDone }: SignInPanelProps
       />
       <TextField
         label={t('auth.password')}
+        testID="auth-password"
         helper={mode === 'signup' ? t('auth.passwordHelp') : undefined}
         icon={KeyRound}
         value={password}

@@ -32,10 +32,13 @@ name: Onboarding
     visible: "Sign in with email"
     timeout: 60000
 - takeScreenshot: 01b-sign-in
-- tapOn: "Email"
+# Tap the fields by id: on iOS the text "Email" also matches the label above the field, which does not focus it.
+- tapOn:
+    id: auth-email
 - inputText: ${KALAM_TEST_EMAIL}
 - hideKeyboard
-- tapOn: "Password"
+- tapOn:
+    id: auth-password
 - inputText: ${KALAM_TEST_PASSWORD}
 - hideKeyboard
 - tapOn: "Sign in with email"
