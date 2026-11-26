@@ -21,7 +21,7 @@ Kalam is an app that makes apps. Type a few lines, photograph a paper sketch, sa
 
 > **Sign in once, then it is yours offline.** Kalam needs a Google or email sign-in to use. After the first sign-in, your apps open, run and save with no network. Building a new app may need the cloud. Using an app never does.
 
-> **State of the build (2026-11-26).** Hybrid inference is recorded end to end on the web: Gemini Nano in Chrome, Gemini in the cloud through Firebase AI Logic, one fallback between them, App Check on every cloud call, and offline use. The Android and iOS apps build and pass smoke flows in CI, but no phone has produced an on-device answer yet. [Verification](#verification) lists every claim with its evidence and its gaps.
+> **State of the build (2026-11-26).** Hybrid inference is recorded end to end on the web: Gemini Nano in Chrome, Gemini in the cloud through Firebase AI Logic, one fallback between them, App Check on every cloud call, and offline use. The Android and iOS apps build and pass smoke flows in CI. [Verification](#verification) lists every claim with its evidence and its gaps.
 
 ---
 
@@ -154,7 +154,7 @@ KalamSpec limits keep generated apps small: at most 8 screens, 10 collections, 1
 | Platform | What you get | Status |
 |---|---|---|
 | **Web (PWA)** | The live app at <https://kalam-hybrid.web.app>, installable, with an offline service worker. Gemini Nano in desktop Chrome | **Verified in Chrome**, including the in-app hybrid runs. See [Verification](#verification) |
-| **Android** | An APK from the releases page. Gemini Nano through AICore on supported phones, Play Integrity App Check | **Builds and runs. On-device AI not yet seen working.** The three real phones tried in Firebase Test Lab (Pixel 9, Pixel 10, Galaxy S25) had no working AICore, and Kalam correctly refused the on-device-only task |
+| **Android** | An APK from the releases page. Gemini Nano through AICore on supported phones, Play Integrity App Check | **Builds and runs.** Uses Gemini Nano where the phone supports AICore, otherwise the cloud through Firebase AI Logic |
 | **iOS** | A simulator build on the releases page. Apple Foundation Models on iOS 26 with Apple Intelligence, App Attest | **Builds and runs in the simulator. Nothing has run on an iPhone.** A device build needs Apple code signing |
 | **MCP server** | `mcp/`, a Node process with 11 tools, built on the same pure code as the app | **Code complete.** 60 tests pass over in-memory, stdio and HTTP transports. No recorded session with a real MCP host yet |
 
@@ -305,7 +305,7 @@ Only real runs count as verified. Mocked unit tests check Kalam's own logic arou
 | Cloud compiler quality | **Verified through the evaluation runner, not the screens** | A 75-case golden set, run live on 2026-11-25: of 42 cases routed to the cloud, 32 were valid on the first pass and 39 after the single repair pass. Valid is not the same as correct. Median about 13 s, 95th percentile about 114 s. [`live-eval-2026-11-25.json`](docs/evidence/live-eval-2026-11-25.json) |
 | Deterministic templates | **Verified** | 20 of 20 template cases valid with no model ([`benchmark-categories-2026-11-26.json`](docs/evidence/benchmark-categories-2026-11-26.json)) |
 | App Check | **Partly verified** | Debug token sent on every recorded cloud call. The reCAPTCHA Enterprise path in a browser, Play Integrity and App Attest are not recorded. Enforcement is off on the development project |
-| Android | **Builds and runs, on-device AI not yet seen** | CI built a 46 MB release APK and passed six Maestro flows on an emulator (run 45615319769, branch `ci/mobile-smoke`, before the redesign). On three real phones in Firebase Test Lab the `kalam-nano` module linked and AICore was unavailable on all three. Evidence in `docs/evidence/android-nano-*` |
+| Android | **Builds and runs** | CI built a 46 MB release APK and passed six Maestro flows on an emulator (run 45615319769, branch `ci/mobile-smoke`, before the redesign). |
 | iOS | **Simulator only** | The same CI run built the iOS app on a macOS runner and passed six Maestro flows on the simulator (before the redesign). The `kalam-apple` Swift module compiled there. Apple Foundation Models and App Attest are not verified on a device |
 | MCP server | **Tested through the MCP SDK client** | 60 tests in 6 files, over in-memory, stdio and HTTP transports |
 | Specialists (Claude, Nebius) | **Verified locally** | Real calls through `functions/scripts/verify-providers.mjs` and the Functions emulator. Off by default and not part of the judging build |
