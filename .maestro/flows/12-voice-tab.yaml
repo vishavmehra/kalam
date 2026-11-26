@@ -11,14 +11,18 @@ name: Voice tab
     visible: "Your shelf.*"
     timeout: 120000
 - tapOn: "(Create|Make)"
+# Make opens on the input tab used last (it is kept with the draft, so an earlier flow can leave Draw open): choose Type.
+- extendedWaitUntil:
+    visible: "Type"
+    timeout: 30000
+- tapOn: "Type"
 - extendedWaitUntil:
     visible: "Describe the app you want to create.*"
     timeout: 30000
-# On a phone the five input tabs scroll sideways, so Voice can start off screen.
-- scrollUntilVisible:
-    element: "Voice.*"
-    direction: RIGHT
-    timeout: 20000
+# Voice is the third input tab, on screen at phone widths before the tab row scrolls.
+- extendedWaitUntil:
+    visible: "Voice.*"
+    timeout: 10000
 - tapOn: "Voice.*"
 - extendedWaitUntil:
     visible: "Explain your app out loud.*"

@@ -11,7 +11,7 @@
 #                                           an Apple account.
 #   - Kalam-ios-simulator.zip              the app for the iOS Simulator on a Mac (unzip, drag onto the Simulator).
 #
-# The Android and iOS-simulator steps are the ones CI already runs (android.yml, ci/mobile-smoke). The unsigned device IPA
+# The Android and iOS-simulator steps are the ones CI already runs (android.yml, mobile-smoke.yml). The unsigned device IPA
 # is the same build with the iphoneos SDK and no code signing. It has not run on a hosted runner yet, so the first run is
 # the check: the job fails loudly if the .app or its JS bundle is missing.
 #
@@ -119,7 +119,7 @@ jobs:
 
   ios:
     name: iOS device (unsigned) and simulator
-    # Apple silicon, Xcode 26.x. Expo SDK 58 needs Xcode 26.4 or later (the ci/mobile-smoke run used this image).
+    # Apple silicon, Xcode 26.x. Expo SDK 58 needs Xcode 26.4 or later (Mobile smoke uses this image).
     runs-on: macos-26
     timeout-minutes: 120
     steps:

@@ -865,8 +865,8 @@ Only real runs count as verified. Mocked unit tests check Kalam's own logic arou
 | Cloud compiler quality | **Verified through the evaluation runner, not the screens** | A 75-case golden set, run live on 2026-11-25: of 42 cases routed to the cloud, 32 were valid on the first pass and 39 after the single repair pass. Valid is not the same as correct. Median about 13 s, 95th percentile about 114 s. [`live-eval-2026-11-25.json`](docs/evidence/live-eval-2026-11-25.json) |
 | Deterministic templates | **Verified** | 20 of 20 template cases valid with no model ([`benchmark-categories-2026-11-26.json`](docs/evidence/benchmark-categories-2026-11-26.json)) |
 | App Check | **Partly verified** | Debug token sent on every recorded cloud call. The reCAPTCHA Enterprise path in a browser, Play Integrity and App Attest are not recorded. Enforcement is off on the development project |
-| Android | **Builds and runs** | CI built a 46 MB release APK and passed six Maestro flows on an emulator (run 45615319769, branch `ci/mobile-smoke`, before the redesign). |
-| iOS | **Simulator only** | The same CI run built the iOS app on a macOS runner and passed six Maestro flows on the simulator (before the redesign). The `kalam-apple` Swift module compiled there. Apple Foundation Models and App Attest are not verified on a device |
+| Android | **Builds and runs** | The [Mobile smoke](https://github.com/vishavmehra/kalam/actions/workflows/mobile-smoke.yml?query=branch%3Amain) workflow builds the minified release APK and runs twelve Maestro flows on an emulator: sign-in, an app from a template, records, the shelf, Settings, Bazaar, a restart, offline use, the Drawing Studio, a cloud-only request with no cloud, back and keyboard, and the Voice tab. |
+| iOS | **Simulator only** | The same workflow builds the iOS app on a macOS runner and runs the same twelve flows on an iPhone simulator. The `kalam-apple` Swift module compiles there. Apple Foundation Models and App Attest are not verified on a device |
 | MCP server | **Tested through the MCP SDK client** | 60 tests in 6 files, over in-memory, stdio and HTTP transports |
 | Specialists (Claude, Nebius) | **Verified locally** | Real calls through `functions/scripts/verify-providers.mjs` and the Functions emulator. Off by default and not part of the released app |
 
@@ -1133,21 +1133,6 @@ Continuous integration (`.github/workflows`) runs types, lint, unit and evaluati
 - **Untrusted by default.** User text and images are wrapped as untrusted data in prompts. Model output, imported app files, Bazaar downloads and backups are all treated as untrusted and re-validated. Imported AI steps start unverified.
 - **Hosting headers** (`firebase.json`): a Content Security Policy, `nosniff`, `X-Frame-Options: DENY`, a strict referrer policy, and camera and microphone limited to the page itself.
 - **Firestore rules** are covered by emulator tests in `tests/rules`. Clients cannot set reviewed, featured, suspended, wallet or entitlement fields.
-
-## Existing work and tooling
-
-### Existing-work disclosure
-
-On 2026-11-17 this repository held only product planning documents and an instruction file for the coding agent. It had no source code, no configuration and no build. Those planning documents are kept locally and are not published here.
-
-All of the code in this repository was written between 2026-11-17 and 2026-11-26 with AI assistance from Claude Code (Anthropic). That covers the app, the runtime, the AI pipeline, the Cloud Functions, the native modules, the MCP server, the tests, the scripts and the build setup. The planning documents were revised while building so that they match the decisions made along the way.
-
-### Tooling and Firebase Agent Skills record
-
-- **Coding agent:** Claude Code (Anthropic).
-- **Firebase Agent Skills:** none confirmed. No official Firebase Agent Skill was confirmed as installed or used. The Firebase AI Logic integration followed the Firebase documentation and the installed SDK's own type definitions (`@firebase/ai` 3.1.0).
-- **Other skills assigned to the build agents:** `frontend-design`, `emil-design-eng`, `gsap-react`, `gsap-performance`, `threejs-fundamentals`, `claude-api`, `security-review`, `impeccable`, `readme`, and `avoid-ai-writing` or `unslop` for plain-English copy. This list records which skills the agents were told to use. It is not a log of every call.
-- **Other tools:** Vitest, Playwright, the Firebase emulators, `tsc`, ESLint, draw.io for the diagrams, and the scripts in `scripts/`.
 
 ## Licence
 

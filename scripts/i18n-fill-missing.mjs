@@ -10,7 +10,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { initializeApp } from 'firebase/app';
 import { CustomProvider, getToken, initializeAppCheck } from 'firebase/app-check';
-import { getAI, getGenerativeModel, GoogleAIBackend, InferenceMode, ThinkingLevel } from 'firebase/ai';
+import { AgentPlatformBackend, getAI, getGenerativeModel, GoogleAIBackend, InferenceMode, ThinkingLevel } from 'firebase/ai';
 
 const DIR = new URL('../src/i18n/locales/', import.meta.url);
 const NAMES = { hi: ['Hindi', 'Devanagari'], gu: ['Gujarati', 'Gujarati'], mr: ['Marathi', 'Devanagari'], bn: ['Bengali', 'Bengali'], ta: ['Tamil', 'Tamil'], te: ['Telugu', 'Telugu'], kn: ['Kannada', 'Kannada'], ml: ['Malayalam', 'Malayalam'], pa: ['Punjabi (Gurmukhi)', 'Gurmukhi'] };
@@ -30,7 +30,7 @@ if (env.EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN) {
   console.log = (...a) => log(...a.map((x) => (typeof x === 'string' ? x.split(env.EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN).join('<redacted>') : x)));
   await getToken(initializeAppCheck(app, { provider: new CustomProvider({ getToken: () => Promise.reject(new Error('unused')) }) }));
 }
-const model = getGenerativeModel(getAI(app, { backend: new GoogleAIBackend() }), {
+const model = getGenerativeModel(getAI(app, { backend: env.EXPO_PUBLIC_AI_BACKEND === 'agent_platform' ? new AgentPlatformBackend(env.EXPO_PUBLIC_AI_LOCATION || undefined) : new GoogleAIBackend() }), {
   mode: InferenceMode.ONLY_IN_CLOUD,
   inCloudParams: { model: MODEL, generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 16000, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } },
 });
@@ -55,7 +55,7 @@ function valid(code, src, out) {
   if ((typeof src === 'string') !== (typeof out === 'string')) return false;
   if (need && !need.every((c) => typeof out[c] === 'string')) return false;
   if (ph(src) !== ph(out)) return false;
-  const script = new RegExp(`\p{Script=${NAMES[code][1]}}`, 'u');
+  const script = new RegExp(`\\p{Script=${NAMES[code][1]}}`, 'u');
   return forms(out).every((s) => s.trim() && script.test(s) && !/[–—!]/.test(s));
 }
 

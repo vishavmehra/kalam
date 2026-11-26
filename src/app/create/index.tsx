@@ -176,6 +176,10 @@ export default function CreateWorkspace() {
 
   // The ink bloom: the workspace opens from the Make key, once (web only, never under reduced motion).
   const sheet = useRef<ComponentRef<typeof View>>(null);
+  // KeyboardAvoidingView measures itself against its parent, not the window, so it needs the height of what sits above
+  // it (the app header) to know how much of it the keyboard covers.
+  const keyboardHost = useRef<ComponentRef<typeof View>>(null);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
   // Drop a picture on the screen, or paste one, from any way in: it joins the photos through the same checks as a picked file.
   const dropIntake = useImageIntake();
   const [tooBig, setTooBig] = useState(false);
@@ -286,8 +290,10 @@ export default function CreateWorkspace() {
 
   return (
     <AppShell active="create">
-      {/* iOS: keep Build app and the inputs above the keyboard. */}
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      {/* Keep Build app and the inputs above the keyboard. Android too: the app draws edge to edge, so the window no
+          longer shrinks for the keyboard (adjustResize does nothing) and the keyboard covered Build app (2026-11-26). */}
+      <View ref={keyboardHost} style={{ flex: 1 }} onLayout={() => keyboardHost.current?.measureInWindow((_x, y) => setKeyboardOffset(y))}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'web' ? undefined : 'padding'} keyboardVerticalOffset={keyboardOffset} style={{ flex: 1 }}>
         <View ref={sheet} style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.surface }}>
           {workspace}
           {dragging ? (
@@ -329,6 +335,7 @@ export default function CreateWorkspace() {
           </View>
         ) : null}
       </KeyboardAvoidingView>
+      </View>
 
       <CloudNoticeSheet visible={noticeOpen} onSend={sendAfterNotice} onCancel={() => setNoticeOpen(false)} />
       <ConfirmSheet

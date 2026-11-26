@@ -10,6 +10,11 @@ name: Cloud-only request without a cloud
     visible: "Your shelf.*"
     timeout: 120000
 - tapOn: "(Create|Make)"
+# Make opens on the input tab used last (it is kept with the draft, so an earlier flow can leave Draw open): choose Type.
+- extendedWaitUntil:
+    visible: "Type"
+    timeout: 30000
+- tapOn: "Type"
 - extendedWaitUntil:
     visible: "Describe the app you want to create.*"
     timeout: 30000
@@ -18,9 +23,10 @@ name: Cloud-only request without a cloud
 - hideKeyboard
 - tapOn:
     id: create-app
-# Either the first-time question about sending to Gemini, or (already answered) the failure itself.
+# Either the first-time question about sending to Gemini, or (already answered) the failure itself: no cloud set up,
+# or, in a build with Firebase but no App Check token (CI, an emulator), "could not build this app yet" with the reason.
 - extendedWaitUntil:
-    visible: ".*(needs Gemini in the cloud|needs the cloud to build).*"
+    visible: ".*(needs Gemini in the cloud|needs the cloud to build|could not build this app yet).*"
     timeout: 60000
 - takeScreenshot: 22-cloud-needed
 - runFlow:

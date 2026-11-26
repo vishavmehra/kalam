@@ -1,5 +1,5 @@
 # The Drawing Studio on a phone (docs/08 §22, docs/13 §13.1; checklist D08-040, D08-054): draw, see the objects counted,
-# save, hand the drawing to Create, and open it again from there. The canvas names itself to the accessibility
+# hand the drawing to Create (Use saves it), and open it again from there. The canvas names itself to the accessibility
 # service ("Drawing canvas. Screen 1 of 1, Screen 1. Pen tool. 2 objects. ..."), so the object count is the parity
 # check with the web canvas: the same gestures must produce the same number of objects on Skia as on the web.
 appId: com.kalam.app
@@ -11,32 +11,55 @@ name: Drawing studio
     visible: "Your shelf.*"
     timeout: 120000
 - tapOn: "(Create|Make)"
+# Make opens on the input tab used last (it is kept with the draft, so an earlier flow can leave Draw open): choose Type.
+- extendedWaitUntil:
+    visible: "Type"
+    timeout: 30000
+- tapOn: "Type"
 - extendedWaitUntil:
     visible: "Describe the app you want to create.*"
     timeout: 30000
-# On a phone the five input tabs scroll sideways, so Draw can start off screen.
-- scrollUntilVisible:
-    element: "Draw.*"
-    direction: RIGHT
-    timeout: 20000
+# On a phone the five input tabs scroll sideways and Draw starts off screen. Swipe the tab row itself, from the Voice
+# tab: scrollUntilVisible swipes the middle of the screen, which scrolls the page, not the row. Two swipes reach the
+# end of the row on a 1080 px emulator; a third does nothing there and covers narrower screens.
+- swipe:
+    from:
+      text: "Voice.*"
+    direction: LEFT
+- swipe:
+    from:
+      text: "Voice.*"
+    direction: LEFT
+- swipe:
+    from:
+      text: "Voice.*"
+    direction: LEFT
+- extendedWaitUntil:
+    visible: "Draw.*"
+    timeout: 10000
 - tapOn: "Draw.*"
-- tapOn: "Open Drawing Studio"
+# "Continue drawing" when the draft already holds an empty drawing (a rerun on the same device).
+- tapOn: "(Open Drawing Studio|Continue drawing)"
 - extendedWaitUntil:
     visible: ".*Drawing canvas.*0 objects.*"
     timeout: 60000
 - takeScreenshot: 18-studio-empty
 
-# A rectangle and a pen stroke.
-- tapOn: "Rectangle.*"
+# A pen stroke (the pen is the starting tool), then a rectangle. On a phone the tool row scrolls sideways and the
+# shapes start hidden: swipe the row from the Eraser to reach them.
 - swipe:
-    start: 30%, 30%
-    end: 70%, 45%
+    start: 25%, 35%
+    end: 75%, 37%
     duration: 600
 - assertVisible: ".*Drawing canvas.*1 object.*"
-- tapOn: "Pen.*"
 - swipe:
-    start: 25%, 60%
-    end: 75%, 62%
+    from:
+      text: "Eraser.*"
+    direction: LEFT
+- tapOn: "Rectangle.*"
+- swipe:
+    start: 30%, 50%
+    end: 70%, 65%
     duration: 600
 - assertVisible: ".*Drawing canvas.*2 objects.*"
 - takeScreenshot: 19-studio-drawn
@@ -47,12 +70,9 @@ name: Drawing studio
 - tapOn: "Redo.*"
 - assertVisible: ".*Drawing canvas.*2 objects.*"
 
-# Save, use the drawing, come back to it through Create.
-- tapOn: "Save now.*"
-- extendedWaitUntil:
-    visible: "Saved"
-    timeout: 15000
-- tapOn: "Use this drawing"
+# Use the drawing (this saves it and hands it to Make), then open it again from there.
+- tapOn:
+    id: use-drawing
 - extendedWaitUntil:
     visible: "Continue drawing"
     timeout: 30000

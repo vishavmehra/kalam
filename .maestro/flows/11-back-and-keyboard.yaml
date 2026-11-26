@@ -11,6 +11,11 @@ name: Back, keyboard and safe areas
     timeout: 120000
 - takeScreenshot: 23-edges-shelf
 - tapOn: "(Create|Make)"
+# Make opens on the input tab used last (it is kept with the draft, so an earlier flow can leave Draw open): choose Type.
+- extendedWaitUntil:
+    visible: "Type"
+    timeout: 30000
+- tapOn: "Type"
 - extendedWaitUntil:
     visible: "Describe the app you want to create.*"
     timeout: 30000

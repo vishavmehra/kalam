@@ -80,6 +80,8 @@ describe.each(LANGUAGES.filter((l) => l.code !== 'en'))('$english catalogue ($co
     for (const [key, message] of get().messages) {
       for (const text of forms(message)) {
         if (key === 'app.name') continue;
+        // Placeholders and punctuation only (e.g. "{label}: {value}"): nothing to translate.
+        if (!/\p{L}/u.test(text.replace(/\{[^}]*\}/g, ''))) continue;
         expect(detectScripts(text), `${key}: ${text}`).toContain(script);
       }
     }

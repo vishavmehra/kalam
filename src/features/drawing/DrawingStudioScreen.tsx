@@ -23,7 +23,7 @@ import {
   FloatingZoom, HistoryButtons, PageStrip, PropertiesPanel, SaveIndicator, ShortcutsButton, TitleInput, ToolPalette, ZoomControls,
 } from './StudioChrome';
 import { flushStudio, useStudio } from './use-studio';
-import { useT } from '@/i18n/react';
+import { useFormat, useT } from '@/i18n/react';
 import { useCreationStore } from '@/state/creation-store';
 import { getServices } from '@/services';
 
@@ -48,6 +48,7 @@ export default function DrawingStudioScreen() {
   const store = useStudio(id);
   const { colors, space, elevation, accessModes, uiLanguage, fontScale } = useKalamTheme();
   const t = useT(uiLanguage);
+  const format = useFormat(uiLanguage);
   const leftHanded = accessModes.leftHanded;
   const insets = useSafeAreaInsets();
   const { isDesktop, isPhone } = useBreakpoint();
@@ -183,7 +184,7 @@ export default function DrawingStudioScreen() {
         visible={sensitive !== null}
         onClose={() => setSensitive(null)}
         title={t('create.draw.sensitive.title')}
-        description={t('create.draw.sensitive.body', { kinds: new Intl.ListFormat(uiLanguage, { style: 'long', type: 'conjunction' }).format((sensitive ?? []).map((k) => t(`create.draw.sensitive.kind.${k}` as const))) })}
+        description={t('create.draw.sensitive.body', { kinds: format.list((sensitive ?? []).map((k) => t(`create.draw.sensitive.kind.${k}` as const))) })}
         testID="drawing-sensitive-cue"
         footer={(
           <>
