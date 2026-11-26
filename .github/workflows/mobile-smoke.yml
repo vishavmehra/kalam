@@ -98,6 +98,13 @@ jobs:
           echo "SIM_UDID=${pick%% *}" >> "$GITHUB_ENV"
           xcrun simctl boot "${pick%% *}"
 
+      # CI has no iOS Google client id, so the app offers email sign-in there anyway. Linking the GoogleSignIn pods also
+      # breaks the Xcode 26 build ("redefinition of module 'RecaptchaInterop'"), so leave them out of this checkout.
+      - name: Leave out native Google Sign-In on iOS
+        run: |
+          echo "module.exports = { dependencies: { '@react-native-google-signin/google-signin': { platforms: { ios: null } } } };" > react-native.config.js
+          npm pkg set 'expo.autolinking.exclude[0]=@react-native-google-signin/google-signin'
+
       - name: Generate the native project
         run: npx expo prebuild --platform ios --clean --no-install
 
@@ -111,7 +118,7 @@ jobs:
           scheme=$(basename "$ws" .xcworkspace)
           xcodebuild -workspace "$ws" -scheme "$scheme" -configuration Release -sdk iphonesimulator \
             -destination "id=$SIM_UDID" -derivedDataPath ios/build \
-            ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO SWIFT_ENABLE_EXPLICIT_MODULES=NO CLANG_ENABLE_EXPLICIT_MODULES=NO build \
+            ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build \
             | tee "$OUT/logs/xcodebuild.log" | xcbeautify --renderer github-actions
           app=$(ls -d ios/build/Build/Products/Release-iphonesimulator/*.app | head -n 1)
           if [ ! -f "$app/main.jsbundle" ]; then echo "::error::$app has no embedded JS bundle"; exit 1; fi
