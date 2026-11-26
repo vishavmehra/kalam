@@ -45,7 +45,7 @@ name: Drawing studio
     timeout: 60000
 - takeScreenshot: 18-studio-empty
 
-# A pen stroke (the pen is the starting tool), then a rectangle. On a phone the tool row scrolls sideways and the
+# A pen stroke (the pen is the starting tool), then a shape. On a phone the tool row scrolls sideways and the
 # shapes start hidden: swipe the row from the Eraser to reach them.
 - swipe:
     start: 25%, 35%
@@ -56,7 +56,8 @@ name: Drawing studio
     from:
       text: "Eraser.*"
     direction: LEFT
-- tapOn: "Rectangle.*"
+# The swipe flings further on iOS, past Rectangle: draw whichever box shape is on screen (both count as one object).
+- tapOn: "(Rectangle|Ellipse).*"
 - swipe:
     start: 30%, 50%
     end: 70%, 65%
