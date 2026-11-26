@@ -1150,4 +1150,4 @@ All of the code in this repository was written between 2026-11-17 and 2026-11-26
 
 ## Licence
 
-Kalam is released under the [MIT License](LICENSE).
+Kalam is released under the [MIT License](LICENSE). Copyright (c) 2026 Vishav Mehra.
