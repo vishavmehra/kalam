@@ -20,6 +20,19 @@ name: Onboarding
 - tapOn:
     id: onboarding-continue
 
+# Sign-in is required. The test account comes from -e KALAM_TEST_EMAIL and -e KALAM_TEST_PASSWORD (CI secrets).
+- extendedWaitUntil:
+    visible: "Sign in with email"
+    timeout: 60000
+- takeScreenshot: 01b-sign-in
+- tapOn: "Email"
+- inputText: ${KALAM_TEST_EMAIL}
+- hideKeyboard
+- tapOn: "Password"
+- inputText: ${KALAM_TEST_PASSWORD}
+- hideKeyboard
+- tapOn: "Sign in with email"
+
 - extendedWaitUntil:
     visible: "Your shelf.*"
     timeout: 30000
