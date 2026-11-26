@@ -180,17 +180,23 @@ jobs:
           sha256sum Kalam-* > SHA256SUMS.txt
           cat SHA256SUMS.txt
           cat > ../notes.md <<'NOTES'
-          Test builds of Kalam for Android and iOS. The web app needs no download.
+          Kalam turns a typed idea, a photo of a sketch, your voice or a drawing into a working app that lives on your
+          device and keeps working offline. It uses Firebase AI Logic for hybrid inference: deterministic templates first,
+          Gemini Nano on the device where it is supported, and the cloud when a request needs it.
 
-          Android: download the .apk, open it on the phone and allow installs from this source when asked. It is signed
-          with an upload key, so it is a direct download and not a Play Store build.
+          Live web app (nothing to install): https://kalam-hybrid.web.app
 
-          iPhone: the .ipa has no signature. Sign it with AltStore or Sideloadly (a free Apple ID works) or with your own
-          Apple Developer certificate, then install it. It will not install as it is.
+          Android: download Kalam-android.apk, open it on the phone and allow installs from unknown sources when asked.
+          It is signed with an upload key, so it is a direct download and not a Play Store build.
 
-          iOS Simulator (Mac): unzip Kalam-ios-simulator.zip and drag the app onto an open Simulator.
+          iOS Simulator (Mac with Xcode): unzip Kalam-ios-simulator.zip, boot a simulator, then run
+          `xcrun simctl install booted Kalam.app` and `xcrun simctl launch booted com.kalam.app`.
 
-          Check a download against SHA256SUMS.txt.
+          iPhone: a device build must be signed with an Apple Developer certificate, and CI has none. The .ipa here
+          (if present) is unsigned: sign it with AltStore or Sideloadly (a free Apple ID works) or re-sign it yourself.
+          It will not install as it is.
+
+          Sign-in is required in the app (Google or email). Check a download against SHA256SUMS.txt.
           NOTES
       - name: Create or update the release
         env:
