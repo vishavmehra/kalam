@@ -14,6 +14,11 @@ name: Drawing studio
 - extendedWaitUntil:
     visible: "Describe the app you want to create.*"
     timeout: 30000
+# On a phone the five input tabs scroll sideways, so Draw can start off screen.
+- scrollUntilVisible:
+    element: "Draw.*"
+    direction: RIGHT
+    timeout: 20000
 - tapOn: "Draw.*"
 - tapOn: "Open Drawing Studio"
 - extendedWaitUntil:
