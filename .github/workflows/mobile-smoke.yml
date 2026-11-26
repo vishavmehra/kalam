@@ -116,10 +116,12 @@ jobs:
         run: |
           ws=$(ls -d ios/*.xcworkspace | head -n 1)
           scheme=$(basename "$ws" .xcworkspace)
-          xcodebuild -workspace "$ws" -scheme "$scheme" -configuration Release -sdk iphonesimulator \
+          # The Expo module scan has a fixed 5 s limit and can miss it on a busy runner; a second build retries it.
+          build() { xcodebuild -workspace "$ws" -scheme "$scheme" -configuration Release -sdk iphonesimulator \
             -destination "id=$SIM_UDID" -derivedDataPath ios/build \
             ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build \
-            | tee "$OUT/logs/xcodebuild.log" | xcbeautify --renderer github-actions
+            | tee -a "$OUT/logs/xcodebuild.log" | xcbeautify --renderer github-actions; test "${PIPESTATUS[0]}" -eq 0; }
+          build || build
           app=$(ls -d ios/build/Build/Products/Release-iphonesimulator/*.app | head -n 1)
           if [ ! -f "$app/main.jsbundle" ]; then echo "::error::$app has no embedded JS bundle"; exit 1; fi
           echo "Built $app, JS bundle $(du -h "$app/main.jsbundle" | cut -f1)"
