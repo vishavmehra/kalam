@@ -12,7 +12,6 @@ name: Settings
     element: "On-device AI.*"
     direction: DOWN
     timeout: 30000
-    centerElement: true
 - takeScreenshot: 11-settings-on-device-ai
 - runFlow: ../common/pause.yaml
 - runFlow: ../common/pause.yaml
