@@ -266,8 +266,8 @@ jobs:
     name: Lighthouse (report only)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Lighthouse numbers on a shared runner vary too much to gate a merge. They are recorded so a trend is visible.
-    continue-on-error: true
+    # The scores vary too much on a shared runner to gate a merge, so no score is checked. The run itself must work:
+    # the step fails unless Lighthouse produced a report.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -281,10 +281,20 @@ jobs:
         run: |
           node tests/e2e/serve.mjs dist 4173 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:4173/manifest.webmanifest > /dev/null && break; sleep 1; done
-          npx --yes lighthouse@13.6.0 http://127.0.0.1:4173/ \
-            --chrome-flags="--headless=new --no-sandbox" \
-            --only-categories=performance,accessibility,best-practices \
-            --output=json --output-path=lighthouse.json --quiet
+          # Audit /onboarding: "/" redirects to it on a first visit, and a page that changes address while Lighthouse
+          # records the load can end the trace early (NO_NAVSTART). Even so a run on a busy runner sometimes loses
+          # the trace, so try up to three times. Each run starts Chrome with a new temporary profile.
+          ok=
+          for attempt in 1 2 3; do
+            rm -f lighthouse.json
+            npx --yes lighthouse@13.6.0 http://127.0.0.1:4173/onboarding \
+              --chrome-flags="--headless=new --no-sandbox --disable-dev-shm-usage" \
+              --only-categories=performance,accessibility,best-practices \
+              --output=json --output-path=lighthouse.json --quiet || true
+            if node -e 'const r = JSON.parse(require("fs").readFileSync("lighthouse.json", "utf8")); process.exit(typeof r.categories?.performance?.score === "number" ? 0 : 1)'; then ok=1; break; fi
+            echo "Lighthouse attempt $attempt produced no performance score"
+          done
+          [ -n "$ok" ] || { echo "::error::Lighthouse produced no report in 3 attempts"; exit 1; }
           node -e '
             const r = JSON.parse(require("fs").readFileSync("lighthouse.json", "utf8"));
             const a = r.audits;
