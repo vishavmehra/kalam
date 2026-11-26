@@ -1,0 +1,31 @@
+# The Voice tab on the release build. Opening it creates expo-audio's AudioRecorder, which crashed the minified
+# Android release APK when R8 had dropped kotlin-reflect's ServiceLoader classes ("No MetadataExtensions instances
+# found", 2026-11-26; the keep rules are in modules/kalam-nano/app.plugin.js). Recording is not started, so no
+# microphone permission prompt appears.
+appId: com.kalam.app
+name: Voice tab
+---
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Your shelf.*"
+    timeout: 120000
+- tapOn: "(Create|Make)"
+- extendedWaitUntil:
+    visible: "Describe the app you want to create.*"
+    timeout: 30000
+# On a phone the five input tabs scroll sideways, so Voice can start off screen.
+- scrollUntilVisible:
+    element: "Voice.*"
+    direction: RIGHT
+    timeout: 20000
+- tapOn: "Voice.*"
+- extendedWaitUntil:
+    visible: "Explain your app out loud.*"
+    timeout: 30000
+- takeScreenshot: 23-voice-tab
+# Still alive a few seconds later: the crash came as the panel mounted.
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: "Explain your app out loud.*"
+- runFlow: ../common/pause.yaml
