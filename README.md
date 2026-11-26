@@ -6,9 +6,9 @@
 
 ### Draw the app you need. Own it forever.
 
-Kalam is an app that makes apps. Type a few lines, photograph a paper sketch, say it out loud, film it or draw it. Kalam turns the request into a checked app that lives on your phone and keeps working with no signal. Built for **#BuildHybridAI 2026** on **Firebase AI Logic** hybrid inference: templates and Gemini Nano on the device first, Gemini in the cloud only when the job needs it.
+Kalam is an app that makes apps. Type a few lines, photograph a paper sketch, say it out loud, film it or draw it. Kalam turns the request into a checked app that lives on your phone and keeps working with no signal. Built on **Firebase AI Logic** hybrid inference: templates and Gemini Nano on the device first, Gemini in the cloud only when the job needs it.
 
-[![#BuildHybridAI 2026](https://img.shields.io/badge/%23BuildHybridAI-2026-E2583E)](#hybrid-ai) [![Firebase AI Logic](https://img.shields.io/badge/Firebase-AI%20Logic-1C1917?logo=firebase&logoColor=FFCA28)](#where-the-firebase-ai-logic-code-lives) [![Gemini Nano](https://img.shields.io/badge/Gemini%20Nano-on%20device-F2A541?logo=googlegemini&logoColor=1C1917)](#where-the-on-device-model-runs) [![Expo SDK 58](https://img.shields.io/badge/Expo-SDK%2058-1C1917?logo=expo&logoColor=white)](#set-it-up) [![Platforms: Web, Android, iOS](https://img.shields.io/badge/platforms-Web%20%7C%20Android%20%7C%20iOS-B8432C)](#platforms) [![MCP server](https://img.shields.io/badge/MCP-server-1C1917?logo=modelcontextprotocol&logoColor=white)](#mcp-server) [![License: MIT](https://img.shields.io/badge/license-MIT-2ea44f.svg)](LICENSE)
+[![Firebase AI Logic](https://img.shields.io/badge/Firebase-AI%20Logic-1C1917?logo=firebase&logoColor=FFCA28)](#where-the-firebase-ai-logic-code-lives) [![Gemini Nano](https://img.shields.io/badge/Gemini%20Nano-on%20device-F2A541?logo=googlegemini&logoColor=1C1917)](#where-the-on-device-model-runs) [![Expo SDK 58](https://img.shields.io/badge/Expo-SDK%2058-1C1917?logo=expo&logoColor=white)](#set-it-up) [![Platforms: Web, Android, iOS](https://img.shields.io/badge/platforms-Web%20%7C%20Android%20%7C%20iOS-B8432C)](#platforms) [![MCP server](https://img.shields.io/badge/MCP-server-1C1917?logo=modelcontextprotocol&logoColor=white)](#mcp-server) [![License: MIT](https://img.shields.io/badge/license-MIT-2ea44f.svg)](LICENSE)
 
 [**Live demo**](https://kalam-hybrid.web.app) · [**Try it now**](#try-it-now) · [**How Kalam uses Firebase AI Logic**](#how-kalam-uses-firebase-ai-logic) · [**Download**](#download) · [How it works](#how-kalam-works) · [Hybrid AI](#hybrid-ai) · [Screenshots](#screenshots) · [Architecture](#architecture) · [Set it up](#set-it-up) · [Privacy and security](#privacy-and-security)
 
@@ -23,7 +23,7 @@ Kalam is an app that makes apps. Type a few lines, photograph a paper sketch, sa
 
 **Live app:** <https://kalam-hybrid.web.app>
 
-**Judges account.** It is a normal user account that holds nothing private, and the password is public on purpose:
+**Reviewer account.** It is a normal user account that holds nothing private, and the password is public on purpose:
 
 | Email | Password |
 |---|---|
@@ -36,7 +36,7 @@ Kalam is an app that makes apps. Type a few lines, photograph a paper sketch, sa
 
 If you choose **Apps only** in step 3, the app arrives without its entries, because that choice never uploads records. This was checked on 2026-11-26 in a fresh browser profile with no local data, both ways.
 
-You can also make your own account: on the sign-in screen choose **Create account** (name, email, password), or use **Continue with Google**. Everyone who signs in as the judges account sees the same app, so please do not type anything personal into it, and please leave **Remove my apps from my account** in Settings alone.
+You can also make your own account: on the sign-in screen choose **Create account** (name, email, password), or use **Continue with Google**. Everyone who signs in as the reviewer account sees the same app, so please do not type anything personal into it, and please leave **Remove my apps from my account** in Settings alone.
 
 To watch the hybrid AI work, make an app from the **Make** tab and open **Activity**: every result is labelled **Template**, **On device** or **Cloud**. Gemini Nano needs desktop Chrome with the model downloaded ([setup](#gemini-nano-in-chrome)). The cloud path needs an ordinary browser session, because App Check on the live site uses reCAPTCHA Enterprise, which scores an automated browser as a bot. How it all fits together is in [How Kalam uses Firebase AI Logic](#how-kalam-uses-firebase-ai-logic).
 
@@ -149,7 +149,7 @@ Claude (planning and repair) and Nebius (sketch reading) exist as server-side ad
 
 ## How Kalam uses Firebase AI Logic
 
-> For the #BuildHybridAI 2026 judges. Every statement here was checked against the code in this repository, and the file is named next to it. Where something has not been verified, it says so. The recorded real runs are in [Evidence](#9-evidence-what-was-run-and-what-passed).
+> For reviewers. Every statement here was checked against the code in this repository, and the file is named next to it. Where something has not been verified, it says so. The recorded real runs are in [Evidence](#9-evidence-what-was-run-and-what-passed).
 
 Kalam has one door to AI. A screen or a feature builds a request and calls `orchestrator.run()`. The orchestrator decides whether the request may run at all, and then hands it to one Firebase AI Logic provider, `createFirebaseProvider()` in `src/infrastructure/firebase/firebase-provider.ts`. That provider makes a **hybrid `GenerativeModel`** with both an on-device and a cloud configuration, and the Firebase AI Logic SDK chooses Gemini Nano on the device or a Gemini model in the cloud. Kalam labels each result with the SDK's own `inferenceSource`, never with the mode it asked for.
 
@@ -724,11 +724,10 @@ KalamSpec limits keep generated apps small: at most 8 screens, 10 collections, 1
 | File on the release | For | Notes |
 |---|---|---|
 | `Kalam-android.apk` | Android phones (arm64-v8a, nearly every phone) | A direct download, not from the Play Store, signed with the project's upload key. Open the file on the phone and allow installs from that source |
-| `Kalam-android-x86_64.apk` | Android emulators on an Intel or AMD computer | The same app built for x86_64, same key. Drag it onto a running emulator or `adb install` it. An emulator on an Apple silicon Mac is arm64 and takes `Kalam-android.apk` |
 | `Kalam-ios-device-unsigned.ipa` | iPhones | **Unsigned, so it will not install as it is.** Sign it with AltStore or Sideloadly (a free Apple ID works) or with your own Apple Developer certificate, then install it. Apple allows nothing else without an Apple account, and this project does not hold one |
 | `Kalam-ios-simulator.zip` | The iOS Simulator on a Mac | Unzip it and drag the app onto an open Simulator window |
 
-Each release also has a `SHA256SUMS.txt` to check a download against. Pushing a version tag such as `v0.1.0`, or running the **Release** workflow by hand (`.github/workflows/release.yml`), builds the three files and attaches them to a GitHub Release. The Android and Simulator builds are the ones CI already builds. The unsigned iPhone build is the same app built for a device without code signing, and its first run on a hosted runner has not happened yet.
+Each release also has a `SHA256SUMS.txt` to check a download against. Pushing a version tag such as `v1.1.0`, or running the **Release** workflow by hand (`.github/workflows/release.yml`), builds the files and attaches them to a GitHub Release. Releases built after v1.0.0 also carry `Kalam-android-x86_64.apk`, the same app for Android emulators on an Intel or AMD computer.
 
 ## Screenshots
 
@@ -868,7 +867,7 @@ Only real runs count as verified. Mocked unit tests check Kalam's own logic arou
 | Android | **Builds and runs** | CI built a 46 MB release APK and passed six Maestro flows on an emulator (run 45615319769, branch `ci/mobile-smoke`, before the redesign). |
 | iOS | **Simulator only** | The same CI run built the iOS app on a macOS runner and passed six Maestro flows on the simulator (before the redesign). The `kalam-apple` Swift module compiled there. Apple Foundation Models and App Attest are not verified on a device |
 | MCP server | **Tested through the MCP SDK client** | 60 tests in 6 files, over in-memory, stdio and HTTP transports |
-| Specialists (Claude, Nebius) | **Verified locally** | Real calls through `functions/scripts/verify-providers.mjs` and the Functions emulator. Off by default and not part of the judging build |
+| Specialists (Claude, Nebius) | **Verified locally** | Real calls through `functions/scripts/verify-providers.mjs` and the Functions emulator. Off by default and not part of the released app |
 
 ### Known limits
 
@@ -1140,7 +1139,7 @@ Continuous integration (`.github/workflows`) runs types, lint, unit and evaluati
 
 On 2026-11-17 this repository held only product planning documents and an instruction file for the coding agent. It had no source code, no configuration and no build. Those planning documents are kept locally and are not published here.
 
-All of the code in this repository was written during the hackathon period with AI assistance from Claude Code (Anthropic). That covers the app, the runtime, the AI pipeline, the Cloud Functions, the native modules, the MCP server, the tests, the scripts and the build setup. The planning documents were revised while building so that they match the decisions made along the way.
+All of the code in this repository was written between 2026-11-17 and 2026-11-26 with AI assistance from Claude Code (Anthropic). That covers the app, the runtime, the AI pipeline, the Cloud Functions, the native modules, the MCP server, the tests, the scripts and the build setup. The planning documents were revised while building so that they match the decisions made along the way.
 
 ### Tooling and Firebase Agent Skills record
 
