@@ -163,7 +163,11 @@ describe('mergeScores', () => {
 
   it('says plainly what was not measured and prints without em dashes', () => {
     expect(final.notMeasured.map((n) => n.metric)).toEqual(
-      expect.arrayContaining(['Component precision, exact', 'Action accuracy, exact', 'User correction rate from real use']),
+      expect.arrayContaining([
+        'Component precision, exact',
+        'Action accuracy, exact',
+        'User correction rate from real use',
+      ]),
     );
     const text = formatFinal(final);
     expect(text).toContain('semantic accuracy');

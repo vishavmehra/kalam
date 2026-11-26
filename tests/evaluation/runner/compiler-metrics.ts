@@ -37,10 +37,24 @@ const ASKED: Record<Advanced, RegExp> = {
 
 const DELETE_WORD = /\b(?:delete|remove|discard|erase)\b|हटा|मिटा/i;
 const SAVE_WORD = /^\s*(?:save|submit|update|confirm|done|record|store)\b|सेव/i;
-const SAVES: ReadonlySet<string> = new Set(['insert', 'update', 'increment', 'decrement', 'runAI', 'clearForm', 'feedback', 'speak']);
+const SAVES: ReadonlySet<string> = new Set([
+  'insert',
+  'update',
+  'increment',
+  'decrement',
+  'runAI',
+  'clearForm',
+  'feedback',
+  'speak',
+]);
 
 const UNKNOWN_REF = new Set([
-  'UNKNOWN_SCREEN', 'UNKNOWN_COLLECTION', 'UNKNOWN_TARGET', 'UNKNOWN_AI_BLOCK', 'UNKNOWN_ACTION', 'UNKNOWN_FIELD',
+  'UNKNOWN_SCREEN',
+  'UNKNOWN_COLLECTION',
+  'UNKNOWN_TARGET',
+  'UNKNOWN_AI_BLOCK',
+  'UNKNOWN_ACTION',
+  'UNKNOWN_FIELD',
 ]);
 
 const has = (o: Record<string, unknown>, id: unknown): boolean => typeof id === 'string' && Object.hasOwn(o, id);
@@ -53,7 +67,8 @@ function countReferences(spec: KalamSpec): number {
     if (s.form) n += 1;
     for (const c of s.children) {
       if (c.type === 'bigButton') n += 1;
-      if (c.type === 'list') n += 2 + [c.secondary, c.sort?.field, c.toggleField, c.detailScreen].filter(Boolean).length;
+      if (c.type === 'list')
+        n += 2 + [c.secondary, c.sort?.field, c.toggleField, c.detailScreen].filter(Boolean).length;
       if (c.type === 'chart') n += 1 + [c.valueField, c.groupBy, c.dateField].filter(Boolean).length;
       if (c.type === 'reminder') n += 2 + [c.doneField, c.titleField].filter(Boolean).length;
       if ('field' in c && c.field) n += 1;
@@ -71,14 +86,26 @@ function appropriate(spec: KalamSpec, screenForm: string | undefined, c: KalamCo
   const fieldOf = (collection: string | undefined, field: unknown) =>
     !!collection && has(spec.collections, collection) && has(spec.collections[collection]!.fields, field);
   switch (c.type) {
-    case 'bigButton': return has(spec.actions, c.action);
-    case 'list': return has(spec.collections, c.source) && fieldOf(c.source, c.primary);
-    case 'number': case 'textInput': case 'date': case 'choice': case 'toggle': return fieldOf(screenForm, c.field);
-    case 'stat': return c.expr.trim().length > 0;
-    case 'chart': return has(spec.collections, c.source);
-    case 'reminder': return fieldOf(c.source, c.dateField);
-    case 'signature': return fieldOf(screenForm, c.field);
-    default: return true;
+    case 'bigButton':
+      return has(spec.actions, c.action);
+    case 'list':
+      return has(spec.collections, c.source) && fieldOf(c.source, c.primary);
+    case 'number':
+    case 'textInput':
+    case 'date':
+    case 'choice':
+    case 'toggle':
+      return fieldOf(screenForm, c.field);
+    case 'stat':
+      return c.expr.trim().length > 0;
+    case 'chart':
+      return has(spec.collections, c.source);
+    case 'reminder':
+      return fieldOf(c.source, c.dateField);
+    case 'signature':
+      return fieldOf(screenForm, c.field);
+    default:
+      return true;
   }
 }
 
@@ -111,10 +138,11 @@ export function measureStructure(
       const action = spec.actions[c.action];
       actions += 1;
       const kind = action?.type;
-      const ok = !!kind
-        && (kind === 'delete' ? DELETE_WORD.test(c.label) : true)
-        && (DELETE_WORD.test(c.label) ? kind === 'delete' : true)
-        && (SAVE_WORD.test(c.label) ? SAVES.has(kind) : true);
+      const ok =
+        !!kind &&
+        (kind === 'delete' ? DELETE_WORD.test(c.label) : true) &&
+        (DELETE_WORD.test(c.label) ? kind === 'delete' : true) &&
+        (SAVE_WORD.test(c.label) ? SAVES.has(kind) : true);
       if (ok) correct += 1;
       else wrong.push(`${s.id}.${c.id}`);
     }
@@ -131,7 +159,15 @@ export function measureStructure(
 export function requestOf(c: CaseResult): string {
   const i = c.detail?.input;
   if (!i) return '';
-  const sketch = i.sketch ? [i.sketch.title, ...i.sketch.pages.flatMap((p) => [p.title, ...p.items.map((x) => ('label' in x ? x.label : 'text' in x ? x.text : '') ?? '')])] : [];
+  const sketch = i.sketch
+    ? [
+        i.sketch.title,
+        ...i.sketch.pages.flatMap((p) => [
+          p.title,
+          ...p.items.map((x) => ('label' in x ? x.label : 'text' in x ? x.text : '') ?? ''),
+        ]),
+      ]
+    : [];
   return [i.text, i.audioTranscript, i.video?.summary, ...sketch].filter(Boolean).join('\n');
 }
 
@@ -148,21 +184,39 @@ export interface StructureTotals {
 /** A stored report is a file on disk, so a spec in it is checked before it is walked. */
 const isSpec = (v: unknown): v is KalamSpec => {
   const s = v as Partial<KalamSpec> | undefined;
-  return !!s && Array.isArray(s.screens) && !!s.collections && typeof s.collections === 'object' && !!s.actions && typeof s.actions === 'object';
+  return (
+    !!s &&
+    Array.isArray(s.screens) &&
+    !!s.collections &&
+    typeof s.collections === 'object' &&
+    !!s.actions &&
+    typeof s.actions === 'object'
+  );
 };
 
 /** The structure metrics over the built apps of a dataset. Needs the stored spec (scoring detail). */
 export function summarizeStructure(cases: readonly CaseResult[]): StructureTotals {
   const rows = cases
     .filter((c) => c.build.stage !== 'skipped' && c.build.ok && isSpec(c.detail?.spec))
-    .map((c) => measureStructure(c.detail!.spec!, requestOf(c), c.detail!.expected, c.build.attempts?.[0]?.issues ?? []));
+    .map((c) =>
+      measureStructure(c.detail!.spec!, requestOf(c), c.detail!.expected, c.build.attempts?.[0]?.issues ?? []),
+    );
   const sum = (f: (r: SpecStructure) => number) => rows.reduce((a, r) => a + f(r), 0);
   const components = sum((r) => r.components.total);
   const refs = sum((r) => r.references.total);
   return {
-    componentPrecision: rate(sum((r) => r.components.appropriate), components),
-    hallucinatedComponents: rate(sum((r) => r.components.hallucinated.length), components),
-    actionAccuracy: rate(sum((r) => r.actions.correct), sum((r) => r.actions.total)),
+    componentPrecision: rate(
+      sum((r) => r.components.appropriate),
+      components,
+    ),
+    hallucinatedComponents: rate(
+      sum((r) => r.components.hallucinated.length),
+      components,
+    ),
+    actionAccuracy: rate(
+      sum((r) => r.actions.correct),
+      sum((r) => r.actions.total),
+    ),
     referenceIntegrityFirstPass: rate(Math.max(0, refs - sum((r) => r.references.danglingFirstPass)), refs),
     measured: rows.length,
   };

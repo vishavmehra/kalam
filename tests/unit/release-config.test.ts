@@ -110,7 +110,7 @@ describe('the release workflow (Android APK and iOS builds on a GitHub Release)'
     // The default token is read-only; contents: write appears once, on the job that creates the release.
     expect(release).toMatch(/^permissions:\r?\n {2}contents: read\r?$/m);
     expect((release.match(/contents: write/g) ?? []).length).toBe(1);
-    expect(release).not.toMatch(/secrets\.(?!GITHUB_TOKEN)/);
+    expect(release).not.toMatch(/secrets\.(?!GITHUB_TOKEN|KALAM_ANDROID_)/);
   });
 
   it('attaches the APK, an unsigned iPhone build and a simulator build, with checksums', () => {

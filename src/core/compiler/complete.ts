@@ -644,7 +644,7 @@ export function completeSpec(input: KalamSpec, opts: CompleteOptions): CompleteR
     for (const [id, a] of Object.entries(spec.actions)) {
       if (a.type === 'feedback' && a.message.includes('!')) a.message = a.message.replace(/!+/g, '.');
       if ('then' in a && a.then?.feedback?.includes('!')) a.then.feedback = a.then.feedback.replace(/!+/g, '.');
-      if (a.type !== 'insert' || a.then?.navigate) continue;
+      if (a.type !== 'insert' || a.then?.navigate || id.startsWith('done_today')) continue; // the one-tap tick stays on its page
       const s = spec.screens.find((x) => x.children.some((c) => 'action' in c && c.action === id));
       if (!s || s === home()) continue;
       const opener = spec.screens.find((x) => x !== s && x.children.some((c) => c.type === 'bigButton' && spec.actions[c.action]?.type === 'navigate' && (spec.actions[c.action] as { screen?: string }).screen === s.id));

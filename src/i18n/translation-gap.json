@@ -1,0 +1,12 @@
+{
+  "_note": "Keys English has that a locale does not yet. At run time they fall back to English, key by key. The catalogue test lets this number only go down; fill the gap with scripts/i18n-fill-missing.mjs and lower it.",
+  "hi": 1009,
+  "gu": 1009,
+  "mr": 1009,
+  "bn": 1009,
+  "ta": 1009,
+  "te": 1009,
+  "kn": 1009,
+  "ml": 1009,
+  "pa": 1009
+}

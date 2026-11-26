@@ -308,9 +308,18 @@ function caveatsOf(report: EvalReport): string[] {
 
 /** The twelve compiler metrics of docs/13 §6.6, each on its own line, with what the number is based on. */
 export const COMPILER_METRIC_NAMES = [
-  'First-pass validity', 'Post-repair validity', 'Semantic accuracy', 'Component precision', 'Component recall',
-  'Field accuracy', 'Action accuracy', 'Reference integrity', 'Hallucinated components', 'Repair success',
-  'Compilation latency', 'User correction rate',
+  'First-pass validity',
+  'Post-repair validity',
+  'Semantic accuracy',
+  'Component precision',
+  'Component recall',
+  'Field accuracy',
+  'Action accuracy',
+  'Reference integrity',
+  'Hallucinated components',
+  'Repair success',
+  'Compilation latency',
+  'User correction rate',
 ] as const;
 export type CompilerMetricName = (typeof COMPILER_METRIC_NAMES)[number];
 export interface CompilerMetricRow {
@@ -322,7 +331,12 @@ export interface CompilerMetricRow {
 }
 
 export function compilerMetricTable(d: DatasetFinal): CompilerMetricRow[] {
-  const row = (metric: CompilerMetricName, raw: Rate | number | null, basis: CompilerMetricRow['basis'], note: string): CompilerMetricRow => {
+  const row = (
+    metric: CompilerMetricName,
+    raw: Rate | number | null,
+    basis: CompilerMetricRow['basis'],
+    note: string,
+  ): CompilerMetricRow => {
     const value = raw !== null && typeof raw === 'object' && raw.total === 0 ? null : raw;
     return { metric, note, value, basis: value === null ? 'not measured' : basis };
   };
@@ -330,21 +344,82 @@ export function compilerMetricTable(d: DatasetFinal): CompilerMetricRow[] {
   const person = 'Needs a person or an AI reviewer to score the built apps.';
   const spec = 'Needs built specs in the report.';
   return [
-    row('First-pass validity', d.firstPassValidity, d.firstPassValidity ? 'measured' : 'not measured', d.firstPassValidity ? 'Valid before the repair pass.' : live),
-    row('Post-repair validity', d.postRepairValidity, d.postRepairValidity ? 'measured' : 'not measured', d.postRepairValidity ? 'Valid after at most one repair pass.' : live),
-    row('Semantic accuracy', d.scoredByHuman ? d.semanticAccuracy : null, d.scoredByHuman ? 'reviewer' : 'not measured', d.scoredByHuman ? 'Share of scored apps called correct.' : person),
-    row('Component precision', d.componentPrecision, d.componentPrecision.total ? 'proxy' : 'not measured', d.componentPrecision.total ? 'Components that are wired and asked for.' : spec),
-    row('Component recall', d.componentRecall, 'measured', 'Required components found, against the golden expectations.'),
-    row('Field accuracy', d.fieldAccuracy, 'measured', 'Required fields found, with the right type, against the golden expectations.'),
-    row('Action accuracy', d.actionAccuracy, d.actionAccuracy.total ? 'proxy' : 'not measured', d.actionAccuracy.total ? 'Button label and action agree.' : spec),
-    row('Reference integrity', d.referenceIntegrityFirstPass.total ? d.referenceIntegrityFirstPass : d.referenceIntegrity, d.referenceIntegrityFirstPass.total ? 'measured' : 'proxy',
-      d.referenceIntegrityFirstPass.total ? 'References that resolved in the model first answer.' : 'Share of built apps that pass the validator.'),
-    row('Hallucinated components', d.hallucinatedComponents, d.hallucinatedComponents.total ? 'proxy' : 'not measured', d.hallucinatedComponents.total ? 'Advanced components nobody asked for. Lower is better.' : spec),
-    row('Repair success', d.repairSuccess, d.repairSuccess ? 'measured' : 'not measured', d.repairSuccess ? 'Invalid first answers the repair pass fixed.' : live),
-    row('Compilation latency', d.latency.cloudMedianMs, d.latency.cloudMedianMs === null ? 'not measured' : 'measured',
-      d.latency.cloudMedianMs === null ? live : 'Median milliseconds from request to result (cloud compiles).'),
-    row('User correction rate', d.scoredByHuman ? d.correctionProxy : null, d.scoredByHuman ? 'reviewer' : 'not measured',
-      d.scoredByHuman ? 'Apps scored partly or wrong, which would need fixing by hand. Real use is not measured.' : person),
+    row(
+      'First-pass validity',
+      d.firstPassValidity,
+      d.firstPassValidity ? 'measured' : 'not measured',
+      d.firstPassValidity ? 'Valid before the repair pass.' : live,
+    ),
+    row(
+      'Post-repair validity',
+      d.postRepairValidity,
+      d.postRepairValidity ? 'measured' : 'not measured',
+      d.postRepairValidity ? 'Valid after at most one repair pass.' : live,
+    ),
+    row(
+      'Semantic accuracy',
+      d.scoredByHuman ? d.semanticAccuracy : null,
+      d.scoredByHuman ? 'reviewer' : 'not measured',
+      d.scoredByHuman ? 'Share of scored apps called correct.' : person,
+    ),
+    row(
+      'Component precision',
+      d.componentPrecision,
+      d.componentPrecision.total ? 'proxy' : 'not measured',
+      d.componentPrecision.total ? 'Components that are wired and asked for.' : spec,
+    ),
+    row(
+      'Component recall',
+      d.componentRecall,
+      'measured',
+      'Required components found, against the golden expectations.',
+    ),
+    row(
+      'Field accuracy',
+      d.fieldAccuracy,
+      'measured',
+      'Required fields found, with the right type, against the golden expectations.',
+    ),
+    row(
+      'Action accuracy',
+      d.actionAccuracy,
+      d.actionAccuracy.total ? 'proxy' : 'not measured',
+      d.actionAccuracy.total ? 'Button label and action agree.' : spec,
+    ),
+    row(
+      'Reference integrity',
+      d.referenceIntegrityFirstPass.total ? d.referenceIntegrityFirstPass : d.referenceIntegrity,
+      d.referenceIntegrityFirstPass.total ? 'measured' : 'proxy',
+      d.referenceIntegrityFirstPass.total
+        ? 'References that resolved in the model first answer.'
+        : 'Share of built apps that pass the validator.',
+    ),
+    row(
+      'Hallucinated components',
+      d.hallucinatedComponents,
+      d.hallucinatedComponents.total ? 'proxy' : 'not measured',
+      d.hallucinatedComponents.total ? 'Advanced components nobody asked for. Lower is better.' : spec,
+    ),
+    row(
+      'Repair success',
+      d.repairSuccess,
+      d.repairSuccess ? 'measured' : 'not measured',
+      d.repairSuccess ? 'Invalid first answers the repair pass fixed.' : live,
+    ),
+    row(
+      'Compilation latency',
+      d.latency.cloudMedianMs,
+      d.latency.cloudMedianMs === null ? 'not measured' : 'measured',
+      d.latency.cloudMedianMs === null ? live : 'Median milliseconds from request to result (cloud compiles).',
+    ),
+    row(
+      'User correction rate',
+      d.scoredByHuman ? d.correctionProxy : null,
+      d.scoredByHuman ? 'reviewer' : 'not measured',
+      d.scoredByHuman
+        ? 'Apps scored partly or wrong, which would need fixing by hand. Real use is not measured.'
+        : person,
+    ),
   ];
 }
 

@@ -13,16 +13,27 @@ import type { GoldenSketchCase } from './types';
  * result. sketches-heldout.json was written afterwards from docs/07 sections 3.1 and 3.2 and was never used to set a
  * threshold. The two are scored apart: only the held-out figure says anything about unseen sketches.
  */
-type Case = Pick<GoldenSketchCase, 'id' | 'title' | 'pages'> & { ambiguous?: boolean; expected: { complexity: ComplexityLevel } };
-const heldOut = (JSON.parse(readFileSync(new URL('../golden/sketches-heldout.json', import.meta.url), 'utf8')) as { cases: Case[] }).cases;
+type Case = Pick<GoldenSketchCase, 'id' | 'title' | 'pages'> & {
+  ambiguous?: boolean;
+  expected: { complexity: ComplexityLevel };
+};
+const heldOut = (
+  JSON.parse(readFileSync(new URL('../golden/sketches-heldout.json', import.meta.url), 'utf8')) as { cases: Case[] }
+).cases;
 
 const RANK: Record<ComplexityLevel, number> = { simple: 0, medium: 1, complex: 2 };
 const score = (cases: readonly Case[]) => {
   const rows = cases.map((c) => ({
-    id: c.id, ambiguous: !!c.ambiguous, expected: c.expected.complexity,
+    id: c.id,
+    ambiguous: !!c.ambiguous,
+    expected: c.expected.complexity,
     got: classifyRequest(sketchCaseInput(summarizeDrawing(buildSketchDocument(c)))).complexity,
   }));
-  return { rows, hit: rows.filter((r) => r.got === r.expected).length, misses: rows.filter((r) => r.got !== r.expected) };
+  return {
+    rows,
+    hit: rows.filter((r) => r.got === r.expected).length,
+    misses: rows.filter((r) => r.got !== r.expected),
+  };
 };
 
 describe('sketch complexity: fitted vs held-out', () => {

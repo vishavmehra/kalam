@@ -310,30 +310,45 @@ export function howItWorks(spec: KalamSpec): string[] {
   const lines: string[] = [];
   for (const [cid, c] of Object.entries(spec.collections)) {
     for (const f of Object.values(c.fields)) {
-      if (f.type === 'text' && f.ref) lines.push(`Each "${colName(cid)}" entry is linked to one "${colName(f.ref.collection)}" (${f.label}).`);
+      if (f.type === 'text' && f.ref)
+        lines.push(`Each "${colName(cid)}" entry is linked to one "${colName(f.ref.collection)}" (${f.label}).`);
     }
   }
   const screenTitle = (id: string) => spec.screens.find((s) => s.id === id)?.title ?? id;
   for (const s of spec.screens) {
     for (const c of s.children) {
-      if (c.type === 'list' && c.detailScreen) lines.push(`Tapping a row of "${c.label || colName(c.source)}" opens "${screenTitle(c.detailScreen)}".`);
+      if (c.type === 'list' && c.detailScreen)
+        lines.push(`Tapping a row of "${c.label || colName(c.source)}" opens "${screenTitle(c.detailScreen)}".`);
       if (c.type !== 'bigButton') continue;
       const a = spec.actions[c.action];
-      const effect =
-        !a ? 'does nothing (missing action)'
-        : a.type === 'navigate' ? `opens "${screenTitle(a.screen)}"`
-        : a.type === 'insert' ? `saves a new "${colName(a.collection)}" entry`
-        : a.type === 'update' && a.set ? `sets ${Object.entries(a.set).map(([k, v]) => `${k} to ${JSON.stringify(v)}`).join(', ')} on the opened entry`
-        : a.type === 'update' ? (s.form === a.collection && s.children.some((k) => 'field' in k && !!k.field) ? 'saves the edited fields of the opened entry' : 'saves nothing (no inputs on this screen)')
-        : a.type === 'delete' ? 'deletes the opened entry'
-        : a.type;
+      const effect = !a
+        ? 'does nothing (missing action)'
+        : a.type === 'navigate'
+          ? `opens "${screenTitle(a.screen)}"`
+          : a.type === 'insert'
+            ? `saves a new "${colName(a.collection)}" entry`
+            : a.type === 'update' && a.set
+              ? `sets ${Object.entries(a.set)
+                  .map(([k, v]) => `${k} to ${JSON.stringify(v)}`)
+                  .join(', ')} on the opened entry`
+              : a.type === 'update'
+                ? s.form === a.collection && s.children.some((k) => 'field' in k && !!k.field)
+                  ? 'saves the edited fields of the opened entry'
+                  : 'saves nothing (no inputs on this screen)'
+                : a.type === 'delete'
+                  ? 'deletes the opened entry'
+                  : a.type;
       lines.push(`Button "${c.label}" on "${s.title}" ${effect}.`);
     }
   }
   const shown = shownFields(spec);
   const entered = new Set(spec.screens.flatMap((s) => (s.form ? [s.form] : [])));
   const hidden = Object.entries(spec.collections).flatMap(([cid, c]) =>
-    entered.has(cid) ? Object.entries(c.fields).filter(([fid]) => !shown.get(cid)?.has(fid)).map(([, f]) => `${colName(cid)}: ${f.label}`) : [],
+    entered.has(cid)
+      ? Object.entries(c.fields)
+          .filter(([fid]) => !shown.get(cid)?.has(fid))
+          .map(([, f]) => `${colName(cid)}: ${f.label}`)
+      : [],
   );
   if (hidden.length) lines.push(`Saved but never shown again: ${hidden.join(', ')}.`);
   if (spec.settings?.currency) lines.push(`Money is shown in ${spec.settings.currency}.`);

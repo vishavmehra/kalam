@@ -328,7 +328,11 @@ export function buildReport(input: ReportInput): EvalReport {
     ? {
         passes: passes.length,
         byStage: tally(failedPasses.map((a) => `${a.pass}:${a.stage}`)),
-        byCode: tally(failedPasses.flatMap((a) => (a.issues.length ? a.issues.map((i) => i.split(' ')[0]) : [a.errorCode ?? 'unknown']))),
+        byCode: tally(
+          failedPasses.flatMap((a) =>
+            a.issues.length ? a.issues.map((i) => i.split(' ')[0]) : [a.errorCode ?? 'unknown'],
+          ),
+        ),
       }
     : undefined;
 

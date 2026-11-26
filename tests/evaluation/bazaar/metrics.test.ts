@@ -11,15 +11,30 @@ describe('Bazaar evaluation metrics (docs/12 §22.5)', () => {
   it('reports every rate with its corpus size, so a rate is never given without a count', async () => {
     const m = await computeBazaarMetrics({ runs: 5 });
     const ids = m.rates.map((r) => r.id);
-    expect(ids).toEqual(expect.arrayContaining([
-      'invalid_listing_rejection', 'valid_listing_acceptance', 'install_success', 'tamper_rejection', 'remix_license',
-      'preview_safety', 'update_migration', 'update_diff', 'compat_gate', 'purchase_correctness',
-    ]));
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'invalid_listing_rejection',
+        'valid_listing_acceptance',
+        'install_success',
+        'tamper_rejection',
+        'remix_license',
+        'preview_safety',
+        'update_migration',
+        'update_diff',
+        'compat_gate',
+        'purchase_correctness',
+      ]),
+    );
     for (const r of m.rates) {
       expect(r.result.total, r.id).toBeGreaterThan(0);
       expect(r.what.length, r.id).toBeGreaterThan(20);
     }
-    expect(m.latencies.map((l) => l.id)).toEqual(['search_latency', 'preview_startup', 'install_prepare', 'publish_prepare']);
+    expect(m.latencies.map((l) => l.id)).toEqual([
+      'search_latency',
+      'preview_startup',
+      'install_prepare',
+      'publish_prepare',
+    ]);
     for (const l of m.latencies) expect(l.medianMs, l.id).not.toBeNull();
   }, 60_000);
 

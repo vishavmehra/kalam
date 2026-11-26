@@ -9,11 +9,19 @@ import { COMPILER_METRIC_NAMES, compilerMetricTable, formatFinal, mergeScores } 
 import { makeResult } from './test-helpers';
 import type { CaseResult, GoldenExpected, HumanScoresFile } from './types';
 
-const ir = compilerIRSchema.parse(JSON.parse(readFileSync(new URL('../../fixtures/compiler/tailor-shop.ir.json', import.meta.url), 'utf8')));
+const ir = compilerIRSchema.parse(
+  JSON.parse(readFileSync(new URL('../../fixtures/compiler/tailor-shop.ir.json', import.meta.url), 'utf8')),
+);
 const tailor = irToSpec(ir, { appId: 'app_tailor01', now: 1 });
 const REQUEST = 'A tailor shop with customers and orders, and a photo of the measurement slip';
 const expectedOf = (requiredComponents: GoldenExpected['requiredComponents'] = []): GoldenExpected => ({
-  complexity: 'complex', taskType: 'create_app', route: 'cloud', minScreens: 1, minCollections: 1, requiredFields: [], requiredComponents,
+  complexity: 'complex',
+  taskType: 'create_app',
+  route: 'cloud',
+  minScreens: 1,
+  minCollections: 1,
+  requiredFields: [],
+  requiredComponents,
 });
 
 /** A copy of the app with one more component on its first screen. */
@@ -25,7 +33,11 @@ const withComponent = (spec: KalamSpec, component: Record<string, unknown>): Kal
 const withAction = (spec: KalamSpec, label: string, action: KalamSpec['actions'][string]): KalamSpec => ({
   ...spec,
   actions: { ...spec.actions, zz_test: action },
-  screens: spec.screens.map((s, i) => (i === 0 ? { ...s, children: [...s.children, { id: 'zz_button', type: 'bigButton', label, action: 'zz_test' } as never] } : s)),
+  screens: spec.screens.map((s, i) =>
+    i === 0
+      ? { ...s, children: [...s.children, { id: 'zz_button', type: 'bigButton', label, action: 'zz_test' } as never] }
+      : s,
+  ),
 });
 
 describe('measureStructure (D13-021)', () => {
@@ -41,18 +53,42 @@ describe('measureStructure (D13-021)', () => {
   });
 
   it('calls an advanced component nobody asked for hallucinated, and one that was asked for fine', () => {
-    const chart = { id: 'zz_chart', type: 'chart', label: 'Orders', chart: 'bar', source: 'orders', metric: 'count', groupBy: 'status' };
+    const chart = {
+      id: 'zz_chart',
+      type: 'chart',
+      label: 'Orders',
+      chart: 'bar',
+      source: 'orders',
+      metric: 'count',
+      groupBy: 'status',
+    };
     const unasked = measureStructure(withComponent(tailor, chart), REQUEST, expectedOf(['photo']));
     expect(unasked.components.hallucinated).toEqual([expect.stringMatching(/zz_chart:chart$/)]);
     expect(unasked.components.appropriate).toBe(unasked.components.total - 1);
-    expect(measureStructure(withComponent(tailor, chart), `${REQUEST}. Show a chart of orders by status.`, expectedOf(['photo'])).components.hallucinated).toEqual([]);
-    expect(measureStructure(withComponent(tailor, chart), REQUEST, expectedOf(['photo', 'chart'])).components.hallucinated).toEqual([]);
+    expect(
+      measureStructure(
+        withComponent(tailor, chart),
+        `${REQUEST}. Show a chart of orders by status.`,
+        expectedOf(['photo']),
+      ).components.hallucinated,
+    ).toEqual([]);
+    expect(
+      measureStructure(withComponent(tailor, chart), REQUEST, expectedOf(['photo', 'chart'])).components.hallucinated,
+    ).toEqual([]);
   });
 
   it('does not count a component that points at nothing as appropriate', () => {
-    const dangling = measureStructure(withComponent(tailor, { id: 'zz_list', type: 'list', source: 'nope', primary: 'nope' }), REQUEST, expectedOf(['photo']));
+    const dangling = measureStructure(
+      withComponent(tailor, { id: 'zz_list', type: 'list', source: 'nope', primary: 'nope' }),
+      REQUEST,
+      expectedOf(['photo']),
+    );
     expect(dangling.components.appropriate).toBe(dangling.components.total - 1);
-    const nobutton = measureStructure(withComponent(tailor, { id: 'zz_b', type: 'bigButton', label: 'Go', action: 'missing' }), REQUEST, expectedOf(['photo']));
+    const nobutton = measureStructure(
+      withComponent(tailor, { id: 'zz_b', type: 'bigButton', label: 'Go', action: 'missing' }),
+      REQUEST,
+      expectedOf(['photo']),
+    );
     expect(nobutton.actions.wrong).toEqual([expect.stringMatching(/zz_b$/)]);
   });
 
@@ -73,7 +109,10 @@ describe('measureStructure (D13-021)', () => {
 
   it('counts only unknown-reference codes of the first answer as dangling references', () => {
     const m = measureStructure(tailor, REQUEST, expectedOf(), [
-      'UNKNOWN_COLLECTION screens[0].children[1].source', 'UNKNOWN_FIELD screens[1].children[0].field', 'DUPLICATE_ID screens[0]', 'IR something',
+      'UNKNOWN_COLLECTION screens[0].children[1].source',
+      'UNKNOWN_FIELD screens[1].children[0].field',
+      'DUPLICATE_ID screens[0]',
+      'IR something',
     ]);
     expect(m.references.danglingFirstPass).toBe(2);
   });
@@ -83,17 +122,55 @@ describe('summarizeStructure and the twelve metrics (D13-021)', () => {
   const built = (id: string, spec: KalamSpec, over: Partial<CaseResult> = {}): CaseResult =>
     makeResult({
       id,
-      build: { stage: 'cloud', ok: true, valid: true, describeOk: true, route: 'cloud', firstPassValid: true, errors: [], warnings: 0 },
+      build: {
+        stage: 'cloud',
+        ok: true,
+        valid: true,
+        describeOk: true,
+        route: 'cloud',
+        firstPassValid: true,
+        errors: [],
+        warnings: 0,
+      },
       latencyMs: { classify: 1, build: 12_000, total: 12_001 },
       detail: {
-        title: id, tags: [], input: { kind: 'text', text: REQUEST }, expected: expectedOf(['photo']), spec, formulas: [], checks: [],
+        title: id,
+        tags: [],
+        input: { kind: 'text', text: REQUEST },
+        expected: expectedOf(['photo']),
+        spec,
+        formulas: [],
+        checks: [],
       },
       ...over,
     });
-  const chart = { id: 'zz_chart', type: 'chart', label: 'Orders', chart: 'bar', source: 'orders', metric: 'count', groupBy: 'status' };
+  const chart = {
+    id: 'zz_chart',
+    type: 'chart',
+    label: 'Orders',
+    chart: 'bar',
+    source: 'orders',
+    metric: 'count',
+    groupBy: 'status',
+  };
   const cases = [
     built('a', tailor),
-    built('b', withComponent(tailor, chart), { build: { stage: 'cloud', ok: true, valid: true, describeOk: true, route: 'cloud+repair', firstPassValid: false, errors: [], warnings: 0, attempts: [{ pass: 'first', stage: 'validation', issues: ['UNKNOWN_FIELD screens[1].children[0].field'], repairs: [] }, { pass: 'repair', stage: 'ok', issues: [], repairs: [] }] } }),
+    built('b', withComponent(tailor, chart), {
+      build: {
+        stage: 'cloud',
+        ok: true,
+        valid: true,
+        describeOk: true,
+        route: 'cloud+repair',
+        firstPassValid: false,
+        errors: [],
+        warnings: 0,
+        attempts: [
+          { pass: 'first', stage: 'validation', issues: ['UNKNOWN_FIELD screens[1].children[0].field'], repairs: [] },
+          { pass: 'repair', stage: 'ok', issues: [], repairs: [] },
+        ],
+      },
+    }),
   ];
 
   it('totals the structure rates over the built apps with a stored spec', () => {
@@ -108,7 +185,9 @@ describe('summarizeStructure and the twelve metrics (D13-021)', () => {
 
   it('skips apps that did not build and stored reports whose spec is not an app', () => {
     const t = summarizeStructure([
-      built('x', tailor, { build: { stage: 'skipped', ok: false, valid: false, describeOk: false, errors: [], warnings: 0 } }),
+      built('x', tailor, {
+        build: { stage: 'skipped', ok: false, valid: false, describeOk: false, errors: [], warnings: 0 },
+      }),
       built('y', {} as never),
     ]);
     expect(t.measured).toBe(0);
@@ -122,11 +201,23 @@ describe('summarizeStructure and the twelve metrics (D13-021)', () => {
 
   it('lists all twelve metrics of docs/13 §6.6, each with its own basis, in the document order', () => {
     const report = buildReport({
-      mode: 'live', datasetVersion: 'v', results: cases, platform: 'node', promptVersion: 'p', datasetHash: 'h', cloudCalls: 3, createdAt: new Date(0),
+      mode: 'live',
+      datasetVersion: 'v',
+      results: cases,
+      platform: 'node',
+      promptVersion: 'p',
+      datasetHash: 'h',
+      cloudCalls: 3,
+      createdAt: new Date(0),
     });
     const scores: HumanScoresFile = {
-      schema: 'kalam-human-scores/1', evaluationId: report.evaluationId, exportedAt: 'x',
-      scores: [{ id: 'a', score: 'correct' }, { id: 'b', score: 'partly' }],
+      schema: 'kalam-human-scores/1',
+      evaluationId: report.evaluationId,
+      exportedAt: 'x',
+      scores: [
+        { id: 'a', score: 'correct' },
+        { id: 'b', score: 'partly' },
+      ],
     };
     const final = mergeScores(report, scores);
     const rows = compilerMetricTable(final.datasets.text!);
@@ -150,11 +241,33 @@ describe('summarizeStructure and the twelve metrics (D13-021)', () => {
 
   it('says "not measured" for what this run cannot measure instead of inventing a number', () => {
     const report = buildReport({
-      mode: 'deterministic', datasetVersion: 'v', results: [makeResult({ id: 'a' })], platform: 'node', promptVersion: 'p', datasetHash: 'h', cloudCalls: 0, createdAt: new Date(0),
+      mode: 'deterministic',
+      datasetVersion: 'v',
+      results: [makeResult({ id: 'a' })],
+      platform: 'node',
+      promptVersion: 'p',
+      datasetHash: 'h',
+      cloudCalls: 0,
+      createdAt: new Date(0),
     });
-    const final = mergeScores(report, { schema: 'kalam-human-scores/1', evaluationId: report.evaluationId, exportedAt: 'x', scores: [] });
+    const final = mergeScores(report, {
+      schema: 'kalam-human-scores/1',
+      evaluationId: report.evaluationId,
+      exportedAt: 'x',
+      scores: [],
+    });
     const by = Object.fromEntries(compilerMetricTable(final.datasets.text!).map((r) => [r.metric, r]));
-    for (const m of ['First-pass validity', 'Post-repair validity', 'Semantic accuracy', 'Component precision', 'Action accuracy', 'Hallucinated components', 'Repair success', 'Compilation latency', 'User correction rate']) {
+    for (const m of [
+      'First-pass validity',
+      'Post-repair validity',
+      'Semantic accuracy',
+      'Component precision',
+      'Action accuracy',
+      'Hallucinated components',
+      'Repair success',
+      'Compilation latency',
+      'User correction rate',
+    ]) {
       expect(by[m], m).toMatchObject({ basis: 'not measured', value: null });
     }
   });

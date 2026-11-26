@@ -202,10 +202,11 @@ async function runCase(c: CaseInput, deps: EvalDeps, opts: EvalOptions): Promise
     if (!build.ok) {
       // Name the pass and stage that stopped it, and its first codes, not only the person-facing message.
       const last = build.attempts?.[build.attempts.length - 1];
-      const where = last ? ` [${last.pass} pass, ${last.stage}${last.issues.length ? `: ${last.issues.slice(0, 3).join('; ')}` : ''}]` : '';
+      const where = last
+        ? ` [${last.pass} pass, ${last.stage}${last.issues.length ? `: ${last.issues.slice(0, 3).join('; ')}` : ''}]`
+        : '';
       failures.push(`build (${build.stage}): ${build.errors[0] ?? 'failed'}${where}`);
-    }
-    else if (!build.valid) failures.push('build: final spec failed validateSpec');
+    } else if (!build.valid) failures.push('build: final spec failed validateSpec');
     else if (!build.describeOk) failures.push('build: describeSpec did not produce a usable summary');
   }
   if (offline && !offline.graceful)
@@ -397,7 +398,11 @@ const placeholder = (id: string, i: number, source: NormalizedImage['source']): 
   source,
 });
 
-export function modalityCaseInput(c: GoldenModalityCase, sketchSummary?: DrawingSummary, frames?: readonly NormalizedImage[]): NormalizedInput {
+export function modalityCaseInput(
+  c: GoldenModalityCase,
+  sketchSummary?: DrawingSummary,
+  frames?: readonly NormalizedImage[],
+): NormalizedInput {
   const modalities: NormalizedInput['modalities'] = [];
   const input: NormalizedInput = {
     text: c.text ?? '',
@@ -416,7 +421,9 @@ export function modalityCaseInput(c: GoldenModalityCase, sketchSummary?: Drawing
   }
   if (c.video) {
     input.video = {
-      frames: frames ? [...frames] : Array.from({ length: c.video.frames }, (_, i) => placeholder(c.id, i, 'video_frame')),
+      frames: frames
+        ? [...frames]
+        : Array.from({ length: c.video.frames }, (_, i) => placeholder(c.id, i, 'video_frame')),
       durationSec: c.video.durationSec,
       ...(c.video.summary ? { summary: c.video.summary } : {}),
     };

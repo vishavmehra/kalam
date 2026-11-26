@@ -373,15 +373,24 @@ async function main() {
         const c = modalityFile.cases.find((x) => x.id === id);
         if (!c?.video) continue;
         const step = c.video.durationSec / (stills.length + 1);
-        videoFrames.set(id, stills.map((name, i) => {
-          const bytes = readFileSync(join(photoDir, `${name}.jpg`));
-          const info = runner.imageInfo(new Uint8Array(bytes));
-          const sec = Math.round(step * (i + 1));
-          return {
-            id: `frame_${id}_${i + 1}`, mimeType: 'image/jpeg', base64: bytes.toString('base64'), width: info?.width ?? 0, height: info?.height ?? 0,
-            source: 'video_frame', label: `Frame at ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`, atSec: sec,
-          };
-        }));
+        videoFrames.set(
+          id,
+          stills.map((name, i) => {
+            const bytes = readFileSync(join(photoDir, `${name}.jpg`));
+            const info = runner.imageInfo(new Uint8Array(bytes));
+            const sec = Math.round(step * (i + 1));
+            return {
+              id: `frame_${id}_${i + 1}`,
+              mimeType: 'image/jpeg',
+              base64: bytes.toString('base64'),
+              width: info?.width ?? 0,
+              height: info?.height ?? 0,
+              source: 'video_frame',
+              label: `Frame at ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`,
+              atSec: sec,
+            };
+          }),
+        );
       }
       picked.text = [];
       picked.sketches = [];
@@ -390,7 +399,9 @@ async function main() {
         console.error('No video case was selected.');
         return 2;
       }
-      notes.push(`Video cases were run from ${picked.modalities.length} set(s) of stills of the golden sketch photos, sent as the video frames with their times. They are not frames of a recorded video.`);
+      notes.push(
+        `Video cases were run from ${picked.modalities.length} set(s) of stills of the golden sketch photos, sent as the video frames with their times. They are not frames of a recorded video.`,
+      );
     }
 
     // ── Run ──

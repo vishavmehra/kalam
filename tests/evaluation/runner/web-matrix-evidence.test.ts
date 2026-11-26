@@ -8,11 +8,27 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const DIR = join(__dirname, '..', '..', '..', 'docs', 'evidence');
-const file = readdirSync(DIR).filter((f) => /^web-matrix-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().at(-1);
+const file = readdirSync(DIR)
+  .filter((f) => /^web-matrix-\d{4}-\d{2}-\d{2}\.json$/.test(f))
+  .sort()
+  .at(-1);
 
-interface Scenario { id: string; pass: boolean; how: string; failures: string[]; observed: Record<string, unknown>; events: Array<Record<string, unknown>> }
+interface Scenario {
+  id: string;
+  pass: boolean;
+  how: string;
+  failures: string[];
+  observed: Record<string, unknown>;
+  events: Array<Record<string, unknown>>;
+}
 const text = file ? readFileSync(join(DIR, file), 'utf8') : '';
-const evidence = file ? (JSON.parse(text) as { exitCode: number; environment: Record<string, unknown>; result: { ok: boolean; scenarios: Scenario[] } }) : undefined;
+const evidence = file
+  ? (JSON.parse(text) as {
+      exitCode: number;
+      environment: Record<string, unknown>;
+      result: { ok: boolean; scenarios: Scenario[] };
+    })
+  : undefined;
 const by = (id: string): Scenario => evidence!.result.scenarios.find((s) => s.id === id)!;
 
 describe.skipIf(!file)('recorded Chrome matrix', () => {
@@ -30,7 +46,12 @@ describe.skipIf(!file)('recorded Chrome matrix', () => {
 
   it('shows a real Nano answer as on_device and every other answer as cloud (the source indicator, FAI-10)', () => {
     expect(by('A').observed).toMatchObject({ availability: 'available', source: 'on_device', model: 'gemini-nano' });
-    expect(by('A').events.at(-1)).toMatchObject({ source: 'on_device', provider: 'firebase', ok: true, fallback: false });
+    expect(by('A').events.at(-1)).toMatchObject({
+      source: 'on_device',
+      provider: 'firebase',
+      ok: true,
+      fallback: false,
+    });
     for (const id of ['B', 'C2', 'D', 'E']) expect(by(id).observed, id).toMatchObject({ source: 'cloud' });
     expect(by('B').observed).toMatchObject({ apiExposed: false });
     expect(by('C2').observed).toMatchObject({ apiExposed: true });
@@ -48,7 +69,13 @@ describe.skipIf(!file)('recorded Chrome matrix', () => {
     expect(by('D').observed).toMatchObject({ source: 'cloud', fallbackUsed: true, cloudRequests: 1 });
     expect(by('D').events[0]).toMatchObject({ source: 'on_device', ok: false });
     expect(by('E').observed).toMatchObject({ appCheck: 'debug', allWithAppCheckHeader: true });
-    expect(by('F').observed).toMatchObject({ online: false, localSource: 'on_device', cloudSuccess: false, cloudErrorCode: 'offline', requestsSentWhileOffline: 0 });
+    expect(by('F').observed).toMatchObject({
+      online: false,
+      localSource: 'on_device',
+      cloudSuccess: false,
+      cloudErrorCode: 'offline',
+      requestsSentWhileOffline: 0,
+    });
     expect(String(by('F').observed.cloudMessage)).toMatch(/online/i);
     // The AI-step check (CP7): the cloud wrote the cases, Nano ran the step.
     expect(by('H').observed).toMatchObject({ device: expect.objectContaining({ availability: 'available' }) });

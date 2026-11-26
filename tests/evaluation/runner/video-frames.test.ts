@@ -6,10 +6,19 @@ import { parseArgs } from './cli';
 import { modalityCaseInput } from './evaluate';
 import type { GoldenModalityCase } from './types';
 
-const golden = JSON.parse(readFileSync(new URL('../golden/modalities.json', import.meta.url), 'utf8')) as { cases: GoldenModalityCase[] };
+const golden = JSON.parse(readFileSync(new URL('../golden/modalities.json', import.meta.url), 'utf8')) as {
+  cases: GoldenModalityCase[];
+};
 const video = golden.cases.find((c) => c.id === 'mv01-video-tap-counter')!;
 const frame = (i: number): NormalizedImage & { atSec: number } => ({
-  id: `frame_${i}`, mimeType: 'image/jpeg', base64: '/9j/AAAA', width: 10, height: 10, source: 'video_frame', label: `Frame at 0:0${i * 3}`, atSec: i * 3,
+  id: `frame_${i}`,
+  mimeType: 'image/jpeg',
+  base64: '/9j/AAAA',
+  width: 10,
+  height: 10,
+  source: 'video_frame',
+  label: `Frame at 0:0${i * 3}`,
+  atSec: i * 3,
 });
 
 describe('video cases from stills (D15-024)', () => {
@@ -32,7 +41,11 @@ describe('video cases from stills (D15-024)', () => {
   it('has a placeholder-free still set for every video case in the golden file', () => {
     const ids = golden.cases.filter((c) => c.modality === 'video').map((c) => c.id);
     expect(ids).toEqual([
-      'mv01-video-tap-counter', 'mv02-video-inventory-walkthrough', 'mv03-video-plus-instruction', 'mv04-video-multi-role-tour', 'mv05-video-whiteboard-flow',
+      'mv01-video-tap-counter',
+      'mv02-video-inventory-walkthrough',
+      'mv03-video-plus-instruction',
+      'mv04-video-multi-role-tour',
+      'mv05-video-whiteboard-flow',
     ]);
   });
 });

@@ -111,7 +111,7 @@ const LAYER_MESSAGE =
   'src/core is the lowest layer. It must not import from the UI, runtime, infrastructure, state or services layers.';
 const UPPER_LAYERS = ['infrastructure', 'features', 'runtime', 'components', 'design', 'state', 'services', 'app'];
 // src/i18n holds pure language tables next to React hooks and components. The core may read the tables, not the rest.
-const I18N_PURE = ['languages', 'scripts'];
+const I18N_PURE = ['languages', 'scripts', 'graphemes'];
 
 const coreImportRestrictions = {
   paths: [
