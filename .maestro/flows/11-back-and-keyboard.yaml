@@ -32,7 +32,9 @@ name: Back, keyboard and safe areas
     timeout: 20000
 - assertVisible:
     id: create-app
-- hideKeyboard
+# iOS cannot hide the keyboard of a multi-line field (Return types a new line), so Maestro's hideKeyboard fails there.
+# Tapping the plain heading above the field (in a ScrollView with keyboardShouldPersistTaps="handled") closes it on both.
+- tapOn: "What should your app do\\?"
 
 # Opening Settings and going back: the Android back button, the iOS edge swipe.
 - tapOn: "Settings"

@@ -20,7 +20,9 @@ name: Cloud-only request without a cloud
     timeout: 30000
 - tapOn: "Describe the app you want to create.*"
 - inputText: "multi-role CRM with approvals and dashboards"
-- hideKeyboard
+# iOS cannot hide the keyboard of a multi-line field (Return types a new line), so Maestro's hideKeyboard fails there.
+# Tapping the plain heading above the field (in a ScrollView with keyboardShouldPersistTaps="handled") closes it on both.
+- tapOn: "What should your app do\\?"
 - tapOn:
     id: create-app
 # Either the first-time question about sending to Gemini, or (already answered) the failure itself: no cloud set up,
