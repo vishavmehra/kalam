@@ -3,9 +3,9 @@ import WidgetKit
 
 /// Paper and Ink night from src/design/tokens.ts (palette.paper and palette.ink: sheet, ink, ink3).
 private enum Ink {
-  static let paper = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.075, green: 0.106, blue: 0.290, alpha: 1) : UIColor(red: 0.988, green: 0.988, blue: 0.980, alpha: 1) })
-  static let text = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.933, green: 0.941, blue: 0.973, alpha: 1) : UIColor(red: 0.071, green: 0.090, blue: 0.180, alpha: 1) })
-  static let muted = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.549, green: 0.576, blue: 0.729, alpha: 1) : UIColor(red: 0.361, green: 0.384, blue: 0.463, alpha: 1) })
+  static let paper = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.110, green: 0.102, blue: 0.094, alpha: 1) : UIColor(red: 1, green: 1, blue: 1, alpha: 1) })
+  static let text = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.961, green: 0.945, blue: 0.918, alpha: 1) : UIColor(red: 0.110, green: 0.098, blue: 0.090, alpha: 1) })
+  static let muted = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.639, green: 0.612, blue: 0.573, alpha: 1) : UIColor(red: 0.416, green: 0.392, blue: 0.369, alpha: 1) })
 }
 
 struct KalamWidgetView: View {

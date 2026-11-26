@@ -5,7 +5,7 @@
  */
 import {
   EXPENSE_PROMPT, completeOnboarding, createAndSave, ensureOnboarded, expect, fillField, goOffline, makeSketchPng, navTo, openSettings,
-  setAccessMode, test, waitForServiceWorkerControl,
+  saveToShelf, setAccessMode, test, waitForServiceWorkerControl,
 } from './fixtures';
 import type { Page } from '@playwright/test';
 
@@ -228,8 +228,7 @@ test.describe('journey E: create an app by voice', () => {
     await expect(page.getByRole('heading', { name: 'Here is what Kalam understood' })).toBeVisible();
     // The structure is readable without seeing it: screens and fields are lists with names.
     await expect(page.getByRole('textbox', { name: 'Name of screen 1' })).toBeVisible();
-    await page.getByRole('button', { name: 'Save to Shelf' }).first().click();
-    await expect(page).toHaveURL(/\/app\/[^/]+$/, { timeout: 15_000 });
+    await saveToShelf(page);
     await expect(page.getByRole('heading', { name: 'Expenses' }).first()).toBeVisible();
   });
 });

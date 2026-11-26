@@ -9,7 +9,7 @@ import type { Page } from '@playwright/test';
 import { test as plain } from '@playwright/test';
 import {
   CALCULATOR_PROMPT, EXPENSE_PROMPT, completeOnboarding, createAndSave, describeAndCreate, expect, goOffline, openCreate, startStaticServer,
-  test, waitForReview, waitForServiceWorkerControl, type StaticServer,
+  saveToShelf, test, waitForReview, waitForServiceWorkerControl, type StaticServer,
 } from './fixtures';
 
 const SOURCE_DIST = join(process.cwd(), process.env.E2E_DIST ?? 'dist');
@@ -106,8 +106,7 @@ test.describe('storage failures', () => {
 
     // Space comes back: the same button saves the same app. Nothing was half-written in between.
     await page.evaluate(() => { (window as unknown as { __diskFull: boolean }).__diskFull = false; });
-    await page.getByRole('button', { name: 'Save to Shelf' }).first().click();
-    await expect(page).toHaveURL(/\/app\/[^/]+$/, { timeout: 15_000 });
+    await saveToShelf(page, { open: false });
     await page.goto('/');
     await expect(page.getByText('1 app on this device')).toBeVisible({ timeout: 30_000 });
   });

@@ -155,7 +155,7 @@ KalamSpec limits keep generated apps small: at most 8 screens, 10 collections, 1
 |---|---|---|
 | **Web (PWA)** | The live app at <https://kalam-hybrid.web.app>, installable, with an offline service worker. Gemini Nano in desktop Chrome | **Verified in Chrome**, including the in-app hybrid runs. See [Verification](#verification) |
 | **Android** | An APK from the releases page. Gemini Nano through AICore on supported phones, Play Integrity App Check | **Builds and runs.** Uses Gemini Nano where the phone supports AICore, otherwise the cloud through Firebase AI Logic |
-| **iOS** | A simulator build on the releases page. Apple Foundation Models on iOS 26 with Apple Intelligence, App Attest | **Builds and runs in the simulator. Nothing has run on an iPhone.** A device build needs Apple code signing |
+| **iOS** | A simulator build and an unsigned iPhone build on the releases page. Apple Foundation Models on iOS 26 with Apple Intelligence, App Attest | **Builds and runs in the simulator. Nothing has run on an iPhone.** The iPhone build must be signed by you (see [Download](#download)) |
 | **MCP server** | `mcp/`, a Node process with 11 tools, built on the same pure code as the app | **Code complete.** 60 tests pass over in-memory, stdio and HTTP transports. No recorded session with a real MCP host yet |
 
 ## Download
@@ -163,12 +163,15 @@ KalamSpec limits keep generated apps small: at most 8 screens, 10 collections, 1
 | | |
 |---|---|
 | **Web app, no install** | <https://kalam-hybrid.web.app>. Sign in with Google or email. |
-| **Android and iOS Simulator builds** | [**github.com/vishavmehra/kalam/releases/latest**](https://github.com/vishavmehra/kalam/releases/latest) |
+| **Android and iOS builds** | [**github.com/vishavmehra/kalam/releases/latest**](https://github.com/vishavmehra/kalam/releases/latest) |
 
 | File on the release | For | Notes |
 |---|---|---|
-| `Kalam-android.apk` | Android phones and emulators | A test build, not from the Play Store. Open the file on the phone and allow installs from that source |
-| `Kalam-ios-simulator.zip` | The iOS Simulator on a Mac | A **simulator build**. Unzip it and drag the app onto an open Simulator window. It is a simulator build because a build for a real iPhone needs Apple code signing with an Apple Developer account, and this project does not ship one |
+| `Kalam-android.apk` | Android phones and emulators | A test build, not from the Play Store, signed with a debug key. Open the file on the phone and allow installs from that source |
+| `Kalam-ios-device-unsigned.ipa` | iPhones | **Unsigned, so it will not install as it is.** Sign it with AltStore or Sideloadly (a free Apple ID works) or with your own Apple Developer certificate, then install it. Apple allows nothing else without an Apple account, and this project does not hold one |
+| `Kalam-ios-simulator.zip` | The iOS Simulator on a Mac | Unzip it and drag the app onto an open Simulator window |
+
+Each release also has a `SHA256SUMS.txt` to check a download against. Pushing a version tag such as `v0.1.0`, or running the **Release** workflow by hand (`.github/workflows/release.yml`), builds the three files and attaches them to a GitHub Release. The Android and Simulator builds are the ones CI already builds. The unsigned iPhone build is the same app built for a device without code signing, and its first run on a hosted runner has not happened yet.
 
 ## Screenshots
 

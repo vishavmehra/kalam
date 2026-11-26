@@ -65,7 +65,7 @@ export function Register({ cloth, name, lang, subtitle, stat, footer, cord, heig
       <View aria-hidden pointerEvents="none" style={{ position: 'absolute', start: 0, top: 0, bottom: 0, width: '9%', backgroundColor: 'rgba(0,0,0,0.22)', borderTopStartRadius: 4, borderBottomStartRadius: 4 }} />
       <View aria-hidden pointerEvents="none" style={{ position: 'absolute', start: 9, top: 10, bottom: 10, borderStartWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.35)' }} />
       {cord ? (
-        <View aria-hidden pointerEvents="none" style={{ position: 'absolute', end: 26, top: -6, height: '62%', width: 5, borderRadius: 3, backgroundColor: '#E7B43A', transform: [{ rotate: '9deg' }] }} />
+        <View aria-hidden pointerEvents="none" style={{ position: 'absolute', end: 26, top: -6, height: '62%', width: 5, borderRadius: 3, backgroundColor: '#F2A541', transform: [{ rotate: '9deg' }] }} />
       ) : null}
       <View
         style={{
@@ -79,8 +79,8 @@ export function Register({ cloth, name, lang, subtitle, stat, footer, cord, heig
           </Text>
           {subtitle ? <Text variant="caption" weight="semibold" numberOfLines={1} style={{ color: clothLabel.muted }}>{subtitle}</Text> : null}
           {stat ? (
-            <View style={{ marginTop: 6, paddingTop: 7, borderTopWidth: 1, borderStyle: 'dashed', borderColor: '#C7CAD4' }}>
-              <Text mono variant="caption" numberOfLines={1} style={{ color: '#2A2F45' }}>{stat}</Text>
+            <View style={{ marginTop: 6, paddingTop: 7, borderTopWidth: 1, borderStyle: 'dashed', borderColor: '#D6D0C6' }}>
+              <Text mono variant="caption" numberOfLines={1} style={{ color: '#44403C' }}>{stat}</Text>
             </View>
           ) : null}
         </View>
@@ -95,7 +95,7 @@ export function Register({ cloth, name, lang, subtitle, stat, footer, cord, heig
       borderTopStartRadius: 4, borderBottomStartRadius: 4, borderTopEndRadius: 9, borderBottomEndRadius: 9,
       paddingTop: 22, paddingBottom: 16, paddingEnd: 16, paddingStart: 26,
       borderWidth: theme.accessModes.highContrast ? 2 : 0, borderColor: theme.colors.borderStrong,
-      shadowColor: '#12172E', shadowOpacity: theme.scheme === 'dark' ? 0.5 : 0.3, shadowRadius: 18, shadowOffset: { width: 0, height: 14 }, elevation: 6,
+      shadowColor: '#1C1917', shadowOpacity: theme.scheme === 'dark' ? 0.5 : 0.3, shadowRadius: 18, shadowOffset: { width: 0, height: 14 }, elevation: 6,
     },
     style,
   ];

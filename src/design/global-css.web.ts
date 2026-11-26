@@ -1,6 +1,6 @@
 /**
- * Web-only global styles (DIRECTION §2.4): theme CSS variables, the sindoor focus ring, haldi selection,
- * royal caret, quiet scrollbars, the fixed paper grain, press travel and hover tints, and reduced motion.
+ * Web-only global styles (DIRECTION §2.4): theme CSS variables, the saffron focus ring, marigold selection,
+ * saffron caret, quiet scrollbars, the fixed paper grain, press travel and hover tints, and reduced motion.
  * Applied at runtime so it works for both `single` and `static` web output.
  * Components opt in with `dataSet={{ kPress: '' }}` / `dataSet={{ kHover: 'surface' }}`.
  * The development build's Fast Refresh badge (a dark square fixed at the bottom left) sat on the Shelf tab on
@@ -11,7 +11,7 @@ import type { KalamTheme } from './theme';
 const STYLE_ID = 'kalam-global-css';
 
 // Fractal-noise paper grain: one fixed layer that never scrolls, so it costs one composite.
-const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .22 0 0 0 0 .35 0 0 0 1.1 -.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
+const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .12 0 0 0 0 .1 0 0 0 0 .09 0 0 0 1.1 -.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
 const CSS = `
 html, body { background: var(--k-bg); color: var(--k-text); }
@@ -19,7 +19,7 @@ html { scrollbar-color: var(--k-border-strong) var(--k-bg); -webkit-text-size-ad
 body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; caret-color: var(--k-royal); -webkit-tap-highlight-color: transparent; }
 body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 2147483000; opacity: var(--k-grain-opacity); mix-blend-mode: var(--k-grain-blend); background-image: ${GRAIN}; }
 html.k-hc body::after { display: none; }
-::selection { background: var(--k-haldi); color: #12172E; }
+::selection { background: var(--k-haldi); color: #1C1917; }
 input, textarea { caret-color: var(--k-royal); }
 *:focus { outline: none; }
 *:focus-visible:not(input):not(textarea) { outline: 2.5px solid var(--k-focus) !important; outline-offset: 3px !important; }

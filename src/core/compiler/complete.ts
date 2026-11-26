@@ -237,6 +237,9 @@ export function completeSpec(input: KalamSpec, opts: CompleteOptions): CompleteR
   removeUnused();
   fixCurrency();
 
+  // ── 6. Saving returns to where the screen was opened from, and messages stay calm (QA 2026-11-26) ─────────
+  fixSaveReturn();
+
   return { spec, notes };
 
   // ═══ Steps ══════════════════════════════════════════════════════════════════
@@ -635,6 +638,19 @@ export function completeSpec(input: KalamSpec, opts: CompleteOptions): CompleteR
     if (spec.intents[old]) spec.intents[id] = spec.intents[old];
     delete spec.intents[old];
     delete spec.actions[old];
+  }
+
+  function fixSaveReturn(): void {
+    for (const [id, a] of Object.entries(spec.actions)) {
+      if (a.type === 'feedback' && a.message.includes('!')) a.message = a.message.replace(/!+/g, '.');
+      if ('then' in a && a.then?.feedback?.includes('!')) a.then.feedback = a.then.feedback.replace(/!+/g, '.');
+      if (a.type !== 'insert' || a.then?.navigate) continue;
+      const s = spec.screens.find((x) => x.children.some((c) => 'action' in c && c.action === id));
+      if (!s || s === home()) continue;
+      const opener = spec.screens.find((x) => x !== s && x.children.some((c) => c.type === 'bigButton' && spec.actions[c.action]?.type === 'navigate' && (spec.actions[c.action] as { screen?: string }).screen === s.id));
+      a.then = { ...(a.then ?? {}), navigate: (opener ?? home()).id };
+      notes.push(`Saving on ${s.id} now returns to the previous screen.`);
+    }
   }
 
   function navBack(s: KalamScreen): string {

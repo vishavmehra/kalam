@@ -1,0 +1,21 @@
+# Back to the App Shelf, where the new app is listed. Starts inside the app.
+appId: com.kalam.app
+name: Shelf
+---
+- tapOn: "Back to your apps"
+# After a fresh save the app sits on top of Create in the navigation stack (review replaces itself with the app),
+# so "Back to your apps" lands on Create. One more Back reaches the shelf.
+- waitForAnimationToEnd:
+    timeout: 5000
+- runFlow:
+    when:
+      visible: "New app"
+    commands:
+      - tapOn: "Back"
+- extendedWaitUntil:
+    visible: "Your shelf.*"
+    timeout: 15000
+- assertVisible: "Expenses.*"
+- takeScreenshot: 09-shelf-with-app
+- runFlow: ../common/pause.yaml
+- runFlow: ../common/pause.yaml

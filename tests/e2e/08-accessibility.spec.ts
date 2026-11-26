@@ -8,7 +8,7 @@
  * KNOWN (below) lists findings that are known and owned by someone else.
  */
 import {
-  CALCULATOR_PROMPT, axeScan, blocking, completeOnboarding, ensureOnboarded, expect, navTo, openSettings, setAccessMode, test,
+  CALCULATOR_PROMPT, axeScan, blocking, completeOnboarding, ensureOnboarded, expect, navTo, openEditor, openSettings, saveToShelf, setAccessMode, test,
   type AxeFinding,
 } from './fixtures';
 
@@ -17,15 +17,22 @@ import {
  * so a new element with the same problem still fails. A rule that is not listed fails the run. The last test below fails
  * when an entry no longer appears anywhere, so the list cannot go stale: delete the entry in the change that fixes it.
  */
-const KNOWN: Record<string, { reason: string; node: RegExp }> = {
+const KNOWN: Record<string, { reason: string; node: RegExp; /** Shows up only where the stale check below does not look (the drawing studio, a narrow window, a phone). */ elsewhere?: boolean }> = {
   'label-content-name-mismatch': {
     reason:
       'Links and cards whose aria-label does not contain their visible text (WCAG 2.5.3): the shell brand link, the shelf example cards and the template cards. Owner: shell, shelf, templates and drawing studio.',
     node: /^(a|button|div\[aria-label=|\.css-[\w-]+:nth-child\(\d+\) > button)/,
   },
   'aria-required-children': {
-    reason: 'The drawing studio has an element with a list-like role that holds no matching children while the page is empty. Owner: drawing studio.',
+    reason: 'The drawing studio has an element with a list-like role that holds no matching children while the page is empty (seen on some runs, not on others). Owner: drawing studio.',
     node: /^\.r-[\w-]+$/,
+    elsewhere: true,
+  },
+  'scrollable-region-focusable': {
+    reason:
+      'On the first-run page the "Example apps" strip scrolls sideways when the window is narrower than its covers (a 1024 px laptop, a phone), and nothing in it can take keyboard focus, so a keyboard user cannot scroll it (src/features/landing/LandingSections.tsx, the horizontal ScrollView). Fix: make the scroller focusable (tabIndex 0 with a label) or make each cover a link. Owner: landing page.',
+    node: /^\.r-[\w-]+$/,
+    elsewhere: true,
   },
   'color-contrast': {
     reason:
@@ -95,12 +102,10 @@ test.describe('axe accessibility scans', { tag: ['@a11y'] }, () => {
     await page.getByTestId('create-app').first().click();
     await expect(page).toHaveURL(/\/create\/review$/, { timeout: 30_000 });
     await scan(page, testInfo, 'review · light');
-    await page.getByRole('button', { name: 'Save to Shelf' }).first().click();
-    await expect(page).toHaveURL(/\/app\/[^/]+$/, { timeout: 15_000 });
+    await saveToShelf(page);
     await expect(page.getByRole('heading', { name: 'Calculator' }).first()).toBeVisible();
     await scan(page, testInfo, 'app · light');
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
-    await expect(page).toHaveURL(/\/edit$/);
+    await openEditor(page);
     await scan(page, testInfo, 'edit · light');
   });
 
@@ -120,7 +125,7 @@ test.describe('axe accessibility scans', { tag: ['@a11y'] }, () => {
       await page.goto(screen.path);
       for (const f of await scan(page, testInfo, `${screen.name} · stale check`)) ids.add(f.id);
     }
-    const stale = Object.keys(KNOWN).filter((id) => !ids.has(id));
+    const stale = Object.keys(KNOWN).filter((id) => !KNOWN[id]!.elsewhere && !ids.has(id));
     expect(stale, 'known findings that no longer appear on any screen: remove them from KNOWN').toEqual([]);
   });
 });

@@ -37,6 +37,13 @@ name: App built by cloud AI
     timeout: 30000
 - tapOn:
     id: save-to-shelf
+# Saving shows ".. is on your shelf" with two buttons; open the new app.
+- extendedWaitUntil:
+    visible:
+      id: open-saved-app
+    timeout: 30000
+- tapOn:
+    id: open-saved-app
 - extendedWaitUntil:
     visible: ".*(Customer|Order|Delivery).*"
     timeout: 60000

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Paper palette from src/design/tokens.ts (palette.paper: sheet, rule, ink, ink3). Night colours are in values-night. -->
 <resources>
-  <color name="kalam_widget_bg">#FCFCFA</color>
-  <color name="kalam_widget_border">#D9DBD2</color>
-  <color name="kalam_widget_text">#12172E</color>
-  <color name="kalam_widget_muted">#5C6276</color>
+  <color name="kalam_widget_bg">#FFFFFF</color>
+  <color name="kalam_widget_border">#E8E1D6</color>
+  <color name="kalam_widget_text">#1C1917</color>
+  <color name="kalam_widget_muted">#6A645E</color>
 </resources>

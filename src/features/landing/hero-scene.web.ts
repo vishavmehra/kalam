@@ -182,23 +182,23 @@ function paintApp(ctx: CanvasRenderingContext2D, prims: Prim[]) {
   }
 }
 
-/** A fountain pen, tip at the left edge: steel nib, black grip, royal barrel with a haldi band. */
+/** A fountain pen, tip at the left edge: steel nib, charcoal grip, saffron barrel with a marigold band. */
 function paintPen(): { canvas: HTMLCanvasElement; w: number; h: number } {
   const w = 320, h = 44;
   const { canvas, ctx } = canvas2d(w, h);
   const cy = h / 2;
-  ctx.fillStyle = 'rgba(2,4,18,0.22)';
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
   ctx.beginPath(); ctx.roundRect(70, cy + 6, 236, 14, 7); ctx.fill();
   const steel = ctx.createLinearGradient(0, cy - 9, 0, cy + 9);
-  steel.addColorStop(0, '#E9EBF2'); steel.addColorStop(0.5, '#AEB3C4'); steel.addColorStop(1, '#7D8396');
+  steel.addColorStop(0, '#ECE8E2'); steel.addColorStop(0.5, '#B5AEA4'); steel.addColorStop(1, '#857E75');
   ctx.fillStyle = steel;
   ctx.beginPath(); ctx.moveTo(0, cy); ctx.quadraticCurveTo(26, cy - 10, 58, cy - 9); ctx.lineTo(58, cy + 9); ctx.quadraticCurveTo(26, cy + 10, 0, cy); ctx.fill();
-  ctx.strokeStyle = '#4B5063'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(4, cy); ctx.lineTo(40, cy); ctx.stroke();
-  ctx.fillStyle = '#12172E'; ctx.beginPath(); ctx.roundRect(56, cy - 11, 50, 22, 5); ctx.fill();
+  ctx.strokeStyle = '#57534E'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(4, cy); ctx.lineTo(40, cy); ctx.stroke();
+  ctx.fillStyle = '#1C1917'; ctx.beginPath(); ctx.roundRect(56, cy - 11, 50, 22, 5); ctx.fill();
   const barrel = ctx.createLinearGradient(0, cy - 14, 0, cy + 14);
-  barrel.addColorStop(0, '#4A5BE0'); barrel.addColorStop(0.45, '#2234C2'); barrel.addColorStop(1, '#16238A');
+  barrel.addColorStop(0, '#F27A60'); barrel.addColorStop(0.45, '#E2583E'); barrel.addColorStop(1, '#B8432C');
   ctx.fillStyle = barrel; ctx.beginPath(); ctx.roundRect(102, cy - 14, 214, 28, 13); ctx.fill();
-  ctx.fillStyle = '#F5B323'; ctx.fillRect(214, cy - 14, 9, 28);
+  ctx.fillStyle = '#F2A541'; ctx.fillRect(214, cy - 14, 9, 28);
   ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.beginPath(); ctx.roundRect(110, cy - 10, 196, 4, 2); ctx.fill();
   return { canvas, w, h };
 }
@@ -246,8 +246,8 @@ function loadImage(url: string): Promise<HTMLImageElement | null> {
 function shadowTexture(): THREE.CanvasTexture {
   const { canvas, ctx } = canvas2d(128, 128, 1);
   const g = ctx.createRadialGradient(64, 64, 6, 64, 64, 64);
-  g.addColorStop(0, 'rgba(2,4,18,0.55)');
-  g.addColorStop(1, 'rgba(2,4,18,0)');
+  g.addColorStop(0, 'rgba(0,0,0,0.55)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 128, 128);
   return new THREE.CanvasTexture(canvas);

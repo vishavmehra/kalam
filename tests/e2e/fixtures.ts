@@ -144,16 +144,45 @@ export async function waitForReview(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Here is what Kalam understood' })).toBeVisible();
 }
 
-/** Create → review → Save to Shelf → the running app. Returns the saved app id. */
-export async function createAndSave(page: Page, prompt: string): Promise<string> {
-  await openCreate(page);
-  await describeAndCreate(page, prompt);
-  await waitForReview(page);
+/**
+ * Presses "Save to Shelf" on the Review screen. Saving shows a choice ("<name> is on your shelf": open it, or go to the
+ * shelf). Returns the saved app id after opening the app, or after the choice appears when open is false.
+ */
+export async function saveToShelf(page: Page, opts: { open?: boolean } = {}): Promise<string> {
   await page.getByRole('button', { name: 'Save to Shelf' }).first().click();
+  await expect(page.getByTestId('saved-slip')).toBeVisible({ timeout: 15_000 });
+  if (opts.open === false) return '';
+  await page.getByTestId('open-saved-app').click();
   await expect(page).toHaveURL(/\/app\/[^/]+$/, { timeout: 15_000 });
   const id = new URL(page.url()).pathname.split('/').pop() ?? '';
   expect(id).not.toBe('');
   return decodeURIComponent(id);
+}
+
+/** Create → review → Save to Shelf → open the app. Returns the saved app id. */
+export async function createAndSave(page: Page, prompt: string): Promise<string> {
+  await openCreate(page);
+  await describeAndCreate(page, prompt);
+  await waitForReview(page);
+  return saveToShelf(page);
+}
+
+/** On a phone the Review screen shows the understanding and the live preview on two tabs; the preview is on "Try it". */
+export async function showPreview(page: Page): Promise<void> {
+  const tab = page.getByRole('radio', { name: 'Try it' });
+  if (await tab.isVisible()) await tab.click();
+}
+
+/** Opens the editor of the app on screen: the Edit button, or on a phone the same action under "More actions". */
+export async function openEditor(page: Page): Promise<void> {
+  const edit = page.getByRole('button', { name: 'Edit', exact: true });
+  if (await edit.isVisible()) {
+    await edit.click();
+  } else {
+    await page.getByRole('button', { name: 'More actions' }).click();
+    await page.getByRole('menuitem', { name: 'Edit' }).click();
+  }
+  await expect(page).toHaveURL(/\/edit$/);
 }
 
 /** Types into a runtime form field (number / text input) of the app currently on screen. */
@@ -208,10 +237,24 @@ export async function openSettings(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Access modes' })).toBeVisible();
 }
 
-/** Turns one access mode on or off from Settings (the switch is a real role=switch). */
+/** The modes that show a preview before they turn on (src/features/settings/access-preview.ts). Read aloud and Voice only apply at once. */
+const PREVIEWED_MODES: readonly AccessMode[] = ['Large', 'High contrast', 'Simple', 'Left-handed'];
+
+/**
+ * Turns one access mode on or off from Settings (the switch is a real role=switch). Turning a mode on first shows a
+ * preview ("Try <mode> first") with a "Turn on" button, for the modes that change how things look; turning it off applies at once.
+ */
 export async function setAccessMode(page: Page, mode: AccessMode, on: boolean): Promise<void> {
   const toggle = page.getByRole('switch', { name: new RegExp(`^${mode}`) });
-  if ((await toggle.getAttribute('aria-checked')) !== String(on)) await toggle.click();
+  if ((await toggle.getAttribute('aria-checked')) !== String(on)) {
+    await toggle.click();
+    if (on && PREVIEWED_MODES.includes(mode)) {
+      const sheet = page.getByTestId('access-preview-sheet');
+      await expect(sheet).toBeVisible();
+      await sheet.getByRole('button', { name: 'Turn on' }).click();
+      await expect(sheet).toBeHidden();
+    }
+  }
   await expect(toggle).toHaveAttribute('aria-checked', String(on));
 }
 

@@ -109,6 +109,7 @@ function drawingLevel(d: DrawingSummary): ComplexityLevel {
   if (d.pageCount === 2) return d.elements.filter((e) => e.kind === 'stamp:bigButton').length >= 2 ? 'medium' : 'simple';
   return d.elements.length > 14 ? 'medium' : 'simple';
 }
+const GENERIC_KEYWORD = /^(notes?|log|logs|list|lists|tracker|track|app|record|records|diary|journal)$/i;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const list = (xs: readonly string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
 
@@ -276,8 +277,11 @@ export function classifyRequest(input: NormalizedInput): TaskClassification {
   }
 
   const top = matchTemplates(text)[0];
-  const strong = top && top.score >= STRONG_TEMPLATE ? top : undefined;
   const words = text.split(/\s+/).filter(Boolean).length;
+  // A long request that matched only a generic word ("notes", "log") is about something else (QA 2026-11-26: a plant
+  // log became the Notes template). Treat it as no template so the structure is generated and nothing is dropped.
+  const onlyGeneric = !!top && words > 8 && top.matchedKeywords.every((k) => GENERIC_KEYWORD.test(k));
+  const strong = top && top.score >= STRONG_TEMPLATE && !onlyGeneric ? top : undefined;
   const t = text.toLowerCase();
   const looksLikeApp = !!top || a.entities.length > 0 || a.points > 0 || SIGNALS.appWords.test(t);
   const vague = !text || (!strong && (words < 3 || SIGNALS.vague.test(t.replace(/[.!?]/g, '').trim())));

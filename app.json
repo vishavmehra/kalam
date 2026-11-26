@@ -29,7 +29,7 @@
     "android": {
       "package": "com.kalam.app",
       "adaptiveIcon": {
-        "backgroundColor": "#283080",
+        "backgroundColor": "#1C1917",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -45,18 +45,18 @@
       "favicon": "./assets/images/favicon.png",
       "name": "Kalam",
       "shortName": "Kalam",
-      "themeColor": "#F4F5F0",
-      "backgroundColor": "#F4F5F0"
+      "themeColor": "#FAF7F2",
+      "backgroundColor": "#FAF7F2"
     },
     "plugins": [
-      "expo-router",
+      ["expo-router", { "asyncRoutes": { "web": true, "default": "development" } }],
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F4F5F0",
+          "backgroundColor": "#FAF7F2",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
-          "dark": { "image": "./assets/images/splash-icon-dark.png", "backgroundColor": "#0B1238" }
+          "dark": { "image": "./assets/images/splash-icon-dark.png", "backgroundColor": "#121110" }
         }
       ],
       "expo-sqlite",

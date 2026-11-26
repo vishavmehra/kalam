@@ -8,8 +8,8 @@
  * uses it on the web), so there is no new package and no browser. Each size is drawn from the vector paths at
  * that size, never scaled down from a bigger bitmap, so small icons stay crisp. Output is deterministic.
  *
- * Geometry comes from the master (ids stem, arm, leg, dot). Colours: the master holds the light theme (ink and
- * marigold); the dark and tinted variants below repeat the dark tokens of src/design/tokens.ts, and
+ * Geometry comes from the master (ids stem, arm, leg, dot). Colours: the master holds the light theme (charcoal
+ * and saffron); the dark and tinted variants below repeat the dark icon tokens of src/design/tokens.ts, and
  * src/components/brand/brand-assets.test.ts fails if they drift.
  */
 import { Buffer } from 'node:buffer';
@@ -24,8 +24,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, '..');
 const require = createRequire(import.meta.url);
 
-/** Dark tokens (darkColors.background, .primary, .accent in src/design/tokens.ts). */
-export const DARK = { background: '#121428', ink: '#AAB3FF', marigold: '#FFC547' };
+/** Dark icon tokens (iconColors.dark.background, .primary, .accent in src/design/tokens.ts): charcoal tile, cream K, saffron full stop. */
+export const DARK = { background: '#1C1A18', ink: '#F5F1EA', marigold: '#F06A4F' };
 const WHITE = '#FFFFFF';
 
 /**

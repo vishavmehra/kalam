@@ -60,7 +60,7 @@ export const palette = {
 } as const;
 
 export interface KalamColors {
-  /** Ledger paper (canvas). */
+  /** Warm paper (canvas). */
   background: string;
   /** Cards, sheets, windows. */
   surface: string;
@@ -76,17 +76,17 @@ export interface KalamColors {
   border: string;
   /** Input and control boundaries (3:1). */
   borderStrong: string;
-  /** Royal ink: links, selection, selected states. */
+  /** Deep saffron: links, selection, selected states, and the fill of buttons that carry text. */
   primary: string;
   primaryPressed: string;
   primarySoft: string;
   onPrimary: string;
-  /** Haldi highlight fill. Pair with `text`; never as text on the background. */
+  /** Marigold highlight fill. Pair with `text`; never as text on the background. */
   accent: string;
   accentSoft: string;
-  /** Text and icons on the haldi fill: always dark ink, in both themes. */
+  /** Text and icons on the marigold fill: always charcoal, in both themes. */
   onAccent: string;
-  /** Accent hue that passes 4.5:1 as text/icons on background and surfaces (haldi ink). */
+  /** Accent hue that passes 4.5:1 as text/icons on background and surfaces (marigold ink). */
   accentInk: string;
   success: string; successSoft: string;
   warning: string; warningSoft: string;
@@ -97,23 +97,23 @@ export interface KalamColors {
   sourceCloud: string;
   sourceDeterministic: string;
   sourceOffline: string;
-  /** Sindoor: 2.5 px ring with 3 px offset. */
+  /** Saffron: 2.5 px ring with 3 px offset (deep saffron on Paper, coral on Ink night). */
   focusRing: string;
   scrim: string;
   /** Decorative rule. Kept for older screens; the margin rule itself is gone (owner, 2026-11-25). */
   ruleLine: string;
   marginLine: string;
-  /** The royal ink field and its pooled edge, with text on it. */
+  /** The charcoal field and its pooled edge, with text on it. */
   field: string;
   fieldDeep: string;
   onField: string;
   onField2: string;
-  /** Sindoor pen mark: red-pen underline, ledger total rule, focus. Never a status or a fill. */
+  /** Bright saffron pen mark: underline, ledger total rule, bullets, chart bars. 3:1 only, so never text and never a status. */
   mark: string;
-  /** Sindoor dark enough for order-book numbering text on tinted slips. */
+  /** Saffron dark enough for order-book numbering text on tinted slips (4.5:1). */
   markInk: string;
   markWash: string;
-  /** Primary action: royal on paper, a paper slip on ink night. */
+  /** Primary action: deep saffron with white text on Paper, saffron coral with charcoal text on Ink night. */
   actionBg: string;
   actionBgPressed: string;
   actionFg: string;

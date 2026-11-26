@@ -93,7 +93,16 @@ test.describe('keyboard and focus', { tag: ['@a11y'] }, () => {
     const large = page.getByRole('switch', { name: /^Large/ });
     await large.focus();
     await page.keyboard.press('Enter');
+    // Turning a mode on first shows how it looks ("Try Large first"); both its buttons work from the keyboard.
+    const sheet = page.getByTestId('access-preview-sheet');
+    await expect(sheet).toBeVisible();
+    await expect(large).toHaveAttribute('aria-checked', 'false');
+    await sheet.getByRole('button', { name: 'Turn on' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(sheet).toBeHidden();
     await expect(large).toHaveAttribute('aria-checked', 'true');
+    // Turning it off needs no preview.
+    await large.focus();
     await page.keyboard.press('Enter');
     await expect(large).toHaveAttribute('aria-checked', 'false');
   });
@@ -148,6 +157,10 @@ test.describe('keyboard and focus', { tag: ['@a11y'] }, () => {
     // On the review screen every action is a real button reachable by Tab.
     const save = page.getByRole('button', { name: 'Save to Shelf' }).first();
     await save.focus();
+    await page.keyboard.press('Enter');
+    // Saving shows "<name> is on your shelf": its two buttons are reachable by keyboard too, and Enter opens the app.
+    await expect(page.getByTestId('saved-slip')).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId('open-saved-app').focus();
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/app\/[^/]+$/, { timeout: 15_000 });
   });

@@ -6,7 +6,7 @@ import { DEFAULT_PAGE_COLOR, INK_COLORS, PAGE_COLORS, SELECTION_COLORS, STAMP_CO
 const HEX6 = /^#[0-9a-f]{6}$/i;
 
 describe('Drawing Studio colours', () => {
-  it('offers distinct, valid pen and page colours from the Khata and Kalam palette', () => {
+  it('offers distinct, valid pen and page colours from the Charcoal and Saffron palette', () => {
     for (const list of [INK_COLORS, PAGE_COLORS]) {
       expect(new Set(list.map((c) => c.value.toLowerCase())).size).toBe(list.length);
       for (const c of list) {
@@ -26,7 +26,7 @@ describe('Drawing Studio colours', () => {
     expect(used.filter((v) => old.has(v))).toEqual([]);
   });
 
-  it('draws selection in royal ink', () => {
+  it('draws selection in the primary (deep saffron) colour', () => {
     expect(SELECTION_COLORS.line).toBe(palette.paper.royal);
   });
 });

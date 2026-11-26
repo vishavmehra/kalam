@@ -67,10 +67,10 @@ function Pen({ page, clock }: { page: Rect; clock: SharedValue<number> }) {
   return (
     <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: len, height: len * 0.55 }, style]}>
       <Svg width={len} height={len * 0.55} viewBox="0 0 200 110">
-        <Path d="M2 108 L30 84 L44 98 Z" fill="#AEB3C4" />
-        <Path d="M30 84 L52 62 L66 76 L44 98 Z" fill="#12172E" />
-        <Path d="M52 62 L178 6 Q194 2 192 18 L66 76 Z" fill="#2234C2" />
-        <Path d="M120 34 L128 30 L142 44 L134 48 Z" fill="#F5B323" />
+        <Path d="M2 108 L30 84 L44 98 Z" fill="#B5AEA4" />
+        <Path d="M30 84 L52 62 L66 76 L44 98 Z" fill="#1C1917" />
+        <Path d="M52 62 L178 6 Q194 2 192 18 L66 76 Z" fill="#E2583E" />
+        <Path d="M120 34 L128 30 L142 44 L134 48 Z" fill="#F2A541" />
       </Svg>
     </Animated.View>
   );
@@ -107,10 +107,10 @@ function Chip({ chip, size, slot, phone, clock, index }: { chip: (typeof CHIPS)[
       pointerEvents="none"
       style={[{
         position: 'absolute', left: 0, top: 0, width: size, height: size, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-        backgroundColor: index === 2 ? '#F5B323' : '#FBFAF5', shadowColor: '#02040F', shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 6,
+        backgroundColor: index === 2 ? '#F2A541' : '#FBFAF5', shadowColor: '#0A0908', shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 6,
       }, style]}
     >
-      <Icon size={size * 0.46} color={index === 2 ? '#12172E' : theme.colors.field} strokeWidth={2.2} />
+      <Icon size={size * 0.46} color={index === 2 ? '#1C1917' : theme.colors.field} strokeWidth={2.2} />
     </Animated.View>
   );
 }
@@ -201,7 +201,7 @@ function Story({ area, paper, phone, stamp, clock, onThisPhone, checked, date }:
   const slots = hoverSlots(area.width, area.height, { text: sq, photo: sq, voice: sq, video: sq });
   return (
     <>
-      <View style={{ position: 'absolute', left: paper.x, top: paper.y, width: paper.w, height: paper.h, transform: [{ rotate: PAPER_TILT }], shadowColor: '#02040F', shadowOpacity: 0.35, shadowRadius: 22, shadowOffset: { width: 0, height: 16 }, elevation: 8 }}>
+      <View style={{ position: 'absolute', left: paper.x, top: paper.y, width: paper.w, height: paper.h, transform: [{ rotate: PAPER_TILT }], shadowColor: '#0A0908', shadowOpacity: 0.35, shadowRadius: 22, shadowOffset: { width: 0, height: 16 }, elevation: 8 }}>
         <Image source={SKETCH_BLANK} aria-hidden style={{ width: paper.w, height: paper.h, borderRadius: 3 }} />
         {WRITE_SCHEDULE.map((item) => <WrittenField key={item.key} item={item} page={paper} clock={clock} />)}
         {READ_SCHEDULE.map((item) => <ReadLine key={item.key} item={item} page={paper} clock={clock} />)}
@@ -210,7 +210,7 @@ function Story({ area, paper, phone, stamp, clock, onThisPhone, checked, date }:
         </Animated.View>
         <Pen page={paper} clock={clock} />
       </View>
-      <View style={{ position: 'absolute', left: phone.x, top: phone.y, width: phone.w, height: phone.h, borderRadius: phone.w * PHONE_RADIUS, transform: PHONE_TILT, shadowColor: '#02040F', shadowOpacity: 0.45, shadowRadius: 26, shadowOffset: { width: -10, height: 20 }, elevation: 12 }}>
+      <View style={{ position: 'absolute', left: phone.x, top: phone.y, width: phone.w, height: phone.h, borderRadius: phone.w * PHONE_RADIUS, transform: PHONE_TILT, shadowColor: '#0A0908', shadowOpacity: 0.45, shadowRadius: 26, shadowOffset: { width: -10, height: 20 }, elevation: 12 }}>
         <Svg width={phone.w} height={phone.h}>
           <SvgRect x={0} y={0} width={phone.w} height={phone.h} rx={phone.w * PHONE_RADIUS} fill={APP_THEME.device} />
           {/* The lit, empty screen the app prints onto. */}

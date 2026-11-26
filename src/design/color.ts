@@ -27,7 +27,7 @@ export function contrastRatio(a: string, b: string): number {
 }
 
 /** Ink or white — whichever reads better on `background`. */
-export function readableOn(background: string, dark = '#202820', light = '#FFFFFF'): string {
+export function readableOn(background: string, dark = '#1C1917', light = '#FFFFFF'): string {
   return contrastRatio(background, dark) >= contrastRatio(background, light) ? dark : light;
 }
 

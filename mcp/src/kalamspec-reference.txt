@@ -1,0 +1,1800 @@
+# Kalam — KalamSpec Language Specification
+
+**File:** `docs/05_KALAMSPEC.md`  
+**Product:** Kalam — Draw the app you need. Own it forever.  
+**Specification:** KalamSpec v1 (current format 1.1.0, section 6.14)  
+**Format:** Declarative JSON  
+**Canonical validation:** Zod + TypeScript  
+**Consumers:** Compiler, Runtime, Version Manager, AI Engine and Kalam Bazaar  
+**Platforms:** Web, Android and iOS (ADR-039 in `docs/16`)
+
+---
+
+# 1. Introduction
+
+## 1.1 What is KalamSpec?
+
+KalamSpec is the declarative language used to describe applications created in Kalam.
+
+It is the central contract between:
+
+- The multimodal AI compiler.
+- The application validator.
+- The shared Kalam runtime.
+- The local data engine.
+- The AI block execution engine.
+- The version manager.
+- The Kalam Bazaar.
+
+A KalamSpec describes an application, including its screens, components, data collections, actions, formulas, AI blocks, themes and user-facing intents.
+
+It does not contain executable JavaScript, HTML, arbitrary scripts or unrestricted functions.
+
+The runtime interprets the specification using a fixed set of trusted capabilities.
+
+**Core rule: KalamSpec describes what an application is allowed to do. Kalam's runtime determines how those capabilities are executed.**
+
+## 1.2 Design objectives
+
+KalamSpec must be:
+
+1. **Declarative:** It describes application structure, not executable implementation.
+2. **Portable:** The same specification runs on Web, Android and iOS.
+3. **Validatable:** Every field and operation has a defined schema.
+4. **Versioned:** Specifications can evolve without silently breaking old apps.
+5. **Editable:** Users and the compiler can safely modify existing applications.
+6. **Offline-compatible:** It does not depend on a remote application server.
+7. **AI-friendly:** It can be generated through constrained structured output.
+8. **Human-readable:** Developers and debugging tools can inspect it.
+9. **Marketplace-safe:** Imported specifications cannot execute arbitrary code.
+10. **Extensible:** New components and capabilities can be introduced through explicit schema versions.
+
+## 1.3 Specification ownership
+
+The canonical KalamSpec definition must live in one place.
+
+Recommended location:
+
+`src/domain/spec/`
+
+The Zod schema is the source of truth.
+
+TypeScript types should be inferred from the schema wherever practical.
+
+The same canonical definition should drive:
+
+- Compiler output validation.
+- Runtime input validation.
+- Editor validation.
+- Marketplace import validation.
+- Version migration validation.
+- Test fixture generation.
+
+Do not maintain separate, drifting definitions for the compiler and runtime.
+
+# 2. KalamSpec document structure
+
+## 2.1 Top-level fields
+
+> **Decision (2026-11-18):** The spec icon is an object with a `glyph` from a fixed list plus optional `background` and `foreground` colours. It is not an SVG string. This removes the SVG sanitising path for icons. Any other uploaded media is still untrusted.
+
+The original Kalam proposal defines these core fields:
+
+| Field | Purpose |
+|---|---|
+| `id` | Unique application identifier |
+| `version` | Application version |
+| `name` | Application name |
+| `icon` | Application icon: `{ glyph, background?, foreground? }` with `glyph` from a fixed list (ADR-033). Never an SVG string |
+| `lang` | Primary language |
+| `theme` | Visual theme |
+| `collections` | Typed local data collections |
+| `screens` | Application screens |
+| `actions` | Supported application actions |
+| `aiBlocks` | Structured AI capabilities |
+| `intents` | Natural-language phrases mapped to actions |
+| `meta` | Author, creation time and remix metadata |
+
+The implementation should also include an explicit `schemaVersion` so stored documents can be migrated safely.
+
+## 2.2 Conceptual TypeScript contract
+
+```ts
+interface KalamSpec {
+  id: string;
+  schemaVersion: string;
+  version: number;
+
+  name: string;
+  description?: string;
+  icon?: string;
+
+  lang: string;
+  theme: KalamTheme;
+
+  collections: Record<string, KalamCollection>;
+  screens: KalamScreen[];
+  actions: Record<string, KalamAction>;
+
+  aiBlocks: Record<string, KalamAIBlock>;
+  intents: Record<string, string[]>;
+
+  meta: KalamMetadata;
+}
+```
+
+This is the conceptual structure. The final schema must define every nested type explicitly.
+
+## 2.3 Identifier rules
+
+Identifiers must:
+
+- Be unique within their required scope.
+- Be stable across edits where the entity is unchanged.
+- Use a restricted character set.
+- Avoid reserved names.
+- Not be generated from untrusted arbitrary expressions.
+
+Recommended identifier format:
+
+```text
+lowercase letters
+numbers
+underscores
+```
+
+Examples:
+
+```text
+home
+new_order
+save_order
+customer_name
+orders
+slip_to_order
+```
+
+Use stable identifiers rather than display labels.
+
+A component may be renamed without changing its identifier.
+
+# 3. Core schema types
+
+## 3.1 Application metadata
+
+```ts
+interface KalamMetadata {
+  author?: string;
+  createdAt: number;
+  updatedAt?: number;
+
+  basedOn?: string;
+  description?: string;
+
+  tags?: string[];
+}
+```
+
+The `basedOn` field records the source application when a user creates a remix.
+
+Metadata must not contain sensitive personal records.
+
+## 3.2 Theme
+
+> **Decision (2026-11-18):** Stack note: there is no CSS cascade on Android. Theme values come from a theme context and `src/design/tokens.ts`, fonts are chosen per script on each `Text`, spacing uses `marginStart` and `marginEnd`, and web-only CSS variables live in `src/design/global-css.web.ts`. See ADR-038 in `docs/16`.
+
+The theme controls the application's appearance.
+
+```ts
+interface KalamTheme {
+  primary: string;
+  secondary?: string;
+  background?: string;
+  surface?: string;
+  text?: string;
+
+  radius: number;
+  fontScale: number;
+
+  fontFamily?: string;
+}
+```
+
+The runtime must validate colour values and numeric ranges.
+
+Theme values should map to CSS variables.
+
+Example:
+
+```json
+{
+  "primary": "#315C4C",
+  "secondary": "#D69B52",
+  "background": "#F8F7F2",
+  "surface": "#FFFFFF",
+  "text": "#242424",
+  "radius": 16,
+  "fontScale": 1.1
+}
+```
+
+Access Modes are applied as a separate user preference layer. They should not require permanently modifying the underlying KalamSpec theme.
+
+# 4. Data collections
+
+## 4.1 Purpose
+
+Collections define the structured data an application stores locally.
+
+Examples:
+
+- `orders`
+- `customers`
+- `doses`
+- `expenses`
+- `attendance`
+- `tasks`
+
+Each collection has a set of typed fields.
+
+## 4.2 Field types
+
+Initial field types:
+
+| Type | Description |
+|---|---|
+| `text` | Text value |
+| `number` | Numeric value |
+| `date` | Date value |
+| `boolean` | True or false |
+| `enum` | One value from a fixed list |
+| `image` | A photo kept with the entry (KalamSpec 1.1). The record holds a reference to a picture stored on this device; it is never uploaded. A `photo` component with `field` fills it. |
+
+The initial implementation should keep this set small and predictable.
+
+## 4.3 Collection definition
+
+```ts
+interface KalamCollection {
+  fields: Record<string, KalamField>;
+}
+
+type KalamField =
+  | TextField
+  | NumberField
+  | DateField
+  | BooleanField
+  | EnumField;
+```
+
+Example:
+
+```json
+{
+  "orders": {
+    "fields": {
+      "customer": {
+        "type": "text",
+        "label": "Customer name",
+        "required": true
+      },
+      "garment": {
+        "type": "enum",
+        "label": "Garment",
+        "options": [
+          "kurta",
+          "shirt",
+          "pant"
+        ]
+      },
+      "chest": {
+        "type": "number",
+        "label": "Chest measurement",
+        "required": true
+      },
+      "delivery": {
+        "type": "date",
+        "label": "Delivery date"
+      },
+      "advance": {
+        "type": "number",
+        "label": "Advance payment"
+      }
+    }
+  }
+}
+```
+
+## 4.4 Field metadata
+
+Fields may contain:
+
+- `type`
+- `label`
+- `required`
+- `defaultValue`
+- `placeholder`
+- `min`
+- `max`
+- `options`
+- `unit`
+
+Only properties appropriate to the field type should be accepted.
+
+For example:
+
+- `min` and `max` are valid for numeric fields.
+- `options` is valid for enum fields.
+- `placeholder` is valid for text fields.
+
+Reject incompatible properties.
+
+## 4.5 Record structure
+
+Records are stored locally and are not embedded into KalamSpec.
+
+Conceptual record:
+
+```ts
+interface KalamRecord {
+  id: string;
+  appId: string;
+  collectionId: string;
+
+  createdAt: number;
+  updatedAt: number;
+
+  values: Record<string, unknown>;
+}
+```
+
+Every value must be validated against its collection field definition.
+
+The runtime should prevent one application's records from being read or modified by another application's actions.
+
+## 4.6 Collection limits
+
+The original proposal specifies a maximum of 10 collections per application.
+
+The validator must enforce this limit.
+
+# 5. Screens
+
+## 5.1 Screen structure
+
+An application contains one or more screens.
+
+```ts
+interface KalamScreen {
+  id: string;
+  title: string;
+  children: KalamComponent[];
+}
+```
+
+Additional optional properties may be introduced through the schema, such as:
+
+- Description.
+- Navigation metadata.
+- Layout configuration.
+- Empty-state configuration.
+
+Do not let the compiler generate arbitrary layout instructions.
+
+## 5.2 Screen rules
+
+- Every screen must have a unique ID.
+- At least one screen must exist.
+- Every navigation destination must reference an existing screen.
+- Screen count must not exceed the configured limit.
+- Every screen must contain valid components.
+- A screen must not reference undefined collections or actions.
+
+## 5.3 Default screen
+
+The runtime needs a deterministic initial screen.
+
+Use a defined initial-screen field in the canonical schema or a documented, deterministic convention.
+
+Do not depend on an arbitrary model-generated ordering assumption.
+
+# 6. Component language v1
+
+The original proposal defines 12 initial components.
+
+| Component | Purpose |
+|---|---|
+| `text` | Display ordinary text |
+| `heading` | Display a section heading |
+| `number` | Numeric input |
+| `textInput` | Text input |
+| `date` | Date input |
+| `choice` | Select an option |
+| `toggle` | Boolean input |
+| `counter` | Increment/decrement value |
+| `bigButton` | Prominent action button |
+| `list` | Display collection records |
+| `stat` | Display a computed value |
+| `photo` | Capture or select an image |
+
+KalamSpec 1.1 adds `chart`, `timer`, `reminder` and `signature` (section 6.14). A Kalam that only knows format 1.0 rejects a 1.1 document with "needs a newer Kalam" instead of accepting parts it cannot run (section 15.2).
+
+## 6.1 Common component properties
+
+Every component should have:
+
+```ts
+interface BaseComponent {
+  id: string;
+  type: string;
+  label?: string;
+  visible?: boolean;
+  secondary?: boolean; // 1.0 spelling of importance: 'secondary'
+  importance?: 'essential' | 'standard' | 'secondary'; // 1.1
+}
+```
+
+The canonical schema should use discriminated unions based on `type`.
+
+Each component has its own property schema.
+
+## 6.2 Text
+
+Purpose: Display ordinary text.
+
+Example:
+
+```json
+{
+  "id": "welcome_text",
+  "type": "text",
+  "label": "Welcome to your order book"
+}
+```
+
+## 6.3 Heading
+
+Purpose: Display a prominent section heading.
+
+Example:
+
+```json
+{
+  "id": "orders_heading",
+  "type": "heading",
+  "label": "Recent orders"
+}
+```
+
+## 6.4 Number
+
+Purpose: Accept a numeric value.
+
+Example:
+
+```json
+{
+  "id": "chest",
+  "type": "number",
+  "label": "Chest measurement",
+  "field": "chest",
+  "required": true
+}
+```
+
+## 6.5 Text input
+
+Purpose: Accept text.
+
+Example:
+
+```json
+{
+  "id": "customer_name",
+  "type": "textInput",
+  "label": "Customer name",
+  "field": "customer",
+  "placeholder": "Enter customer name"
+}
+```
+
+## 6.6 Date
+
+Purpose: Accept a date.
+
+Example:
+
+```json
+{
+  "id": "delivery_date",
+  "type": "date",
+  "label": "Delivery date",
+  "field": "delivery"
+}
+```
+
+## 6.7 Choice
+
+Purpose: Select one value from a predefined set.
+
+Example:
+
+```json
+{
+  "id": "garment_type",
+  "type": "choice",
+  "label": "Garment",
+  "field": "garment",
+  "options": [
+    "Kurta",
+    "Shirt",
+    "Pant"
+  ]
+}
+```
+
+The options must match the field's allowed values.
+
+## 6.8 Toggle
+
+Purpose: Represent a boolean value.
+
+Example:
+
+```json
+{
+  "id": "payment_received",
+  "type": "toggle",
+  "label": "Payment received",
+  "field": "paid"
+}
+```
+
+## 6.9 Counter
+
+Purpose: Increment or decrement a numeric value.
+
+Example:
+
+```json
+{
+  "id": "habit_counter",
+  "type": "counter",
+  "label": "Daily target",
+  "min": 0,
+  "max": 100
+}
+```
+
+The counter's state and persistence behaviour must be explicitly defined by the canonical component/action contract.
+
+## 6.10 Big button
+
+Purpose: Present a prominent action.
+
+Example:
+
+```json
+{
+  "id": "new_order_button",
+  "type": "bigButton",
+  "label": "New order",
+  "action": "go_new_order"
+}
+```
+
+The referenced action must exist.
+
+## 6.11 List
+
+Purpose: Display records from a local collection.
+
+Example:
+
+```json
+{
+  "id": "orders_list",
+  "type": "list",
+  "source": "orders",
+  "primary": "customer",
+  "secondary": "delivery"
+}
+```
+
+The collection and both referenced fields must exist.
+
+## 6.12 Stat
+
+Purpose: Display a computed value.
+
+Example:
+
+```json
+{
+  "id": "due_this_week",
+  "type": "stat",
+  "label": "Due this week",
+  "expr": "count(orders)"
+}
+```
+
+The expression must pass the restricted formula parser and evaluator.
+
+## 6.13 Photo
+
+Purpose: Capture or select an image.
+
+Example:
+
+```json
+{
+  "id": "scan_slip",
+  "type": "photo",
+  "label": "Scan measurement slip",
+  "aiBlock": "slip_to_order"
+}
+```
+
+The AI block must exist and accept the photo input type.
+
+## 6.14 KalamSpec 1.1 additions
+
+Format 1.1 (`schemaVersion` "1.1.0") is strictly additive: every part below is optional, and a document that uses none of them is a valid 1.0 document. The validator checks each part (`src/core/spec/validate-v11.ts`), the compiler IR carries them (`src/core/compiler/ir.ts`, with the server copy in `functions/src/ir.ts`), and the runtime parts live in `src/runtime/engine/v11` and `src/runtime/ui/v11`.
+
+**Links between collections.** A text field can link to one entry of another collection with `ref`: `{ "collection": "customers", "display": "name", "onDelete": "cascade" }`. The field stores the linked entry's id, and the person picks the entry by name from a list. Relationships are field links, not a separate top-level section. `display` is a text, number, date or choice field of the linked collection (default: its first plain text field). `onDelete` says what happens to linking entries when the linked one is deleted:
+
+- `restrict` (the default): the delete is refused while any entry still links to it.
+- `cascade`: the linking entries are deleted too, at most 500 in one delete.
+- `clear`: the link is emptied. Not allowed on a required field.
+
+A delete runs the linked deletes first, then the entry, then the cleared links, so a failure part way leaves at worst a link to a missing entry ("Missing entry"), never an emptied link to an entry that still exists. The plan is worked out again after the person confirms, and nothing is deleted if it changed. A link field takes no `maxLength`, `defaultValue` or `multiline`, and sorting a list by a link warns (`SORT_BY_LINK`), because it would order by hidden ids. Only the picker writes a link: a saved link must name an existing entry, and AI steps and voice never fill a link or a signature field.
+
+**Layout groups.** A screen can have `layout`, a list of groups that arrange components already in its `children`: `row` (side by side), `grid` (2 to 4 equal `columns`) and `card` (a framed block with an optional `title`). A group names component ids or nested groups. Groups nest at most 3 deep, a screen has at most 16 groups, a group has at most 12 children, and a component is in at most one group. Components a group does not name keep their normal order. A grid drops columns instead of squeezing cells on a narrow screen or in Large mode. This is a named arrangement of existing components, checked like every other part, not free positioning, so it does not conflict with section 5.1. The compiler sends groups as a flat list (`groups`) that the converter nests, dropping unknown ids, repeats and cycles.
+
+**Style.** Any component or group can have `style` with named choices only: `size` (small, medium, large), `emphasis` (subtle, normal, strong), `tone` (neutral, primary, secondary, success, warning, danger), `align` (start, center, end) and `fullWidth`. Tones come from the app's own palette with contrast checks, and touch targets never shrink. Raw CSS and colour codes are rejected.
+
+**New components.**
+
+- `chart`: a bar, line or donut chart of one collection, counting, summing or averaging, split by a choice or yes/no field (`groupBy`) or by day, week or month (`period`), with an optional range and at most 3 filters.
+- `timer`: a countdown (`durationSec`, at most 24 hours) or a stopwatch. With `field` it writes its time (seconds or minutes, `unit`) into a number field of the screen form while it runs, so Save stores the time shown.
+- `reminder`: reminds the person about dated entries of `source` (`dateField`, `leadDays` 0 to 30, `time` as HH:MM, optional `doneField`, `titleField` and `message`). It is off until the person switches it on, and notification permission is asked for only then. An app has at most 4 reminders. The entry's name in a notification is a plain text or choice field, never a link or a signature.
+- `signature`: a signature pad that stores the drawing in a text field as plain numbers (`sig1:`), drawn back from numbers only and never as markup. People who cannot draw can type their name instead (`sigt:`), so a required signature never blocks someone using a keyboard, switch or screen reader.
+
+**New sections.**
+
+- `permissions`: `[{ "kind": "camera" | "notifications", "reason": "..." }]`. Derived from the components (a photo needs the camera, a reminder needs notifications) by the compiler and kept in step by edits, never taken from a model. A listed kind nothing uses, or a used kind not listed, is a warning.
+- `accessibility`: `summary` (at most 300 characters) and `suggestedModes` (large, highContrast, simple, readAloud). Suggested modes are offered to the person once, never switched on by the app itself: Access Modes belong to the person.
+- `settings`: `currency` (a 3-letter code, used by money stats that name none) and `timeFormat` (12h or 24h).
+- `localization.terminology`: at most 40 terms, each either kept exactly (`keep`) or given fixed translations for up to 12 languages. A translation is checked against these rules word by word. The translate service puts the rules for the target language into its prompt as quoted data and drops any translated label that breaks one (the original label stays on screen); a translate AI step carries the same rules in its prompt. The match is whole-word and case-insensitive, and the rules are looked up by the exact language tag first, then its base language (`hi-IN` falls back to `hi`).
+
+# 7. Actions
+
+## 7.1 Purpose
+
+Actions define what happens when users interact with an application.
+
+Actions must use a finite, predefined operation set.
+
+They must not contain JavaScript functions or executable scripts.
+
+## 7.2 Initial action types
+
+The initial action system should support:
+
+- Navigate.
+- Insert record.
+- Update record.
+- Delete record.
+- Increment.
+- Decrement.
+- Invoke AI block.
+- Speak text.
+- Show feedback.
+- Execute an approved formula where required.
+
+Additional action types require explicit implementation and schema support.
+
+## 7.3 Action contract
+
+Conceptual union:
+
+```ts
+type KalamAction =
+  | NavigateAction
+  | InsertAction
+  | UpdateAction
+  | DeleteAction
+  | CounterAction
+  | AIAction
+  | SpeakAction;
+```
+
+Every action must have a stable identifier.
+
+## 7.4 Navigate action
+
+Example:
+
+```json
+{
+  "type": "navigate",
+  "screen": "new_order"
+}
+```
+
+The screen must exist.
+
+## 7.5 Insert action
+
+Example:
+
+```json
+{
+  "type": "insert",
+  "collection": "orders",
+  "then": {
+    "speak": "Saved",
+    "navigate": "home"
+  }
+}
+```
+
+The target collection must exist.
+
+The runtime should validate the form data before insertion.
+
+## 7.6 Update action
+
+An update action must:
+
+- Identify a valid collection.
+- Identify the target record using a supported record-selection mechanism.
+- Validate the changed fields.
+- Preserve unchanged fields.
+- Persist the result transactionally.
+
+An update either saves the inputs of the screen it is on, or writes fixed values with `set` (KalamSpec 1.1), for example `{ "type": "update", "collection": "appointments", "record": "selected", "set": { "status": "Done" } }` for a "Mark done" button. Each fixed value must fit its field. An update button that would change nothing, one with no `set` on a screen that has no inputs for that collection, is flagged as `NO_OP_UPDATE` (eval 2026-11-25 case s20). The validator reports it as a warning, so a stored app with one such button still opens, saves and restores; the compiler treats it as an error and never ships a new app with one.
+
+## 7.7 Delete action
+
+A delete action must reference a valid collection and supported record-selection mechanism.
+
+The runtime should require confirmation for destructive user-facing operations.
+
+## 7.8 Action sequencing
+
+Action sequences must be explicit and bounded.
+
+Do not allow arbitrary loops, recursion or unbounded workflows.
+
+The runtime must handle failure between steps without leaving partially updated data.
+
+## 7.9 Compute action (KalamSpec 1.1)
+
+`{ "type": "compute", "formula": "sum(orders.amount)", "target": "total", "then": { "feedback": "Done" } }` evaluates one formula with the whitelist engine (same language, limits and checks as a stat) and stores the answer in `target`: a counter id (kept in app state, held inside its min and max) or a field of the current screen's form (checked like typed input). A list answers with its size. An empty answer clears a form field and leaves a counter alone. The formula is checked with the spec (`INVALID_FORMULA`, `UNKNOWN_TARGET`); a failure at run time changes nothing and shows the fix hint of docs/09 §8.7. The compiler does not write this action (it is in `V11_ACTION_TYPES`, not in `ACTION_TYPES`); templates and hand-made specs may. Several writes of one action (a delete that also removes linked entries) go through `records.batch`, one storage transaction (docs/09 §7.3).
+
+# 8. Formula language
+
+## 8.1 Purpose
+
+KalamSpec supports simple formulas to make generated applications useful without arbitrary programming.
+
+Examples (every one parses and evaluates in `src/core/formula`):
+
+```text
+sum(orders.amount)
+count(filter(doses, date == today))
+sum(filter(expenses, category == 'Food').amount)
+if(balance > 0, "red", "green")
+```
+
+Rules the examples rely on: collections are filtered with `filter(collection, predicate)`, equality is `==`, and `today` is the local date as `YYYY-MM-DD`. See section 8.3 for the function list.
+
+The original proposal wrote `count(doses where date == today)`. The parser accepts `count(collection where condition)` as sugar and rewrites it to `count(filter(collection, condition))` (ADR-031 in `docs/16`). Use `filter()` for everything else.
+
+## 8.2 Supported syntax
+
+The initial formula language should support:
+
+- Numbers.
+- Strings.
+- Boolean values.
+- Approved field references.
+- Arithmetic.
+- Comparisons.
+- Boolean operators.
+- Conditional expressions.
+- Approved collection aggregations.
+
+## 8.3 Supported functions
+
+Initial functions:
+
+| Function | Purpose |
+|---|---|
+| `sum` | Sum numeric values |
+| `count` | Count matching records |
+| `avg` | Average numeric values |
+| `min` | Minimum value |
+| `max` | Maximum value |
+| `filter` | Filter a collection through approved predicates |
+| `if` | Conditional result |
+| `round` | Round a number to 0 to 10 decimals |
+| `abs` | Absolute value |
+| `len` | Length of a text or a list |
+| `concat` | Join values into one text |
+| `month` | `YYYY-MM` of a date or of `now`, so `month(date) == month(today)` means this month of this year |
+| `week` | The Monday that starts the week of a date or of `now`, as `YYYY-MM-DD`, so `week(date) == week(today)` means this week of this year |
+| `streak` | Days in a row with an entry, ending today (or yesterday while today has none yet), from a list of dates: `streak(filter(logs, done == true).date)` |
+
+Three values are defined: `today` (the local date as `YYYY-MM-DD`), `now` (the current time as epoch milliseconds) and `selected` (the id of the entry the current screen was opened with from a list, so a parent's page lists and totals only its own entries: `sum(filter(entries, customer == selected).amount)`; on a screen that was not opened from a list it is the selected entry of the screen's own collection, else empty, and a field or collection named `selected` wins). Inside `filter()` and a list `filter`, `id` is the entry's own id, so the opened entry's own fields can be read: `sum(filter(students, id == selected).total_fee) - sum(filter(payments, student == selected).amount)` is one student's balance (eval 2026-11-25 case s23). A field the app itself named `id` wins. The runtime keeps the entry each open screen was opened with, so going back from an entry's page to its customer's page shows that customer again. A value that is missing gives an empty result, never an error, and division by zero gives an empty result. Any other function name is rejected when the spec is validated.
+
+## 8.4 Formula restrictions
+
+The original proposal specifies:
+
+- jsep for parsing.
+- A custom whitelist evaluator.
+- No global property access.
+- No function calls outside the whitelist.
+- A 10,000-step evaluation limit.
+
+These restrictions must be enforced by the runtime.
+
+## 8.5 Formula evaluation
+
+The evaluator should:
+
+1. Parse the expression.
+2. Validate the AST.
+3. Resolve allowed field references.
+4. Check function permissions.
+5. Evaluate within the execution limit.
+6. Return a typed result.
+7. Handle invalid or missing values safely.
+
+## 8.6 Formula caching
+
+Memoise suitable formula results.
+
+Invalidate cached values when referenced collection data changes.
+
+Do not cache results without accounting for relevant dependencies.
+
+# 9. AI blocks
+
+## 9.1 Purpose
+
+AI blocks are reusable, typed AI capabilities embedded inside generated applications.
+
+Examples:
+
+- Extract measurements from a photo.
+- Classify a note.
+- Summarise a document.
+- Translate text.
+- Extract a bill total.
+
+AI blocks are declarative instructions. The trusted AI engine executes them.
+
+## 9.2 Initial AI block types
+
+The original proposal identifies:
+
+- `extractFromPhoto`
+- `classify`
+- `summarise`
+- `translate`
+
+Each block must have a defined input type and output schema.
+
+## 9.3 AI block definition
+
+Conceptual contract:
+
+```ts
+interface KalamAIBlock {
+  kind:
+    | "extractFromPhoto"
+    | "classify"
+    | "summarise"
+    | "translate";
+
+  prompt: string;
+  inputSchema: unknown;
+  outputSchema: unknown;
+
+  verified:
+    | "onDevice"
+    | "cloudPreferred"
+    | "unverified";
+}
+```
+
+The production schema must define exact input/output types for each block kind.
+
+## 9.4 Extraction block
+
+Example:
+
+```json
+{
+  "kind": "extractFromPhoto",
+  "target": "orders",
+  "prompt": "Read the handwritten tailoring slip and extract the available measurements.",
+  "verified": "onDevice"
+}
+```
+
+The target collection must exist.
+
+The AI result must be validated against the target field types.
+
+## 9.5 Classification block
+
+Classification should use a fixed list of permitted labels.
+
+Example:
+
+```json
+{
+  "kind": "classify",
+  "labels": [
+    "work",
+    "personal",
+    "urgent"
+  ],
+  "prompt": "Classify this note."
+}
+```
+
+The output must be one of the declared labels or a supported structured result.
+
+## 9.6 Summary block
+
+A summary block should:
+
+- Accept supported text.
+- Define the expected output format.
+- Enforce output size limits.
+- Return plain text or an explicitly supported structured format.
+
+## 9.7 Translation block
+
+A translation block should define:
+
+- Source text.
+- Target language.
+- Output format.
+- Optional terminology constraints.
+
+Translations should be cached by application and language where appropriate.
+
+## 9.8 AI block verification
+
+> **Decision (2026-11-18):** AI-block test cases are graded deterministically first. A cloud judge is used only for open-ended blocks. Where this document says the judge grades everything, `docs/07` section 13.4 governs. The status stored in a spec is `onDevice`, `cloudPreferred` or `unverified`.
+
+The original proposal specifies a verification process:
+
+1. Cloud model generates five realistic test inputs and expected outputs.
+2. The selected on-device model executes the test inputs.
+3. A cloud judge grades the results.
+4. Four out of five or better means the block can be marked `onDevice`.
+5. Otherwise, it becomes `cloudPreferred`.
+
+The verification metadata should record:
+
+- Verification status.
+- Test count.
+- Pass count.
+- Evaluated model.
+- Schema version.
+- Verification timestamp.
+
+Do not claim that a block is verified if the test process did not actually run.
+
+## 9.9 AI block execution rules
+
+- Validate input before inference.
+- Resolve the block through a registered executor.
+- Apply the task's routing policy.
+- Validate the output.
+- Preserve the original input on failure.
+- Require user review before committing extracted personal records where appropriate.
+- Record the actual inference source.
+- Never execute prompts as code.
+
+# 10. Intents and voice actions
+
+## 10.1 Purpose
+
+Intents map natural-language phrases to supported application actions.
+
+They allow the voice agent to understand application-specific commands.
+
+## 10.2 Intent definition
+
+Example:
+
+```json
+{
+  "save_order": [
+    "save",
+    "done",
+    "rakh do"
+  ],
+  "go_new_order": [
+    "new order",
+    "naya order"
+  ]
+}
+```
+
+The keys must reference valid action identifiers.
+
+## 10.3 Voice action result
+
+The voice model must return a constrained structured response.
+
+Conceptual contract:
+
+```ts
+interface VoiceActionResult {
+  action: string | null;
+  fields: Record<string, string | number | boolean>;
+  confidence: "high" | "low";
+}
+```
+
+The actual result schema must be derived from the application's valid actions and fields.
+
+## 10.4 Safety
+
+- Do not permit unknown action identifiers.
+- Validate each field against its destination field definition.
+- Do not execute low-confidence destructive operations.
+- Confirm ambiguous or consequential actions.
+- Do not infer missing values without an explicit policy.
+
+# 11. Accessibility and language metadata
+
+## 11.1 Component accessibility
+
+Components should support accessible names, descriptions and appropriate semantics through the runtime.
+
+Where necessary, component metadata may include:
+
+- Accessibility label.
+- Accessibility description.
+- Secondary importance.
+- Read-aloud text.
+
+These values must be part of an explicitly versioned schema.
+
+## 11.2 Access Modes
+
+The original proposal defines:
+
+- Large.
+- High Contrast.
+- Simple.
+- Read-aloud.
+- Voice-only.
+- Left-handed.
+
+These are profile-level presentation and interaction preferences.
+
+They should be applied by the runtime without rewriting the underlying application specification.
+
+## 11.3 Language
+
+The `lang` field identifies the application's primary language.
+
+Translation cache entries are stored separately from the canonical specification.
+
+Do not overwrite original labels when generating a translated view.
+
+# 12. Complete example — tailoring measurement book
+
+This example combines the major KalamSpec concepts: a collection, two screens, a form bound to a collection, formulas, a photo AI block, actions with a `then` step, voice intents and metadata.
+
+It is a copy of the fixture `tests/fixtures/specs/valid/tailor-measurement-book.json`, which is run through the real validator by the unit tests. If this block and the fixture ever differ, the fixture is right.
+
+Points the original draft of this example got wrong, now fixed:
+
+- `icon` is an object (`glyph`, `background`, `foreground`), not an SVG string. Icons are a fixed glyph list, which is safer than sanitising SVG (ADR-033).
+- The `new` screen declares `"form": "orders"`, which is what binds its input components to the `orders` collection.
+- Choice `options` must match the collection field's enum values exactly (`kurta`, `shirt`, `pant`).
+- Formulas use `filter(collection, predicate)`, never `where`.
+- The top-level `initialScreen` is required and names the first screen. A `stat` component may carry a `format` (`integer`, `currency` and so on).
+
+```json
+{
+  "id": "ramesh_tailors",
+  "schemaVersion": "1.0.0",
+  "version": 1,
+  "name": "Ramesh Tailors",
+  "lang": "hi",
+  "description": "A local tailoring order and measurement book.",
+  "icon": {
+    "glyph": "scissors",
+    "background": "#315C4C",
+    "foreground": "#FFFFFF"
+  },
+  "theme": {
+    "primary": "#315C4C",
+    "secondary": "#D69B52",
+    "background": "#F8F7F2",
+    "radius": 16,
+    "fontScale": 1.1
+  },
+  "collections": {
+    "orders": {
+      "label": "Orders",
+      "fields": {
+        "customer": {
+          "type": "text",
+          "label": "Customer name",
+          "required": true
+        },
+        "garment": {
+          "type": "enum",
+          "label": "Garment",
+          "options": [
+            "kurta",
+            "shirt",
+            "pant"
+          ]
+        },
+        "chest": {
+          "type": "number",
+          "label": "Chest",
+          "unit": "in"
+        },
+        "waist": {
+          "type": "number",
+          "label": "Waist",
+          "unit": "in"
+        },
+        "sleeve": {
+          "type": "number",
+          "label": "Sleeve",
+          "unit": "in"
+        },
+        "delivery": {
+          "type": "date",
+          "label": "Delivery date"
+        },
+        "advance": {
+          "type": "number",
+          "label": "Advance",
+          "min": 0
+        }
+      }
+    }
+  },
+  "screens": [
+    {
+      "id": "home",
+      "title": "Orders",
+      "children": [
+        {
+          "id": "orders_count",
+          "type": "stat",
+          "label": "Orders",
+          "expr": "count(orders)",
+          "format": "integer"
+        },
+        {
+          "id": "upcoming",
+          "type": "stat",
+          "label": "Deliveries still to do",
+          "expr": "count(filter(orders, delivery >= today))",
+          "format": "integer"
+        },
+        {
+          "id": "advance_total",
+          "type": "stat",
+          "label": "Advance collected",
+          "expr": "sum(orders.advance)",
+          "format": "currency",
+          "currency": "INR"
+        },
+        {
+          "id": "orders_list",
+          "type": "list",
+          "source": "orders",
+          "primary": "customer",
+          "secondary": "delivery",
+          "sort": {
+            "field": "delivery",
+            "direction": "asc"
+          },
+          "emptyText": "No orders yet"
+        },
+        {
+          "id": "new_order",
+          "type": "bigButton",
+          "label": "New order",
+          "action": "go_new_order"
+        }
+      ]
+    },
+    {
+      "id": "new",
+      "title": "New order",
+      "form": "orders",
+      "children": [
+        {
+          "id": "customer_input",
+          "type": "textInput",
+          "label": "Customer name",
+          "field": "customer",
+          "required": true
+        },
+        {
+          "id": "garment_choice",
+          "type": "choice",
+          "label": "Garment",
+          "field": "garment",
+          "options": [
+            "kurta",
+            "shirt",
+            "pant"
+          ]
+        },
+        {
+          "id": "chest_input",
+          "type": "number",
+          "label": "Chest",
+          "field": "chest"
+        },
+        {
+          "id": "waist_input",
+          "type": "number",
+          "label": "Waist",
+          "field": "waist"
+        },
+        {
+          "id": "sleeve_input",
+          "type": "number",
+          "label": "Sleeve",
+          "field": "sleeve"
+        },
+        {
+          "id": "delivery_input",
+          "type": "date",
+          "label": "Delivery date",
+          "field": "delivery"
+        },
+        {
+          "id": "advance_input",
+          "type": "number",
+          "label": "Advance payment",
+          "field": "advance"
+        },
+        {
+          "id": "scan_slip",
+          "type": "photo",
+          "label": "Scan measurement slip",
+          "aiBlock": "slip_to_order"
+        },
+        {
+          "id": "save_button",
+          "type": "bigButton",
+          "label": "Save order",
+          "action": "save_order"
+        }
+      ]
+    }
+  ],
+  "initialScreen": "home",
+  "actions": {
+    "go_new_order": {
+      "type": "navigate",
+      "screen": "new"
+    },
+    "save_order": {
+      "type": "insert",
+      "collection": "orders",
+      "then": {
+        "speak": "Order saved",
+        "navigate": "home"
+      }
+    }
+  },
+  "aiBlocks": {
+    "slip_to_order": {
+      "kind": "extractFromPhoto",
+      "target": "orders",
+      "verified": "unverified",
+      "prompt": "Read the handwritten tailoring slip and extract customer name, garment, chest, waist, sleeve, delivery date and advance payment."
+    }
+  },
+  "intents": {
+    "save_order": [
+      "save",
+      "done",
+      "rakh do"
+    ],
+    "go_new_order": [
+      "new order",
+      "naya order"
+    ]
+  },
+  "meta": {
+    "author": "Kalam fixtures",
+    "createdAt": 1794950000000,
+    "description": "Tailoring orders with measurements",
+    "source": "manual"
+  }
+}
+```
+
+# 13. Validation architecture
+
+## 13.1 Validation layers
+
+KalamSpec requires several validation layers.
+
+| Layer | What it checks |
+|---|---|
+| JSON parsing | Valid JSON |
+| Structural validation | Required properties and correct types |
+| Schema validation | Zod contract |
+| Resource validation | Screen, component, collection and AI block limits |
+| Reference validation | IDs and cross-references |
+| Semantic validation | Actions and application behaviour |
+| Formula validation | Restricted expression grammar |
+| Security validation | No unsupported capabilities |
+| Runtime compatibility | Supported schema and component versions |
+
+Passing one layer does not imply passing all layers.
+
+## 13.2 Resource limits
+
+The original proposal establishes:
+
+| Resource | Maximum |
+|---|---:|
+| Screens | 8 |
+| Components per screen | 40 |
+| Collections | 10 |
+| AI blocks | 15 |
+
+Enforce these limits in:
+
+- Compiler output validation.
+- Editor operations.
+- Import.
+- Marketplace installation.
+- Runtime loading.
+
+Do not rely on the AI model to respect limits.
+
+## 13.3 Reference integrity
+
+Check that:
+
+- Every action reference exists.
+- Every screen destination exists.
+- Every field reference exists.
+- Every collection reference exists.
+- Every formula reference resolves.
+- Every AI block reference exists.
+- Every intent maps to an existing action.
+
+## 13.4 Component-specific validation
+
+A component's properties must match its type.
+
+Examples:
+
+- A `list` requires a valid collection.
+- A `stat` requires a valid formula.
+- A `photo` referencing an AI block requires a compatible photo-input block.
+- A `bigButton` requires a valid action.
+- A `choice` must reference a compatible enum field or valid option list.
+
+## 13.5 Error format
+
+Use structured errors.
+
+Conceptual contract:
+
+```ts
+interface SpecValidationError {
+  code: string;
+  path: string;
+  message: string;
+  severity: "error" | "warning";
+  recoverable: boolean;
+}
+```
+
+Example:
+
+```json
+{
+  "code": "UNKNOWN_ACTION",
+  "path": "screens[0].children[2].action",
+  "message": "The referenced action does not exist.",
+  "severity": "error",
+  "recoverable": true
+}
+```
+
+The UI can translate these errors into understandable corrections.
+
+# 14. Zod schema implementation strategy
+
+## 14.1 Source of truth
+
+Use Zod to define:
+
+- Base identifiers.
+- Theme.
+- Field types.
+- Collection schemas.
+- Component unions.
+- Screen schemas.
+- Action unions.
+- AI block unions.
+- Intent map.
+- Metadata.
+- Top-level KalamSpec.
+
+Infer TypeScript types from these definitions.
+
+## 14.2 Discriminated unions
+
+Use discriminated unions for components, actions, fields and AI blocks.
+
+For example:
+
+```ts
+const componentSchema = z.discriminatedUnion("type", [
+  textComponentSchema,
+  headingComponentSchema,
+  numberComponentSchema,
+  textInputComponentSchema,
+  dateComponentSchema,
+  choiceComponentSchema,
+  toggleComponentSchema,
+  counterComponentSchema,
+  bigButtonComponentSchema,
+  listComponentSchema,
+  statComponentSchema,
+  photoComponentSchema,
+]);
+```
+
+This is illustrative. Implement each referenced schema explicitly.
+
+## 14.3 Strictness
+
+> **Decision (2026-11-18):** A KalamSpec is at most 100 KB. The schema stays strict, and a spec from a newer minor version is rejected with a message that says the app needs updating. Older minors are migrated.
+
+Reject unknown properties at untrusted specification boundaries unless a specific forward-compatibility mechanism is defined.
+
+Do not silently accept arbitrary fields from model output.
+
+## 14.4 Structured output schema
+
+The compiler should receive a schema compatible with the structured-output capabilities of the selected Firebase AI Logic model.
+
+If the full Zod schema cannot be represented directly:
+
+1. Generate a supported structured-output schema.
+2. Keep the canonical Zod schema as the final authority.
+3. Validate the response with Zod.
+4. Use the repair pass for recoverable failures.
+
+Do not weaken runtime validation merely to accommodate model output limitations.
+
+# 15. Specification versioning
+
+## 15.1 Two version concepts
+
+KalamSpec needs two separate version concepts:
+
+- `schemaVersion`: version of the KalamSpec language.
+- `version`: version of an individual application.
+
+For example:
+
+```json
+{
+  "schemaVersion": "1.0.0",
+  "version": 7
+}
+```
+
+An application may have version 7 while still using schema version 1.0.0.
+
+## 15.2 Schema evolution
+
+> **Decision (2026-11-18):** A KalamSpec is at most 100 KB. The schema stays strict, and a spec from a newer minor version is rejected with a message that says the app needs updating. Older minors are migrated.
+
+Use semantic versioning for the specification contract.
+
+General policy:
+
+- Patch: clarifications or compatible validation fixes.
+- Minor: backward-compatible optional capabilities.
+- Major: breaking schema changes requiring migration.
+
+The current format is 1.1.0 (section 6.14). A 1.0.0 document is migrated to 1.1.0 by changing only its format number. A 1.0 document that picks up a 1.1 part (an edit added a chart) is raised to 1.1.0 when it is validated, with the warning `SCHEMA_VERSION_RAISED`, so an older Kalam refuses it clearly instead of failing on an unknown property. The minor number is compared as a number, so "1.00.0" counts as 1.0. Format 1.2 and later is rejected with a message that says Kalam needs updating (ADR-024).
+
+## 15.3 Application versioning
+
+Every accepted edit should create a new application version.
+
+The original proposal recommends storing version differences as JSON Patch operations and keeping the last 20 versions.
+
+Use:
+
+- Full snapshot for the initial version.
+- Patches for subsequent versions.
+- Periodic snapshots to prevent long patch chains.
+- A documented retention policy.
+
+## 15.4 Version restoration
+
+Restoring a historical version should create a new current version based on the selected older specification.
+
+Do not delete later history.
+
+Do not automatically delete local application records when a design is restored.
+
+# 16. Migration strategy
+
+## 16.1 Migration function
+
+Conceptual interface:
+
+```ts
+interface SpecMigration {
+  fromVersion: string;
+  toVersion: string;
+
+  migrate(
+    input: unknown
+  ): unknown;
+}
+```
+
+Migrations must be deterministic and testable.
+
+## 16.2 Migration sequence
+
+1. Read the stored schema version.
+2. Determine whether migration is needed.
+3. Select the required migration chain.
+4. Apply each migration.
+5. Validate the final document.
+6. Persist the migrated document.
+7. Retain recovery information until migration succeeds.
+
+## 16.3 Unsupported versions
+
+If the runtime encounters a newer unsupported schema:
+
+- Do not attempt unsafe interpretation.
+- Preserve the original document.
+- Explain the compatibility issue.
+- Offer an update path when available.
+
+# 17. Import and marketplace validation
+
+Imported specifications are untrusted.
+
+The same validation process applies whether the source is:
+
+- AI compiler output.
+- A local import.
+- A marketplace installation.
+- A remix.
+- A restored backup.
+
+Before an imported spec is saved:
+
+1. Parse it.
+2. Validate schema version.
+3. Validate structure.
+4. Check resource limits.
+5. Validate references.
+6. Validate formulas.
+7. Validate actions.
+8. Validate AI blocks.
+9. Check unsupported features.
+10. Sanitize display assets.
+11. Confirm successful runtime compatibility.
+
+A marketplace review badge must never replace local validation.
+
+# 18. Compiler compatibility
+
+## 18.1 Compiler contract
+
+The compiler must generate KalamSpec matching the canonical schema.
+
+It must receive:
+
+- Supported component list.
+- Supported field types.
+- Supported action types.
+- Formula grammar.
+- AI block types.
+- Resource limits.
+- Required metadata.
+- Valid examples.
+
+## 18.2 Repair pass
+
+When validation fails, send the model:
+
+- The invalid specification.
+- The exact validation errors.
+- The required schema.
+- The relevant original input context.
+
+Allow one bounded repair pass as specified in the original product plan.
+
+If repair fails, preserve the original creation session and show the Understanding Review correction path.
+
+Before any model repair, two deterministic steps run with no model call (eval 2026-11-25):
+
+1. IR normalisation (`src/core/compiler/normalize.ts`): text is trimmed and cut to the IR's own limits, empty or unknown optional values are dropped, the case of fixed words is corrected and lists are cut to their maximum. The cloud response schema cannot carry these limits, so this replaces a model repair for them.
+2. App completion (`src/core/compiler/complete.ts`): entries that belong to a person or thing get a link and the parent's page lists and totals only its own entries, with repayments subtracted; every saved field gets a place to be seen again; "Mark done" style buttons write a fixed value; "this week", "this month", "today" and streak totals look at that period; photos are kept in an image field; unused collections and AI blocks are removed; money uses the person's currency, else INR. A list of people is added only when the request asks for it ("each customer", "employees", a per-person summary) or two collections name them, so a booking's "Client name" stays text; a link is made only when there is room for the parent's list, page and add screen within 8 screens, otherwise the name stays text. A flag that marks an entry settled ("paid") keeps the entry owed until it is paid; only a repayment marker ("payment received", "wapas") is taken off, on the parent's page and in shop-wide totals of what is owed. A habit's "done today" flag becomes dated check-ins, with a one-tap "Done today" on the habit's page. When the completed app would be invalid, the unrepaired one is validated instead, and when both are invalid the cloud repair pass is given the unrepaired app's problems, whose paths match the model's own output.
+
+Every pass is recorded with its stage (`model`, `structured_output`, `validation`, `ok`), its docs/13 §21 category and the exact validator codes (`CreationResult.compileAttempts`), and the evaluation report tallies them (`compileFailures`).
+
+## 18.3 Compiler warnings
+
+Warnings should be separate from hard validation errors.
+
+Examples:
+
+- A field appears unnecessary.
+- A button label is ambiguous.
+- A component may be difficult to use on a small screen.
+- An AI block is not verified for local execution.
+- A saved field is never shown again in a list row or on a detail screen (`FIELD_NOT_SHOWN`; the compiler's completion step adds a detail screen when one fits within 8 screens). The screen a list opens must show the whole entry: a field another list shows elsewhere does not count, only the parent link a page's list is filtered on.
+
+Warnings should not make an otherwise valid application impossible to save.
+
+# 19. Specification fixtures and golden examples
+
+Maintain a fixture collection.
+
+Suggested examples:
+
+```text
+tests/fixtures/specs/
+├── tailor-measurement-book.json
+├── medicine-tracker.json
+├── expense-tracker.json
+├── habit-counter.json
+├── attendance-register.json
+├── kirana-credit-book.json
+├── gst-calculator.json
+├── notes-app.json
+├── invalid-unknown-component.json
+├── invalid-unknown-action.json
+├── invalid-formula.json
+└── invalid-reference.json
+```
+
+Each valid fixture should:
+
+- Pass Zod validation.
+- Pass semantic validation.
+- Render in the runtime.
+- Support its declared actions.
+- Have a test for expected behaviour.
+
+Each invalid fixture should fail for the expected reason.
+
+# 20. Required test coverage
+
+## 20.1 Schema tests
+
+- [ ] Valid minimal spec passes.
+- [ ] Missing required field fails.
+- [ ] Unknown component fails.
+- [ ] Unknown action fails.
+- [ ] Invalid theme fails.
+- [ ] Invalid field definition fails.
+- [ ] Invalid collection reference fails.
+- [ ] Invalid screen reference fails.
+- [ ] Resource limits are enforced.
+- [ ] Invalid AI block fails.
+
+## 20.2 Formula tests
+
+- [ ] Arithmetic works.
+- [ ] Comparisons work.
+- [ ] Conditional expressions work.
+- [ ] Collection aggregation works.
+- [ ] Missing values are handled.
+- [ ] Unknown functions are rejected.
+- [ ] Global access is rejected.
+- [ ] Execution limits are enforced.
+
+## 20.3 Runtime tests
+
+- [ ] Each v1 component renders.
+- [ ] Component actions dispatch correctly.
+- [ ] Form values bind to valid fields.
+- [ ] Lists read the correct collection.
+- [ ] Stats update after relevant data changes.
+- [ ] Invalid specs fail safely.
+- [ ] Accessibility overlays work without mutating the spec.
+
+## 20.4 Version tests
+
+- [ ] Initial snapshot is stored.
+- [ ] Patch is generated correctly.
+- [ ] Patch is validated.
+- [ ] Restore creates a new version.
+- [ ] Later history is retained.
+- [ ] Records survive specification restoration.
+
+## 20.5 Marketplace tests
+
+- [ ] Valid listing spec imports.
+- [ ] Invalid spec is rejected.
+- [ ] Unsupported component is rejected.
+- [ ] Private records are not imported.
+- [ ] Remix metadata is preserved.
+- [ ] Display assets are sanitized.
+
+# 21. Implementation rules for Claude Code
+
+1. Implement the canonical Zod schema before building the compiler.
+2. Use inferred TypeScript types wherever practical.
+3. Define every v1 component explicitly.
+4. Define every action as a finite, validated operation.
+5. Keep collections separate from local records.
+6. Keep AI prompts separate from executable runtime behaviour.
+7. Do not support arbitrary JavaScript.
+8. Do not use `eval` or `new Function`.
+9. Do not permit unrestricted JSON Patch operations.
+10. Validate every cross-reference.
+11. Validate every formula with the restricted grammar.
+12. Enforce resource limits at every untrusted input boundary.
+13. Implement schema versioning from the beginning.
+14. Test migrations before changing stored schema.
+15. Keep the runtime and compiler on the same canonical schema.
+16. Keep Web, Android and iOS behaviour consistent.
+17. Preserve the original source document when compilation fails.
+18. Do not silently accept unknown schema fields.
+19. Add valid and invalid fixtures.
+20. Do not call a component implemented until its rendering, validation, interactions and tests are complete.
+
+# 22. Definition of done
+
+KalamSpec v1 is complete when:
+
+- A canonical Zod schema exists.
+- TypeScript types are derived from it.
+- The 12 original components are defined.
+- Collection and field definitions are validated.
+- Actions use a finite operation set.
+- Formulas use a restricted evaluator.
+- AI blocks use typed schemas.
+- Intents map to valid actions.
+- Resource limits are enforced.
+- Cross-references are checked.
+- The compiler can produce valid specifications.
+- The runtime can render valid specifications.
+- The version manager can preserve and restore versions.
+- Imported specifications pass the same validation.
+- No generated specification can execute arbitrary code.
+
+**The KalamSpec promise:** An application created in Kalam is not a bundle of generated code that the user must trust. It is a portable, inspectable and validated description that the trusted Kalam runtime can safely bring to life.
+
+---
+
+**End of KalamSpec Specification**

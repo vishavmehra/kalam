@@ -96,7 +96,7 @@ const token = (source: string, name: string) => {
   if (!m?.[1]) throw new Error(`token ${name} not found`);
   return m[1].toUpperCase();
 };
-// The icon keeps its own colours until it is redrawn for "Khata and Kalam" (tokens.ts iconColors).
+// Icon colours (tokens.ts iconColors): a charcoal tile, a white K and a saffron-coral full stop. `marigold` keeps its old key name.
 const iconBlock = tokens.slice(tokens.indexOf('export const iconColors'));
 const darkBlock = iconBlock.slice(iconBlock.indexOf('dark:'));
 const INK = token(iconBlock, 'ink');
@@ -250,7 +250,7 @@ describe('contrast of the finished art', () => {
     expect(contrast(DARK.marigold, DARK.background)).toBeGreaterThanOrEqual(3);
     expect(contrast(DARK.ink, DARK.splash)).toBeGreaterThanOrEqual(7);
     expect(contrast(DARK.marigold, DARK.splash)).toBeGreaterThanOrEqual(3);
-    // The marigold dot on paper is only 1.8:1. It is decorative (the K carries the meaning), so it is not asserted.
+    // The saffron dot on paper is 3.45:1 and decorative (the K carries the meaning), so it is not asserted.
   });
 });
 

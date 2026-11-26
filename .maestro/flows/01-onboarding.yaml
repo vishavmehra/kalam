@@ -1,0 +1,27 @@
+# First run: the welcome screen, Continue, the empty App Shelf. Starts from a clean install.
+appId: com.kalam.app
+name: Onboarding
+---
+- launchApp:
+    clearState: true
+
+# A cold Release start on a CI machine can take a while (fonts and settings hold the splash).
+- extendedWaitUntil:
+    visible: "Draw the app.*"
+    timeout: 120000
+- takeScreenshot: 01-onboarding
+- runFlow: ../common/pause.yaml
+- scrollUntilVisible:
+    element:
+      id: onboarding-continue
+    direction: DOWN
+    timeout: 20000
+- runFlow: ../common/pause.yaml
+- tapOn:
+    id: onboarding-continue
+
+- extendedWaitUntil:
+    visible: "Your shelf.*"
+    timeout: 30000
+- takeScreenshot: 02-shelf-empty
+- runFlow: ../common/pause.yaml

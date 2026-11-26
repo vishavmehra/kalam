@@ -1,0 +1,359 @@
+# Mobile smoke test: builds Kalam on free GitHub-hosted runners and walks the main journey with Maestro on an iOS
+# simulator and an Android emulator, so iOS and Android can be checked without a Mac or a phone.
+#
+#   ios-simulator     macOS runner: Expo prebuild, pod install, xcodebuild Release for the iPhone simulator (JS
+#                     bundle embedded), boot a simulator, install, launch, Maestro, screenshots, recordings.
+#   android-emulator  Linux runner with KVM: Expo prebuild, Gradle assembleRelease (signed with the debug key that
+#                     prebuild generates, so it is a test build), Android emulator, Maestro, screenshots, recordings.
+#
+# Flows: every file in .maestro/flows, run in name order in one app session (the first one installs fresh). Each
+# flow gets its own screen recording (one mp4 per flow), so adding or renaming a flow needs no change here.
+#
+# Artifacts per platform: <platform>-screenshots, <platform>-logs, <platform>-demo-recordings, and the built app
+# (ios-simulator-app zip; android-release-apk, which has arm64-v8a and x86_64 code so it also installs on a phone).
+#
+# The flows need no cloud AI: they build a deterministic template app on the device. Firebase web config comes from
+# repository variables (not secrets: it ships in every client). No App Check debug token or provider key is used.
+name: Mobile smoke
+
+on:
+  push:
+    branches: [main, ci/mobile-smoke]
+    paths:
+      - app.json
+      - eas.json
+      - package.json
+      - package-lock.json
+      - metro.config.js
+      - babel.config.js
+      - src/**
+      - assets/**
+      - modules/**
+      - .maestro/**
+      - .github/workflows/mobile-smoke.yml
+  workflow_dispatch:
+
+# A run takes about an hour and its recordings matter, so a new push waits instead of cancelling the current run.
+concurrency:
+  group: mobile-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash # -eo pipefail, so a failed build is not hidden by `| tee`
+
+env:
+  EXPO_PUBLIC_FIREBASE_API_KEY: ${{ vars.EXPO_PUBLIC_FIREBASE_API_KEY }}
+  EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ vars.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+  EXPO_PUBLIC_FIREBASE_PROJECT_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_PROJECT_ID }}
+  EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ vars.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+  EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+  EXPO_PUBLIC_FIREBASE_APP_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_APP_ID }}
+  EXPO_PUBLIC_FIREBASE_ANDROID_APP_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_ANDROID_APP_ID }}
+  EXPO_PUBLIC_FIREBASE_IOS_APP_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_IOS_APP_ID }}
+  EXPO_PUBLIC_RECAPTCHA_SITE_KEY: ${{ vars.EXPO_PUBLIC_RECAPTCHA_SITE_KEY }}
+  EXPO_PUBLIC_AI_BACKEND: ${{ vars.EXPO_PUBLIC_AI_BACKEND }}
+  EXPO_PUBLIC_AI_LOCATION: ${{ vars.EXPO_PUBLIC_AI_LOCATION }}
+  EXPO_PUBLIC_SPECIALIST_ENABLED: 'false'
+  MAESTRO_VERSION: 2.12.1
+  # Maestro's on-device driver starts slowly on shared CI machines.
+  MAESTRO_DRIVER_STARTUP_TIMEOUT: '240000'
+  MAESTRO_CLI_NO_ANALYTICS: '1'
+  OUT: ${{ github.workspace }}/smoke-out
+
+jobs:
+  ios-simulator:
+    name: iOS simulator
+    # Apple silicon, Xcode 26.6 by default. Expo SDK 58 needs Xcode 26.4 or later.
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      # Booting takes a minute or two, so it runs in the background while the app builds.
+      - name: Pick and boot an iPhone simulator
+        run: |
+          xcodebuild -version
+          mkdir -p "$OUT/screenshots" "$OUT/logs" "$OUT/recordings"
+          pick=$(xcrun simctl list devices available -j | node -e '
+            const d = JSON.parse(require("fs").readFileSync(0, "utf8")).devices;
+            const runtimes = Object.keys(d).filter((k) => k.includes(".iOS-")).sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+            for (const rt of runtimes) {
+              const phones = d[rt].filter((x) => x.isAvailable && x.name.startsWith("iPhone"));
+              const p = phones.find((x) => x.name === "iPhone 17") ?? phones[0];
+              if (p) { console.log(`${p.udid} ${p.name} (${rt.split(".").pop()})`); break; }
+            }')
+          if [ -z "$pick" ]; then echo "::error::No iPhone simulator is available on this image"; xcrun simctl list devices available; exit 1; fi
+          echo "Simulator: $pick"
+          echo "SIM_UDID=${pick%% *}" >> "$GITHUB_ENV"
+          xcrun simctl boot "${pick%% *}"
+
+      - name: Generate the native project
+        run: npx expo prebuild --platform ios --clean --no-install
+
+      - name: Install CocoaPods
+        working-directory: ios
+        run: pod install
+
+      - name: Build Release for the simulator
+        run: |
+          ws=$(ls -d ios/*.xcworkspace | head -n 1)
+          scheme=$(basename "$ws" .xcworkspace)
+          xcodebuild -workspace "$ws" -scheme "$scheme" -configuration Release -sdk iphonesimulator \
+            -destination "id=$SIM_UDID" -derivedDataPath ios/build \
+            ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build \
+            | tee "$OUT/logs/xcodebuild.log" | xcbeautify --renderer github-actions
+          app=$(ls -d ios/build/Build/Products/Release-iphonesimulator/*.app | head -n 1)
+          if [ ! -f "$app/main.jsbundle" ]; then echo "::error::$app has no embedded JS bundle"; exit 1; fi
+          echo "Built $app, JS bundle $(du -h "$app/main.jsbundle" | cut -f1)"
+          echo "APP_PATH=$app" >> "$GITHUB_ENV"
+          echo "BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Info.plist")" >> "$GITHUB_ENV"
+          echo "APP_EXE=$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$app/Info.plist")" >> "$GITHUB_ENV"
+          ditto -c -k --keepParent "$app" "$OUT/Kalam-simulator.app.zip"
+
+      - name: Install Maestro
+        run: |
+          curl -fsSL https://get.maestro.mobile.dev | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Install, launch and run the flows (recorded)
+        run: |
+          xcrun simctl bootstatus "$SIM_UDID" -b
+          xcrun simctl status_bar "$SIM_UDID" override --time 9:41 --batteryState charged --batteryLevel 100 || true
+          xcrun simctl install "$SIM_UDID" "$APP_PATH"
+          xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          sleep 30
+          xcrun simctl io "$SIM_UDID" screenshot "$OUT/screenshots/00-first-launch.png"
+          status=0
+          for flow in .maestro/flows/*.yaml; do
+            name=$(basename "$flow" .yaml)
+            xcrun simctl io "$SIM_UDID" recordVideo --codec=h264 --force "$OUT/recordings/ios-$name.mp4" &
+            rec=$!
+            sleep 2
+            maestro test "$flow" --format junit --output "$OUT/logs/maestro-$name.xml" \
+              --test-output-dir "$OUT/maestro" --debug-output "$OUT/maestro-debug/$name" || status=$?
+            sleep 1
+            kill -INT "$rec" && wait "$rec" || true
+            if [ "$status" != 0 ]; then
+              echo "::error::Maestro flow $name failed"
+              find "$OUT/maestro-debug/$name" "$OUT/maestro" -name 'step-*.png' ! -name '*demo_pause*' -exec cp {} "$OUT/screenshots/" \; || true
+              break
+            fi
+          done
+          xcrun simctl io "$SIM_UDID" screenshot "$OUT/screenshots/99-final.png" || true
+          find "$OUT/maestro" -name '*.png' ! -name 'step-*' -exec cp {} "$OUT/screenshots/" \; || true
+          ls -l "$OUT/recordings"
+          exit $status
+
+      - name: Collect simulator logs
+        if: always()
+        run: |
+          [ -n "${SIM_UDID:-}" ] || exit 0
+          xcrun simctl spawn "$SIM_UDID" log show --last 60m --style compact \
+            --predicate "process == \"${APP_EXE:-Kalam}\"" > "$OUT/logs/ios-app.log" 2>&1 || true
+          cp ~/Library/Logs/DiagnosticReports/"${APP_EXE:-Kalam}"* "$OUT/logs/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ios-screenshots
+          path: smoke-out/screenshots/
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ios-demo-recordings
+          path: smoke-out/recordings/
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ios-logs
+          path: |
+            smoke-out/logs/
+            smoke-out/maestro-debug/
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ios-simulator-app
+          path: smoke-out/Kalam-simulator.app.zip
+          if-no-files-found: warn
+          retention-days: 14
+
+  android-emulator:
+    name: Android emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      # com.google.mlkit:genai-schema (pulled in by firebase-ai-ondevice 16.0.0-beta08 in modules/kalam-nano) is
+      # built with Kotlin 2.4, and React Native 0.88's default Kotlin 2.2 compiler cannot read it ("Module was
+      # compiled with an incompatible version of Kotlin"). android/build.gradle from Expo prebuild takes the Kotlin
+      # Gradle plugin version from the `android.kotlinVersion` property, so it is passed to Gradle below unless the
+      # app already sets it in gradle.properties (the lasting fix belongs in the kalam-nano config plugin). It must be
+      # a version Expo publishes its Kotlin compiler plugins for (io.github.expo.pika, expo-modules-v2-compiler-plugin).
+      ANDROID_KOTLIN_VERSION: 2.4.20
+    steps:
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: npm ci
+
+      # The first run lost the runner mid-build ("starves it for CPU/Memory"): Gradle, the Kotlin daemon, R8 and
+      # parallel C++ compiles together outgrow the runner's 16 GB. Extra swap and capped JVM heaps keep it alive.
+      - name: Add swap
+        run: |
+          sudo swapoff -a || true
+          sudo fallocate -l 12G /mnt/kalam.swap
+          sudo chmod 600 /mnt/kalam.swap
+          sudo mkswap /mnt/kalam.swap >/dev/null
+          sudo swapon /mnt/kalam.swap
+          free -h
+
+      - name: Generate the native project
+        run: npx expo prebuild --platform android --no-install --clean
+
+      # arm64-v8a for real phones (Samsung Galaxy, Pixel), x86_64 for the emulator. Skipping 32-bit ABIs saves time.
+      - name: Build the release APK
+        working-directory: android
+        env:
+          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
+        run: |
+          mkdir -p "$OUT/screenshots" "$OUT/logs" "$OUT/recordings"
+          props=(-PreactNativeArchitectures=arm64-v8a,x86_64 -Pkotlin.daemon.jvmargs=-Xmx2g)
+          if ! grep -q '^android.kotlinVersion=' gradle.properties; then props+=("-Pandroid.kotlinVersion=$ANDROID_KOTLIN_VERSION"); fi
+          echo "Gradle properties: ${props[*]}"
+          # Resolve Gradle plugins first, with retries: a plugin download from the Gradle Plugin Portal failed once.
+          for i in 1 2 3; do ./gradlew help --no-daemon -q "${props[@]}" && break; [ "$i" = 3 ] && exit 1; sleep 30; done
+          # Memory and disk every two minutes, so a starved runner shows up in the log.
+          (while sleep 120; do echo "[resources] $(date -u +%H:%M) $(free -m | awk '/Mem/{print "mem " $3 "/" $2 " MB"} /Swap/{print "swap " $3 "/" $2 " MB"}' | tr '\n' ' ')$(df -h / | awk 'NR==2{print "disk " $3 "/" $2}')"; done) &
+          mon=$!
+          ./gradlew assembleRelease --no-daemon --stacktrace "${props[@]}" 2>&1 | tee "$OUT/logs/gradle.log"
+          kill "$mon" || true
+          apk=$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)
+          if [ -z "$apk" ]; then echo "::error::No APK was produced"; exit 1; fi
+          cp "$apk" "$OUT/kalam-release.apk"
+          "$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)/apksigner" verify --print-certs "$OUT/kalam-release.apk" | sed -n 1,3p
+          echo "APK: $(du -h "$OUT/kalam-release.apk" | cut -f1)"
+
+      # Uploaded right after the build, so the APK is available even if the emulator part fails.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-release-apk
+          path: smoke-out/kalam-release.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Install Maestro
+        run: |
+          curl -fsSL https://get.maestro.mobile.dev | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      # The emulator action runs each `script` line on its own, so the steps live in one file.
+      - name: Write the emulator script
+        run: |
+          cat > "$RUNNER_TEMP/android-smoke.sh" <<'EOF'
+          set -u
+          adb wait-for-device
+          adb logcat -G 16M || true
+          adb logcat -c || true
+          # For demo recordings: show taps, and a clean status bar (fixed clock, full battery, no notifications).
+          adb shell settings put system show_touches 1 || true
+          adb shell settings put global sysui_demo_allowed 1 || true
+          for cmd in "enter" "clock -e hhmm 0941" "battery -e level 100 -e plugged false" "notifications -e visible false" "network -e wifi show -e level 4 -e fully true" "network -e mobile hide"; do
+            adb shell am broadcast -a com.android.systemui.demo -e command $cmd >/dev/null || true
+          done
+          adb install -r "$OUT/kalam-release.apk"
+          adb shell monkey -p com.kalam.app -c android.intent.category.LAUNCHER 1 >/dev/null
+          sleep 30
+          adb exec-out screencap -p > "$OUT/screenshots/00-first-launch.png"
+          status=0
+          for flow in .maestro/flows/*.yaml; do
+            name=$(basename "$flow" .yaml)
+            # Full screen size at 6 Mbps (about 45 MB a minute). Falls back to 720x1600 if the encoder refuses it.
+            adb shell screenrecord --bit-rate 6000000 --time-limit 180 "/sdcard/$name.mp4" &
+            sleep 2
+            if ! adb shell pidof screenrecord >/dev/null; then
+              adb shell screenrecord --size 720x1600 --bit-rate 6000000 --time-limit 180 "/sdcard/$name.mp4" &
+              sleep 2
+            fi
+            maestro test "$flow" --format junit --output "$OUT/logs/maestro-$name.xml" \
+              --test-output-dir "$OUT/maestro" --debug-output "$OUT/maestro-debug/$name" || status=$?
+            sleep 1
+            adb shell pkill -2 screenrecord || true
+            wait
+            sleep 2
+            adb pull "/sdcard/$name.mp4" "$OUT/recordings/android-$name.mp4" >/dev/null || true
+            adb shell rm -f "/sdcard/$name.mp4" || true
+            if [ "$status" != 0 ]; then
+              echo "::error::Maestro flow $name failed"
+              find "$OUT/maestro-debug/$name" "$OUT/maestro" -name 'step-*.png' ! -name '*demo_pause*' -exec cp {} "$OUT/screenshots/" \; || true
+              break
+            fi
+          done
+          adb exec-out screencap -p > "$OUT/screenshots/99-final.png" || true
+          adb logcat -d -v time > "$OUT/logs/logcat.txt" 2>&1 || true
+          find "$OUT/maestro" -name '*.png' ! -name 'step-*' -exec cp {} "$OUT/screenshots/" \; || true
+          ls -l "$OUT/recordings"
+          exit $status
+          EOF
+
+      - name: Run the flows on an emulator (recorded)
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          cores: 4
+          ram-size: 4096M
+          disk-size: 6000M
+          emulator-boot-timeout: 900
+          script: bash "$RUNNER_TEMP/android-smoke.sh"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: android-screenshots
+          path: smoke-out/screenshots/
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: android-demo-recordings
+          path: smoke-out/recordings/
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: android-logs
+          path: |
+            smoke-out/logs/
+            smoke-out/maestro-debug/
+          if-no-files-found: warn
+          retention-days: 14

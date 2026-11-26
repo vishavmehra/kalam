@@ -24,6 +24,7 @@
     "${configDir}/jest.config.js",
     "${configDir}/android",
     "${configDir}/ios",
-    "${configDir}/mcp"
+    "${configDir}/mcp",
+    "${configDir}/functions"
   ]
 }

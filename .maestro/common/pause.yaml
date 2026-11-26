@@ -1,0 +1,8 @@
+# A short pause so screen recordings are readable. Maestro has no sleep command: this waits for text that never
+# appears, and `optional` turns the timeout into a pass.
+appId: com.kalam.app
+---
+- extendedWaitUntil:
+    visible: "__kalam_demo_pause__"
+    timeout: 1500
+    optional: true

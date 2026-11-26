@@ -98,7 +98,7 @@ export function RestoreConfirmSheet({ visible, preview, onConfirm, onCancel }: R
       <View style={{ gap: 16, paddingBottom: 8 }}>
         <View style={{ gap: 6 }}>
           <Text variant="h4" accessibilityRole="header">{copy.restore.changesHeading}</Text>
-          <Text weight="medium">{preview.headline}</Text>
+          {shown.length === 1 && shown[0].text === preview.headline ? null : <Text weight="medium">{preview.headline}</Text>}
           {shown.map((c) => <ChangeRow key={c.key} text={c.text} note={c.note} details={c.details} />)}
           {hidden > 0 ? <Text variant="bodySmall" tone="secondary">{copy.restore.more(hidden)}</Text> : null}
         </View>

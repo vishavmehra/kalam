@@ -1,0 +1,34 @@
+# Use the built expense app: add one record and see the totals update. Starts on the app's home screen.
+appId: com.kalam.app
+name: Use the built app
+---
+- extendedWaitUntil:
+    visible: "Entries: 0"
+    timeout: 15000
+- tapOn: "Add expense.*"
+- extendedWaitUntil:
+    visible: "Save expense.*"
+    timeout: 15000
+- runFlow: ../common/pause.yaml
+# The number field's accessibility label is "Amount (₹)"; its visible label reads "Amount (₹) (required)".
+- tapOn: "Amount( \\([^)]+\\))?"
+- inputText: "250"
+# iOS's decimal pad has no dismiss key, so Maestro's hideKeyboard fails there. Tapping the screen title (plain
+# text in a ScrollView with keyboardShouldPersistTaps="handled") closes the keyboard on both platforms.
+- tapOn: "Add expense"
+- takeScreenshot: 07-record-form
+- runFlow: ../common/pause.yaml
+- scrollUntilVisible:
+    element: "Save expense.*"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Save expense.*"
+
+# Back on the app's home screen with the new totals.
+- extendedWaitUntil:
+    visible: "Entries: 1"
+    timeout: 15000
+- assertVisible: "Total spent: .*250.*"
+- takeScreenshot: 08-record-added
+- runFlow: ../common/pause.yaml
+- runFlow: ../common/pause.yaml

@@ -1,0 +1,16 @@
+# Kalam mobile smoke test: every flow in .maestro/flows, in order, in one app session.
+# Run locally with `maestro test .maestro/smoke.yaml`. CI (.github/workflows/mobile-smoke.yml) runs the flow files
+# one at a time instead, so it can record one video per flow.
+#
+# Needs no network and no cloud AI. Selectors: testIDs where the app has them (onboarding-continue, create-app,
+# save-to-shelf), otherwise accessibility labels or visible text as regexes (Maestro matches the whole string),
+# so small copy changes do not break the flows.
+appId: com.kalam.app
+name: Kalam smoke
+---
+- runFlow: flows/01-onboarding.yaml
+- runFlow: flows/02-create-from-template.yaml
+- runFlow: flows/03-use-the-app.yaml
+- runFlow: flows/04-shelf.yaml
+- runFlow: flows/05-settings.yaml
+- runFlow: flows/06-bazaar.yaml

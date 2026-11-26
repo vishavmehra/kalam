@@ -56,7 +56,7 @@ export function ReadPage({ rect, stamp, stampLabel, stampDate }: { rect: Rect; s
       style={{
         position: 'absolute', left: rect.x, top: rect.y, width: rect.w, height: rect.h,
         transform: [{ rotate: PAPER_TILT }],
-        shadowColor: '#02040F', shadowOpacity: 0.35, shadowRadius: 22, shadowOffset: { width: 0, height: 16 }, elevation: 8,
+        shadowColor: '#0A0908', shadowOpacity: 0.35, shadowRadius: 22, shadowOffset: { width: 0, height: 16 }, elevation: 8,
       }}
     >
       <Image source={SKETCH} resizeMode="cover" aria-hidden style={{ width: rect.w, height: rect.h, borderRadius: 3 }} />
@@ -86,7 +86,7 @@ export function TiltedPhone({ rect, state }: { rect: Rect; state: AppState }) {
     <View
       style={{
         position: 'absolute', left: rect.x, top: rect.y, width: rect.w, height: rect.h, borderRadius: rect.w * PHONE_RADIUS, transform: PHONE_TILT,
-        shadowColor: '#02040F', shadowOpacity: 0.45, shadowRadius: 26, shadowOffset: { width: -10, height: 20 }, elevation: 12,
+        shadowColor: '#0A0908', shadowOpacity: 0.45, shadowRadius: 26, shadowOffset: { width: -10, height: 20 }, elevation: 12,
       }}
     >
       <OrderPhone width={rect.w} state={state} />

@@ -100,3 +100,50 @@ describe('secret scanning (the Security job)', () => {
     for (const id of ['kalam-appcheck-debug-token', 'kalam-anthropic-api-key', 'kalam-nebius-api-key']) expect(gitleaks).toContain(id);
   });
 });
+
+describe('the release workflow (Android APK and iOS builds on a GitHub Release)', () => {
+  const release = read('.github/workflows/release.yml');
+
+  it('runs on a version tag or by hand, and writes to the repository only in the publishing job', () => {
+    expect(release).toMatch(/tags: \['v\*'\]/);
+    expect(release).toContain('workflow_dispatch:');
+    // The default token is read-only; contents: write appears once, on the job that creates the release.
+    expect(release).toMatch(/^permissions:\r?\n {2}contents: read\r?$/m);
+    expect((release.match(/contents: write/g) ?? []).length).toBe(1);
+    expect(release).not.toMatch(/secrets\.(?!GITHUB_TOKEN)/);
+  });
+
+  it('attaches the APK, an unsigned iPhone build and a simulator build, with checksums', () => {
+    for (const file of ['Kalam-android.apk', 'Kalam-ios-device-unsigned.ipa', 'Kalam-ios-simulator.zip', 'SHA256SUMS.txt']) expect(release, file).toContain(file);
+    expect(release).toContain('assembleRelease');
+    expect(release).toContain('-sdk iphoneos');
+    expect(release).toContain('CODE_SIGNING_ALLOWED=NO');
+    expect(release).toContain('gh release create');
+  });
+
+  it('the README names the same files, and says the iPhone file is unsigned', () => {
+    const readme = read('README.md');
+    for (const file of ['Kalam-android.apk', 'Kalam-ios-device-unsigned.ipa', 'Kalam-ios-simulator.zip']) expect(readme, file).toContain(file);
+    expect(readme).toMatch(/releases/i);
+    expect(readme).toMatch(/unsigned/i);
+  });
+});
+
+describe('the mobile smoke workflow (Android emulator and iOS simulator, D04-049, D08-040, D08-054, D09-049, X01-007)', () => {
+  const smoke = read('.github/workflows/mobile-smoke.yml');
+
+  it('runs every flow in .maestro/flows on both platforms, so the persistence, offline, drawing and kill flows are covered', () => {
+    expect(smoke).toContain('ios-simulator:');
+    expect(smoke).toContain('android-emulator:');
+    expect((smoke.match(/for flow in \.maestro\/flows\/\*\.yaml/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    const flows = readdirSync(join(ROOT, '.maestro/flows')).filter((f) => f.endsWith('.yaml'));
+    for (const prefix of ['01-', '02-', '03-', '04-', '05-', '06-', '07-', '08-', '09-', '10-', '11-']) expect(flows.some((f) => f.startsWith(prefix)), prefix).toBe(true);
+  });
+
+  it('the flows that save an app open it from the "on your shelf" choice, and use the shell tab name "Make"', () => {
+    const create = read('.maestro/flows/02-create-from-template.yaml');
+    expect(create).toContain('id: open-saved-app');
+    expect(create).toMatch(/tapOn: "Make"/);
+    expect(read('.maestro/live/ai-built-app.yaml')).toContain('id: open-saved-app');
+  });
+});

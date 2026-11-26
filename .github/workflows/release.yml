@@ -1,0 +1,174 @@
+# Release builds: the Android APK and the iOS builds, attached to a GitHub Release (README, "Download").
+#
+# Runs when a version tag is pushed (v0.1.0) or by hand with the tag to release. It builds three files and uploads them
+# to one release, with a SHA-256 list so a download can be checked:
+#   - Kalam-android.apk                     the release APK. arm64-v8a and x86_64, so it installs on a phone and on an
+#                                           emulator. Signed with the debug key that Expo prebuild generates: a test
+#                                           build, not a store build.
+#   - Kalam-ios-device-unsigned.ipa         the iPhone app with NO signature. A phone refuses it until it is signed:
+#                                           sideload it with AltStore or Sideloadly (a free Apple ID works), or re-sign
+#                                           it with an Apple Developer certificate. There is no way around this without
+#                                           an Apple account.
+#   - Kalam-ios-simulator.zip              the app for the iOS Simulator on a Mac (unzip, drag onto the Simulator).
+#
+# The Android and iOS-simulator steps are the ones CI already runs (android.yml, ci/mobile-smoke). The unsigned device IPA
+# is the same build with the iphoneos SDK and no code signing. It has not run on a hosted runner yet, so the first run is
+# the check: the job fails loudly if the .app or its JS bundle is missing.
+#
+# Needs no secret: the release is made with the run's own GITHUB_TOKEN, and the public Firebase web config comes from
+# repository variables (the same ones android.yml reads).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to release, for example v0.1.0 (created on the selected branch when it does not exist yet)
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+  EXPO_PUBLIC_FIREBASE_API_KEY: ${{ vars.EXPO_PUBLIC_FIREBASE_API_KEY }}
+  EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ vars.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+  EXPO_PUBLIC_FIREBASE_PROJECT_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_PROJECT_ID }}
+  EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ vars.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+  EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+  EXPO_PUBLIC_FIREBASE_APP_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_APP_ID }}
+  EXPO_PUBLIC_SPECIALIST_ENABLED: 'false'
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: npm ci
+      - name: Generate the native project
+        run: npx expo prebuild --platform android --no-install --clean
+      - name: Build the release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        env:
+          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
+      - name: Name the file
+        run: |
+          apk=$(find android/app/build/outputs/apk/release -name '*.apk' | head -n 1)
+          if [ -z "$apk" ]; then echo "::error::No APK was produced"; exit 1; fi
+          mkdir -p out
+          cp "$apk" "out/Kalam-android.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          path: out/*.apk
+          retention-days: 7
+
+  ios:
+    name: iOS device (unsigned) and simulator
+    # Apple silicon, Xcode 26.x. Expo SDK 58 needs Xcode 26.4 or later (the ci/mobile-smoke run used this image).
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Generate the native project
+        run: npx expo prebuild --platform ios --clean --no-install
+      - name: Install CocoaPods
+        working-directory: ios
+        run: pod install
+
+      - name: Build for the simulator
+        run: |
+          ws=$(ls -d ios/*.xcworkspace | head -n 1)
+          scheme=$(basename "$ws" .xcworkspace)
+          xcodebuild -workspace "$ws" -scheme "$scheme" -configuration Release -sdk iphonesimulator \
+            -derivedDataPath ios/build-sim ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build
+          app=$(ls -d ios/build-sim/Build/Products/Release-iphonesimulator/*.app | head -n 1)
+          if [ ! -f "$app/main.jsbundle" ]; then echo "::error::$app has no embedded JS bundle"; exit 1; fi
+          mkdir -p out
+          ditto -c -k --keepParent "$app" "out/Kalam-ios-simulator.zip"
+
+      # No signature on purpose: signing needs an Apple Developer account, which CI does not hold.
+      - name: Build for a device, unsigned
+        run: |
+          ws=$(ls -d ios/*.xcworkspace | head -n 1)
+          scheme=$(basename "$ws" .xcworkspace)
+          xcodebuild -workspace "$ws" -scheme "$scheme" -configuration Release -sdk iphoneos \
+            -derivedDataPath ios/build-device CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+          app=$(ls -d ios/build-device/Build/Products/Release-iphoneos/*.app | head -n 1)
+          if [ ! -f "$app/main.jsbundle" ]; then echo "::error::$app has no embedded JS bundle"; exit 1; fi
+          rm -rf Payload && mkdir Payload && cp -R "$app" Payload/
+          zip -qry "out/Kalam-ios-device-unsigned.ipa" Payload
+          rm -rf Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-ios
+          path: |
+            out/*.ipa
+            out/*.zip
+          retention-days: 7
+
+  publish:
+    name: Attach to the release
+    needs: [android, ios]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # create the release and upload its files, nothing else
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: out
+          merge-multiple: true
+      - name: Checksums and notes
+        run: |
+          cd out
+          sha256sum Kalam-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          cat > ../notes.md <<'NOTES'
+          Test builds of Kalam for Android and iOS. The web app needs no download.
+
+          Android: download the .apk, open it on the phone and allow installs from this source when asked. It is signed
+          with a debug key, so it is a test build and not a Play Store build.
+
+          iPhone: the .ipa has no signature. Sign it with AltStore or Sideloadly (a free Apple ID works) or with your own
+          Apple Developer certificate, then install it. It will not install as it is.
+
+          iOS Simulator (Mac): unzip Kalam-ios-simulator.zip and drag the app onto an open Simulator.
+
+          Check a download against SHA256SUMS.txt.
+          NOTES
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" out/* --clobber
+          else
+            gh release create "$TAG" out/* --title "Kalam $TAG" --notes-file notes.md --target "$GITHUB_SHA"
+          fi

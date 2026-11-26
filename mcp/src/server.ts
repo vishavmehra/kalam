@@ -6,7 +6,7 @@ import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mc
 import { z } from 'zod';
 import type { AIProvider, TemplateId } from '@/core/contracts';
 import { instantiateTemplate, listTemplates } from '@/core/templates';
-import KALAMSPEC_DOC from '../../docs/05_KALAMSPEC.md?raw';
+import KALAMSPEC_DOC from './kalamspec-reference.txt?raw';
 import pkg from '../package.json';
 import { specJsonSchema } from './catalogue';
 import type { Options } from './config';
@@ -99,7 +99,7 @@ export function createKalamServer(ctx: ServerContext = {}): McpServer {
 
   server.registerResource('kalamspec-docs', 'kalam://docs/kalamspec', {
     title: 'KalamSpec language reference',
-    description: 'docs/05_KALAMSPEC.md: the design of the format, with examples. Use kalam://schema for exact rules.',
+    description: 'The KalamSpec reference: the design of the format, with examples. Use kalam://schema for exact rules.',
     mimeType: 'text/markdown',
   }, (uri) => ({ contents: [{ uri: uri.href, mimeType: 'text/markdown', text: KALAMSPEC_DOC }] }));
 

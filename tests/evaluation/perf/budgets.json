@@ -1,8 +1,8 @@
 {
-  "description": "Performance budgets (docs/13 §17, docs/15 §11.6). The web numbers are a regression guard set about 20% above the first measured build (dist-w1, 2026-11-18: JavaScript 6.63 MB, gzip 1.32 MB, first screen 5.29 MB, largest chunk 4.22 MB). They are not product targets. Product targets are in productTargets and are measured by the CI perf job and on devices.",
+  "description": "Performance budgets (docs/13 §17, docs/15 §11.6). The web numbers are a regression guard. Total raised on 2026-11-26 (11.5 MB, 2.75 MB gzip) for the 10 lazy language chunks and the 3D hero, which are never all loaded at once; initial JS and largest chunk stay under the original limits. Original: about 20% above the first measured build (dist-w1, 2026-11-18: JavaScript 6.63 MB, gzip 1.32 MB, first screen 5.29 MB, largest chunk 4.22 MB). They are not product targets. Product targets are in productTargets and are measured by the CI perf job and on devices.",
   "web": {
-    "totalJsBytes": 8388608,
-    "totalJsGzipBytes": 2097152,
+    "totalJsBytes": 12058624,
+    "totalJsGzipBytes": 2883584,
     "largestChunkBytes": 5767168,
     "initialJsBytes": 6815744
   },

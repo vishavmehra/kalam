@@ -34,7 +34,7 @@ export const FIELDS: Record<FieldKey, Box> = {
 export const WRITE_ORDER: readonly FieldKey[] = ['title', 'name', 'phone', 'cloth', 'size', 'date', 'money', 'balance', 'save'];
 
 /** Fixed object colours (DIRECTION §2.3): the pen marks on photographed paper look the same in both themes. */
-export const PEN_RED = '#C8322A';
+export const PEN_RED = '#E2583E';
 export const PEN_INK = '#1F3A93';
 export const STAMP_VIOLET = '#5B3BB5';
 
@@ -187,8 +187,8 @@ export function stampDate(locale: string, date = new Date()): string {
 
 export const APP_THEME = {
   primary: '#2F6B4F', primarySoft: '#E2EEE7', bg: '#F6F7F3', field: '#FFFFFF', line: '#CBD6CF',
-  text: '#13201C', muted: '#56665E', onPrimary: '#FFFFFF', chrome: '#FCFCFA', chromeInk: '#12172E',
-  leaf: '#1C6E43', toast: '#18241F', toastCheck: '#7FD3A6', device: '#0E1222', notch: '#05060C',
+  text: '#13201C', muted: '#56665E', onPrimary: '#FFFFFF', chrome: '#FCFCFA', chromeInk: '#1C1917',
+  leaf: '#1C6E43', toast: '#18241F', toastCheck: '#7FD3A6', device: '#0F0E0D', notch: '#050505',
 } as const;
 
 /** Phone screen in app units. The body adds `BEZEL` on every side. */
@@ -258,7 +258,7 @@ export function orderAppUI(s: AppState): Prim[] {
   text(30, 30, '9:41', 14, 'latinSemi', A.chromeInk);
   rect(128, 11, 104, 26, 13, A.notch);
   for (let i = 0; i < 4; i++) rect(276 + i * 5, 26 - i * 3, 3, 5 + i * 3, 1, A.chromeInk);
-  icon(s.offline ? ICON.wifiOff : ICON.wifi, 298, 15, 0.62, s.offline ? '#B02A22' : A.chromeInk, 2.4);
+  icon(s.offline ? ICON.wifiOff : ICON.wifi, 298, 15, 0.62, s.offline ? '#A63A25' : A.chromeInk, 2.4);
   rect(318, 18, 24, 12, 3, undefined, A.chromeInk, 1.4);
   rect(320.5, 20.5, 17, 7, 1.5, A.chromeInk);
   // Kalam's thin chrome: shelf key, app name, "On this phone" stamp.

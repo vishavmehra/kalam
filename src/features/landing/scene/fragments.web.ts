@@ -23,21 +23,21 @@ export interface ScenePalette {
 }
 
 /**
- * "Khata and Kalam" object colours (DIRECTION §2.3): paper, ballpoint and devices are things, not UI, so they
- * stay the same in both themes; paper is dimmed a little at ink night. `brand` is the haldi voice strip and
+ * "Charcoal and Saffron" object colours (DIRECTION §2.3): paper, ballpoint and devices are things, not UI, so they
+ * stay the same in both themes; paper is dimmed a little at ink night. `brand` is the marigold voice strip and
  * `haldi` the same highlight for the glow and the pen.
  */
 export function scenePalette(dark: boolean): ScenePalette {
   return {
     dark,
     ink: '#1F3A93',
-    brand: '#F5B323',
-    haldi: '#F5B323',
+    brand: '#F2A541',
+    haldi: '#F2A541',
     paper: dark ? '#E9E8E2' : '#FBFAF5',
     rule: 'rgba(31,58,147,0.16)',
     margin: 'rgba(200,50,42,0.5)',
-    device: '#0E1222',
-    shadow: dark ? 'rgba(2,4,18,0.5)' : 'rgba(18,23,46,0.22)',
+    device: '#0F0E0D',
+    shadow: dark ? 'rgba(0,0,0,0.5)' : 'rgba(28,25,23,0.22)',
   };
 }
 
@@ -242,7 +242,7 @@ export function voiceNote(pal: ScenePalette): Fragment & { amp: { value: number 
   const { ctx } = p;
   const r = card(p, 22, 26, pal.brand, pal.shadow);
   // Mic badge: an ink key on the haldi strip.
-  const VOICE_INK = '#12172E';
+  const VOICE_INK = '#1C1917';
   const cx = r.x + 62, cy = r.y + r.h / 2;
   ctx.fillStyle = VOICE_INK;
   ctx.beginPath(); ctx.arc(cx, cy, 38, 0, Math.PI * 2); ctx.fill();
@@ -252,7 +252,7 @@ export function voiceNote(pal: ScenePalette): Fragment & { amp: { value: number 
   ctx.beginPath(); ctx.arc(cx, cy - 2, 16, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(cx, cy + 14); ctx.lineTo(cx, cy + 22); ctx.stroke();
   // Duration.
-  ctx.fillStyle = 'rgba(18,23,46,0.72)';
+  ctx.fillStyle = 'rgba(28,25,23,0.72)';
   ctx.font = `20px ${FONT.semibold}`;
   ctx.textAlign = 'right';
   ctx.fillText('0:12', r.x + r.w - 22, r.y + r.h - 16);
@@ -292,7 +292,7 @@ function paintFrame(ctx: CanvasRenderingContext2D, x: number, y: number, w: numb
     // Shop shelves with jars.
     ctx.fillStyle = '#B98A5A';
     for (let s = 0; s < 3; s++) ctx.fillRect(x, y + h * (0.3 + s * 0.3), w, 4);
-    const jar = ['#2F6B4F', '#C8322A', '#F5B323', '#2234C2'];
+    const jar = ['#2F6B4F', '#E2583E', '#F2A541', '#1C1917'];
     for (let s = 0; s < 3; s++) for (let j = 0; j < 4; j++) {
       ctx.fillStyle = jar[(s + j) % 4];
       ctx.beginPath(); ctx.roundRect(x + 10 + j * (w - 16) / 4, y + h * (0.3 + s * 0.3) - 22, (w - 40) / 4, 22, 4); ctx.fill();
@@ -301,19 +301,19 @@ function paintFrame(ctx: CanvasRenderingContext2D, x: number, y: number, w: numb
     // Open ledger with a pen.
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(x + 12, y + 16, w / 2 - 14, h - 32); ctx.fillRect(x + w / 2 + 2, y + 16, w / 2 - 14, h - 32);
-    ctx.strokeStyle = 'rgba(40,48,128,0.35)'; ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(87,83,78,0.35)'; ctx.lineWidth = 2;
     for (let l = 0; l < 5; l++) {
       ctx.beginPath(); ctx.moveTo(x + 18, y + 30 + l * 14); ctx.lineTo(x + w / 2 - 8, y + 30 + l * 14); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(x + w / 2 + 8, y + 30 + l * 14); ctx.lineTo(x + w - 18, y + 30 + l * 14); ctx.stroke();
     }
-    ctx.strokeStyle = '#1E2563'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+    ctx.strokeStyle = '#2B2622'; ctx.lineWidth = 6; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(x + w * 0.62, y + h * 0.78); ctx.lineTo(x + w * 0.9, y + h * 0.3); ctx.stroke();
   } else if (kind === 2) {
     // Counter with a calculator.
     ctx.fillStyle = '#C9B79C'; ctx.fillRect(x, y + h * 0.62, w, h * 0.38);
-    ctx.fillStyle = '#2E3248'; ctx.beginPath(); ctx.roundRect(x + w * 0.3, y + h * 0.16, w * 0.4, h * 0.6, 6); ctx.fill();
+    ctx.fillStyle = '#2E2A27'; ctx.beginPath(); ctx.roundRect(x + w * 0.3, y + h * 0.16, w * 0.4, h * 0.6, 6); ctx.fill();
     ctx.fillStyle = '#9FD8C4'; ctx.fillRect(x + w * 0.34, y + h * 0.22, w * 0.32, h * 0.12);
-    ctx.fillStyle = '#DDE0EE';
+    ctx.fillStyle = '#E6E1D8';
     for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) ctx.fillRect(x + w * 0.35 + c * w * 0.105, y + h * 0.4 + r * h * 0.11, w * 0.07, h * 0.07);
   } else {
     // Parcel being packed.
@@ -349,7 +349,7 @@ export function filmStrip(pal: ScenePalette): Fragment {
 export function sketchPhoto(pal: ScenePalette, page: HTMLImageElement): Fragment {
   const p = painter(330, 390);
   const { ctx } = p;
-  const r = card(p, 24, 6, pal.dark ? '#E9EAF2' : '#FFFFFF', pal.shadow);
+  const r = card(p, 24, 6, pal.dark ? '#EAE6DF' : '#FFFFFF', pal.shadow);
   const ix = r.x + 16, iy = r.y + 16, iw = r.w - 32, ih = r.w - 32;
   // The photographed sheet: warm paper under a desk lamp.
   const g = ctx.createRadialGradient(ix + iw * 0.45, iy + ih * 0.4, 10, ix + iw / 2, iy + ih / 2, iw * 0.8);

@@ -25,8 +25,8 @@ const ICONS = [
 /** iOS Safari ignores manifest icons for "Add to Home Screen" and wants this one (180 px, opaque, full bleed). */
 const TOUCH_ICON = 'apple-touch-icon.png';
 /** Paper canvas (iconColors.paper in src/design/tokens.ts): the install splash and the title bar match the app splash. brand-assets.test.ts checks it. */
-const THEME = '#F4F5F0';
-const BACKGROUND = '#F4F5F0';
+const THEME = '#FAF7F2';
+const BACKGROUND = '#FAF7F2';
 /** Not needed at runtime (source maps, Expo export metadata) or must never be precached (the worker). */
 const SKIP = /(^|\/)(sw\.js|metadata\.json|.*\.map)$/;
 

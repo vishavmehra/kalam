@@ -32,12 +32,12 @@ export const PAGE_BACKGROUNDS: ReadonlyArray<{ id: PageBackground; label: string
   { id: 'dots', label: 'Dots' },
 ];
 
-/** Paper tints offered for a page ("Khata and Kalam" washes). The first is the default. */
+/** Paper tints offered for a page ("Charcoal and Saffron" washes; the pale blue is a blue-ink wash). The first is the default. */
 export const PAGE_COLORS: ReadonlyArray<{ value: string; name: string }> = [
   { value: palette.neutral[0], name: 'White' },
   { value: palette.paper.canvas, name: 'Paper' },
   { value: palette.paper.haldiWash, name: 'Haldi' },
-  { value: palette.paper.royalWash, name: 'Ink' },
+  { value: palette.pen.blueWash, name: 'Ink' },
   { value: palette.paper.leafWash, name: 'Green' },
   { value: palette.paper.skyWash, name: 'Sky' },
   { value: palette.paper.sindoorWash, name: 'Rose' },
@@ -51,7 +51,7 @@ export const DEFAULT_PAGE_COLOR = palette.neutral[0];
  */
 export const INK_COLORS: ReadonlyArray<{ value: string; name: string }> = [
   { value: palette.paper.ink, name: 'Ink' },
-  { value: palette.paper.royal, name: 'Blue ink' },
+  { value: palette.pen.blue, name: 'Blue ink' },
   { value: palette.paper.sky, name: 'Sky' },
   { value: palette.paper.leaf, name: 'Green' },
   { value: palette.paper.sindoor, name: 'Red pen' },
@@ -70,7 +70,7 @@ export const STAMP_COLORS = {
   placeholder: palette.paper.sunk,
 } as const;
 
-/** Selection chrome on the canvas: royal ink, the colour of selection everywhere in Kalam. */
+/** Selection chrome on the canvas: deep saffron, the colour of selection everywhere in Kalam. */
 export const SELECTION_COLORS = {
   line: palette.paper.royal,
   locked: palette.paper.graphite,
