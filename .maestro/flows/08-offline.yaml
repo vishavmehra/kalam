@@ -1,0 +1,61 @@
+# Use a saved app with no network at all, then restart it, still with no network (docs/09 §23.6, docs/13 §11.1,
+# checklist D09-049, D17-042, D13-032). Android switches airplane mode on from the test. iOS has no such switch in
+# the simulator, so there the flow still proves the same thing, because using a saved app never touches the network.
+appId: com.kalam.app
+name: Offline use of a saved app
+onFlowComplete:
+  - runFlow:
+      when:
+        platform: Android
+      commands:
+        - setAirplaneMode: disabled
+---
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: enabled
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Your shelf.*"
+    timeout: 120000
+- tapOn: "Expenses.*"
+- extendedWaitUntil:
+    visible: "Entries: 1"
+    timeout: 30000
+- takeScreenshot: 15-offline-app-open
+
+# Add a second record with no network.
+- tapOn: "Add expense.*"
+- extendedWaitUntil:
+    visible: "Save expense.*"
+    timeout: 15000
+- tapOn: "Amount( \\([^)]+\\))?"
+- inputText: "75"
+# Same keyboard trick as 03-use-the-app: tapping the screen title closes it on both platforms.
+- tapOn: "Add expense"
+- scrollUntilVisible:
+    element: "Save expense.*"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Save expense.*"
+- extendedWaitUntil:
+    visible: "Entries: 2"
+    timeout: 15000
+- assertVisible: "Total spent: .*325.*"
+- takeScreenshot: 16-offline-record-added
+
+# Close the process and open it again, still offline: both records are there.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Your shelf.*"
+    timeout: 120000
+- tapOn: "Expenses.*"
+- extendedWaitUntil:
+    visible: "Entries: 2"
+    timeout: 30000
+- assertVisible: "Total spent: .*325.*"
+- takeScreenshot: 17-offline-after-restart
+- runFlow: ../common/pause.yaml

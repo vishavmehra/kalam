@@ -4,7 +4,7 @@ import { migrateSpec, migrateSpecWith, validateSpec, type SpecMigration } from '
 
 describe('migrateSpec', () => {
   it('passes the current version through as an independent copy', () => {
-    const input = loadFixture('valid', 'gst-calculator');
+    const input = { ...loadFixture('valid', 'gst-calculator'), schemaVersion: '1.1.0' };
     const before = JSON.stringify(input);
     const r = migrateSpec(input);
     expect(r.ok).toBe(true);
@@ -12,6 +12,23 @@ describe('migrateSpec', () => {
     expect(r.spec).toEqual(input);
     expect(r.spec).not.toBe(input);
     expect(JSON.stringify(input)).toBe(before);
+    expect(validateSpec(r.spec).ok).toBe(true);
+  });
+
+  it('migrates a 1.0.0 document to 1.1.0 by changing only its format number', () => {
+    const input = loadFixture('valid', 'gst-calculator');
+    const before = JSON.stringify(input);
+    const r = migrateSpec(input);
+    expect(r).toMatchObject({ ok: true, migratedFrom: '1.0.0' });
+    expect(r.spec).toEqual({ ...input, schemaVersion: '1.1.0' });
+    expect(JSON.stringify(input)).toBe(before);
+    expect(validateSpec(r.spec).ok).toBe(true);
+  });
+
+  it('leaves a 1.0 patch it has no step for unchanged, and validation still accepts it', () => {
+    const r = migrateSpec({ ...loadFixture('valid', 'gst-calculator'), schemaVersion: '1.0.3' });
+    expect(r).toMatchObject({ ok: true });
+    expect(r.migratedFrom).toBeUndefined();
     expect(validateSpec(r.spec).ok).toBe(true);
   });
 

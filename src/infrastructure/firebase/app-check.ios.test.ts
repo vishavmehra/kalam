@@ -60,12 +60,16 @@ describe('App Check (iOS)', () => {
     expect(mod.appCheckStatus()).toEqual({ status: 'debug', detail: undefined });
   });
 
-  it('release build: never uses the debug token and installs App Attest with the iOS app id', async () => {
+  it('release build: never uses the debug token, and installs App Attest with the iOS app id on the first token request', async () => {
     vi.stubEnv('EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN', 'registered-debug-token');
     const native = fakeApple();
     const mod = await load(native);
     mod.setupAppCheck(fakeApp);
     expect(g.FIREBASE_APPCHECK_DEBUG_TOKEN).toBeUndefined();
+    expect(sdk.initializeAppCheck).toHaveBeenCalledWith(fakeApp, expect.objectContaining({ isTokenAutoRefreshEnabled: false }));
+    expect(native.installAppAttest).not.toHaveBeenCalled();
+    expect(native.getAppCheckToken).not.toHaveBeenCalled();
+    await providerGetToken()();
     expect(native.installAppAttest).toHaveBeenCalledWith({
       apiKey: 'test-api-key', projectId: 'test-project', appId: '1:123:ios:abc', gcmSenderId: '123',
     });
@@ -110,11 +114,12 @@ describe('App Check (iOS)', () => {
     expect(native.installAppAttest).not.toHaveBeenCalled();
   });
 
-  it('reports missing public Firebase ids as an error without throwing', async () => {
+  it('reports missing public Firebase ids as an error on the first token request, without throwing at start-up', async () => {
     vi.stubEnv('EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID', '');
     const native = fakeApple();
     const mod = await load(native);
     expect(() => mod.setupAppCheck(fakeApp)).not.toThrow();
+    await expect(providerGetToken()()).rejects.toThrow(/MESSAGING_SENDER_ID/);
     expect(mod.appCheckStatus()).toMatchObject({ status: 'error', detail: expect.stringMatching(/MESSAGING_SENDER_ID/) });
     expect(native.installAppAttest).not.toHaveBeenCalled();
   });

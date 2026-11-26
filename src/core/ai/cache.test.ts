@@ -9,7 +9,7 @@ const base: StructuredRequest<unknown> = {
   mode: 'prefer_on_device', parse: (raw) => ({ success: true, data: raw }),
 };
 const ctx: KeyContext = { taskType: 'summarize', role: 'ai_block', mode: 'prefer_on_device', appId: 'app-1', promptVersion: 'block-v1', model: 'gemini-3.5-flash-lite' };
-const answer = (output: unknown): CachedAnswer => ({ output, provider: 'firebase', source: 'cloud', model: 'gemini-3.5-flash-lite' });
+const answer = (raw: unknown): CachedAnswer => ({ raw, provider: 'firebase', source: 'cloud', model: 'gemini-3.5-flash-lite' });
 
 describe('stableStringify', () => {
   it('ignores key order and undefined members', () => {
@@ -59,11 +59,12 @@ describe('requestKey', () => {
   });
 });
 
-/** In-memory stand-in for db.aiCache that can be made to fail. */
+/** In-memory stand-in for db.aiCache that can be made to fail, with the requested `remove`. */
 function store(opts: { fail?: boolean } = {}) {
   const data = new Map<string, unknown>();
   const sets: Array<{ key: string; meta: unknown }> = [];
-  const repo: AICacheRepository = {
+  const repo: AICacheRepository & { remove(key: string): Promise<void> } = {
+    remove: async (key) => { data.delete(key); },
     get: async <T>(key: string) => {
       if (opts.fail) throw new Error('db closed');
       return data.get(key) as T | undefined;
@@ -105,25 +106,35 @@ describe('result cache: LRU with a TTL', () => {
     expect(CACHE_TTL_MS).toBe(24 * 60 * 60 * 1000);
   });
 
-  it('writes through to db.aiCache with the task and source, and reads back in a new session', async () => {
+  it('writes through to db.aiCache with the task, source and app, and reads back in a new session', async () => {
     const s = store();
-    createResultCache({ now: () => 0, store: s.repo }).set('k', answer({ s: 'ok' }), 'translate');
+    createResultCache({ now: () => 0, store: s.repo }).set('k', answer({ s: 'ok' }), 'translate', 'app-1');
     await settle();
-    expect(s.sets).toEqual([{ key: 'k', meta: { taskType: 'translate', source: 'cloud' } }]);
+    expect(s.sets).toEqual([{ key: 'k', meta: { taskType: 'translate', source: 'cloud', appId: 'app-1' } }]);
+    expect(s.data.get('k')).toMatchObject({ v: 2, raw: { s: 'ok' }, appId: 'app-1' });
     const later = createResultCache({ now: () => 1000, store: s.repo });
     expect(await later.get('k')).toEqual(answer({ s: 'ok' }));
     expect(later.size()).toBe(1);
   });
 
-  it('treats a stored value that is expired or malformed as a miss', async () => {
+  it('treats a stored value that is expired or malformed as a miss, and purges it from disk', async () => {
     const s = store();
-    s.data.set('old', { v: 1, expiresAt: 10, output: 1, provider: 'firebase', source: 'cloud' });
-    s.data.set('bad', { v: 1, expiresAt: 1e15, output: 1, provider: 'evil', source: 'cloud' });
+    s.data.set('old', { v: 2, expiresAt: 10, raw: 1, provider: 'firebase', source: 'cloud' });
+    s.data.set('bad', { v: 2, expiresAt: 1e15, raw: 1, provider: 'evil', source: 'cloud' });
     s.data.set('legacy', 'just a string');
+    s.data.set('v1', { v: 1, expiresAt: 1e15, output: { parsed: true }, provider: 'firebase', source: 'cloud' });
     const c = createResultCache({ now: () => 100, store: s.repo });
-    expect(await c.get('old')).toBeUndefined();
-    expect(await c.get('bad')).toBeUndefined();
-    expect(await c.get('legacy')).toBeUndefined();
+    for (const key of ['old', 'bad', 'legacy', 'v1']) expect(await c.get(key)).toBeUndefined();
+    await settle();
+    expect(s.data.size).toBe(0);
+  });
+
+  it('treats an answer as stale when the clock was set back', async () => {
+    let t = 10 * CACHE_TTL_MS;
+    const c = createResultCache({ now: () => t });
+    c.set('k', answer('x'), 'classify');
+    t -= 60 * 60 * 1000; // one hour back: the expiry is now more than one TTL away
+    expect(await c.get('k')).toBeUndefined();
   });
 
   it('never fails because the store fails', async () => {

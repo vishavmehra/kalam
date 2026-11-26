@@ -26,15 +26,23 @@ export const habitTrackerTemplate: KalamTemplate<HabitTrackerParams> = {
   },
   build(p, opts) {
     const habits = cleanOptions(p.habits, 'My habit');
-    const perHabit = habits.map<KalamComponent>((h, i) => ({
-      id: `habit_days_${i + 1}`, type: 'stat', label: `${h}: days done`,
-      expr: `count(filter(logs, habit == '${h}' && done == true))`, format: 'integer',
-    }));
+    // Per habit: all-time days, the streak (days in a row up to today) and this week (eval s21, s24).
+    const perHabit = habits.flatMap<KalamComponent>((h, i) => {
+      const kept = `filter(logs, habit == '${h}' && done == true)`;
+      return [
+        { id: `habit_days_${i + 1}`, type: 'stat', label: `${h}: days done`, expr: `count(${kept})`, format: 'integer' },
+        { id: `habit_streak_${i + 1}`, type: 'stat', label: `${h}: days in a row`, expr: `streak(${kept}.date)`, format: 'integer' },
+        {
+          id: `habit_week_${i + 1}`, type: 'stat', label: `${h}: this week`,
+          expr: `count(filter(logs, habit == '${h}' && done == true && week(date) == week(today)))`, format: 'integer',
+        },
+      ];
+    });
     return assembleSpec(
       {
         templateId: 'habit_tracker',
         name: p.name,
-        description: `Check in ${habits.slice(0, 3).join(', ').toLowerCase()}${habits.length > 3 ? ' and more' : ''} every day.`,
+        description: `Check in ${habits.slice(0, 3).join(', ').toLowerCase()}${habits.length > 3 ? ' and more' : ''} every day, and see each streak.`,
         glyph: 'flame',
         theme: p.theme,
         collections: {

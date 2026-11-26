@@ -58,7 +58,7 @@ const NO_DEVICE: OnDeviceStatus = {
 
 const tokenSchema = z.object({ token: z.string().min(1).max(8192), ttl: z.string().regex(/^\d+(\.\d+)?s$/) });
 
-async function exchangeDebugToken(env: FirebaseEnv): Promise<{ token: string; expireTimeMillis: number }> {
+export async function exchangeDebugToken(env: FirebaseEnv): Promise<{ token: string; expireTimeMillis: number }> {
   const url = `https://firebaseappcheck.googleapis.com/v1/projects/${env.projectId}/apps/${env.appId}:exchangeDebugToken?key=${encodeURIComponent(env.apiKey)}`;
   const res = await fetch(url, {
     method: 'POST', headers: { 'content-type': 'application/json' },
@@ -69,9 +69,9 @@ async function exchangeDebugToken(env: FirebaseEnv): Promise<{ token: string; ex
   return { token: body.token, expireTimeMillis: Date.now() + Number.parseFloat(body.ttl) * 1000 };
 }
 
-const stripFences = (s: string) => s.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+export const stripFences = (s: string) => s.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
 
-function errorCode(e: unknown): AIErrorCode {
+export function errorCode(e: unknown): AIErrorCode {
   const text = `${(e as { code?: unknown })?.code ?? ''} ${(e as Error)?.message ?? ''}`.toLowerCase();
   if (text.includes('app check') || text.includes('app-check')) return 'app_check_failed';
   if (text.includes('quota') || text.includes('429')) return 'quota';
@@ -133,6 +133,10 @@ export function createNodeFirebaseProvider(env: FirebaseEnv): AIProvider {
         if (!parsed.success) return failed('invalid_output', parsed.error);
         return { success: true, output: parsed.data, provider: 'firebase', source: 'cloud', model, latencyMs: Date.now() - started, fallbackUsed: false };
       } catch (e) {
+        // dist/server.js leaves firebase out of the bundle; it is loaded from the repo's node_modules.
+        if ((e as { code?: unknown })?.code === 'ERR_MODULE_NOT_FOUND') {
+          return failed('not_configured', 'The firebase package is not installed next to this server. Run npm install at the Kalam repo root.');
+        }
         // The provider message can quote the request, so only the error kind leaves this function.
         return failed(errorCode(e), 'Firebase AI Logic did not answer.');
       }
@@ -164,13 +168,22 @@ export function budgetedOrchestrator(provider: AIProvider, budget: CallBudget): 
 
 export const compileShape = {
   request: z.string().min(3).max(4000).describe('What the app should do, in the person\'s words. This text is sent to Google.'),
+  force: z.boolean().default(false)
+    .describe('Call the cloud even when a template fits. Only when the person asked for the cloud version.'),
 };
 
 export async function compileWithFirebaseTool(
-  { request }: { request: string }, provider: AIProvider, budget: CallBudget,
+  { request, force = false }: { request: string; force?: boolean }, provider: AIProvider, budget: CallBudget,
 ): Promise<CallToolResult> {
   const input = { text: request, modalities: ['text' as const], images: [] };
   const classification = classifyRequest(input);
+  // Deterministic first (docs/07): a simple request that a template covers needs no model call.
+  if (!force && classification.complexity === 'simple' && classification.matchingTemplate) {
+    return fail(
+      `A template fits this request, so no cloud call was made. Call kalam_build_from_template with templateId "${classification.matchingTemplate}". Pass force: true only if the person wants the cloud version anyway.`,
+      { templateId: classification.matchingTemplate, callsLeft: budget.left },
+    );
+  }
   const out = await compileWithCloud(input, classification, { ai: budgetedOrchestrator(provider, budget), appId: newAppId() });
   const label = { provider: out.provider, source: out.source, model: out.model, route: out.route, callsLeft: budget.left };
   if (!out.ok || !out.spec) {
@@ -186,8 +199,9 @@ export function registerFirebaseTool(server: McpServer, provider: AIProvider, bu
     title: 'Build with Firebase AI',
     description:
       "Sends the request text to Firebase AI Logic (Gemini in Google's cloud) and runs Kalam's compiler on the answer. " +
-      'Use it only when the person agreed to send the request to Google and no template fits. Each call costs money and spends the server budget.',
+      'Use it only when the person agreed to send the request to Google and no template fits (it refuses simple requests a template covers unless force is true). Each call costs money and spends the server budget.',
     inputSchema: compileShape,
-    annotations: { readOnlyHint: true, openWorldHint: true },
+    // Not read-only: it sends text to Google, costs money and spends the budget, so hosts should ask first.
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
   }, (a) => compileWithFirebaseTool(a, provider, budget));
 }

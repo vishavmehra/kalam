@@ -1,0 +1,37 @@
+{
+  "kind": "audio-cloud-transcription",
+  "recordedAt": "2026-11-26T00:58:38.047Z",
+  "command": "node scripts/verify-audio-transcribe.mjs",
+  "ok": true,
+  "appCheck": "debug_token_exchanged",
+  "recording": {
+    "mimeType": "audio/wav",
+    "bytes": 323450,
+    "spoken": "Add a customer called Raju Kumar, a blue kurta, chest forty two inches, delivery on Friday."
+  },
+  "outcome": {
+    "source": "cloud",
+    "model": "gemini-3.5-flash-lite",
+    "language": "en",
+    "transcript": "Add a customer called Rajukumar, a Blue Kurta, chest 42 in, delivery on Friday."
+  },
+  "wordsFound": [
+    "raju",
+    "kurta",
+    "friday"
+  ],
+  "wordsExpected": [
+    "raju",
+    "kurta",
+    "friday"
+  ],
+  "latencyMs": 3868,
+  "modelRequests": 1,
+  "event": {
+    "task": "voice_action",
+    "source": "cloud",
+    "provider": "firebase",
+    "success": true,
+    "platform": "other"
+  }
+}

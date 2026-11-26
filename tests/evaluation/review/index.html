@@ -1,0 +1,1781 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'none'; base-uri 'none'"
+    />
+    <title>Kalam scoring page</title>
+    <style>
+      :root {
+        --bg: #f6f4ee;
+        --panel: #ffffff;
+        --ink: #1d2327;
+        --muted: #566067;
+        --line: #d6d2c6;
+        --accent: #1f5f4a;
+        --accent-ink: #ffffff;
+        --focus: #0b5cad;
+        --good: #1b6b3a;
+        --good-bg: #e3f3e8;
+        --mid: #8a5a00;
+        --mid-bg: #fdf0d2;
+        --bad: #a12a1f;
+        --bad-bg: #fbe4e0;
+        --info-bg: #e8eef5;
+        --sketch-ink: #3a3a3a;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #14181a;
+          --panel: #1d2225;
+          --ink: #e8ecee;
+          --muted: #a3adb3;
+          --line: #3a4247;
+          --accent: #6fcaa4;
+          --accent-ink: #0d1f18;
+          --focus: #7db8f0;
+          --good: #7fd69c;
+          --good-bg: #17301f;
+          --mid: #f0c36a;
+          --mid-bg: #33280f;
+          --bad: #f19a90;
+          --bad-bg: #3a1a16;
+          --info-bg: #1f2a36;
+          --sketch-ink: #d0d0d0;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        font-size: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          1rem/1.5 system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      h1,
+      h2,
+      h3 {
+        line-height: 1.25;
+        margin: 0 0 0.5rem;
+      }
+      h1 {
+        font-size: 1.5rem;
+      }
+      h2 {
+        font-size: 1.2rem;
+      }
+      h3 {
+        font-size: 1rem;
+      }
+      p {
+        margin: 0 0 0.75rem;
+      }
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 1.25rem;
+      }
+      button,
+      select,
+      input,
+      textarea {
+        font: inherit;
+        color: inherit;
+      }
+      :focus-visible {
+        outline: 3px solid var(--focus);
+        outline-offset: 2px;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .skip {
+        position: absolute;
+        left: 0.5rem;
+        top: -4rem;
+        background: var(--panel);
+        border: 2px solid var(--focus);
+        padding: 0.5rem 0.75rem;
+        z-index: 10;
+      }
+      .skip:focus {
+        top: 0.5rem;
+      }
+      .wrap {
+        max-width: 78rem;
+        margin: 0 auto;
+        padding: 0 1rem 3rem;
+      }
+      header.top {
+        padding: 1rem 0 0.5rem;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 1rem;
+      }
+      .btn {
+        min-height: 44px;
+        padding: 0.5rem 1rem;
+        border: 2px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        cursor: pointer;
+      }
+      .btn:hover {
+        border-color: var(--accent);
+      }
+      .btn.primary {
+        background: var(--accent);
+        color: var(--accent-ink);
+        border-color: var(--accent);
+        font-weight: 600;
+      }
+      .btn[disabled] {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .drop {
+        display: block;
+        border: 2px dashed var(--line);
+        border-radius: 8px;
+        padding: 1.5rem;
+        text-align: center;
+        cursor: pointer;
+        background: var(--panel);
+      }
+      .drop.over {
+        border-color: var(--accent);
+        background: var(--info-bg);
+      }
+      .drop input {
+        position: absolute;
+        opacity: 0;
+        width: 1px;
+        height: 1px;
+      }
+      .drop:focus-within {
+        outline: 3px solid var(--focus);
+        outline-offset: 2px;
+      }
+      .error {
+        border: 2px solid var(--bad);
+        background: var(--bad-bg);
+        color: var(--ink);
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        margin: 0.75rem 0;
+      }
+      .bar {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: var(--bg);
+        border-bottom: 1px solid var(--line);
+        padding: 0.5rem 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1.25rem;
+        align-items: center;
+      }
+      .bar progress {
+        width: 12rem;
+        height: 1rem;
+        accent-color: var(--accent);
+      }
+      .bar label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        min-height: 32px;
+      }
+      .tally {
+        display: inline-flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 17rem minmax(0, 1fr);
+        gap: 1rem;
+        margin-top: 1rem;
+        align-items: start;
+      }
+      @media (max-width: 62rem) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
+      nav.cases {
+        max-height: calc(100vh - 7rem);
+        overflow: auto;
+        position: sticky;
+        top: 4.5rem;
+      }
+      @media (max-width: 62rem) {
+        nav.cases {
+          position: static;
+          max-height: 16rem;
+        }
+      }
+      nav.cases h2 {
+        font-size: 1rem;
+      }
+      nav.cases ul {
+        list-style: none;
+        padding: 0;
+      }
+      nav.cases li button {
+        width: 100%;
+        text-align: left;
+        border: 0;
+        border-left: 4px solid transparent;
+        background: transparent;
+        padding: 0.35rem 0.5rem;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        gap: 0.5rem;
+        border-radius: 4px;
+        min-height: 32px;
+      }
+      nav.cases li button:hover {
+        background: var(--info-bg);
+      }
+      nav.cases li button[aria-current='true'] {
+        border-left-color: var(--accent);
+        background: var(--info-bg);
+        font-weight: 600;
+      }
+      .pill {
+        display: inline-block;
+        padding: 0 0.5rem;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        border: 1px solid var(--line);
+        white-space: nowrap;
+      }
+      .pill.correct {
+        background: var(--good-bg);
+        color: var(--good);
+        border-color: var(--good);
+      }
+      .pill.partly {
+        background: var(--mid-bg);
+        color: var(--mid);
+        border-color: var(--mid);
+      }
+      .pill.wrong {
+        background: var(--bad-bg);
+        color: var(--bad);
+        border-color: var(--bad);
+      }
+      .pill.info {
+        background: var(--info-bg);
+      }
+      .cols {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+        gap: 1rem;
+      }
+      @media (max-width: 62rem) {
+        .cols {
+          grid-template-columns: 1fr;
+        }
+      }
+      .stack > * + * {
+        margin-top: 1rem;
+      }
+      .asked blockquote {
+        margin: 0;
+        padding: 0.5rem 0.75rem;
+        border-left: 4px solid var(--accent);
+        background: var(--info-bg);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .kv {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 0.15rem 0.75rem;
+        margin: 0;
+      }
+      .kv dt {
+        color: var(--muted);
+      }
+      .kv dd {
+        margin: 0;
+      }
+      .screen {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 0.5rem 0.75rem;
+        margin-bottom: 0.5rem;
+      }
+      .screen h4 {
+        margin: 0 0 0.25rem;
+        font-size: 0.95rem;
+      }
+      .fields {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+      .chip {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 0 0.5rem;
+        font-size: 0.9rem;
+        background: var(--bg);
+      }
+      table.f {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 0.9rem;
+      }
+      table.f th,
+      table.f td {
+        text-align: left;
+        padding: 0.25rem 0.5rem;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      code,
+      pre {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.85rem;
+      }
+      pre {
+        overflow: auto;
+        max-height: 24rem;
+        background: var(--bg);
+        padding: 0.5rem;
+        border-radius: 6px;
+      }
+      .checks {
+        list-style: none;
+        padding: 0;
+      }
+      .checks li {
+        display: flex;
+        gap: 0.5rem;
+        align-items: baseline;
+        padding: 0.15rem 0;
+      }
+      .checks .tag {
+        min-width: 3.2rem;
+        text-align: center;
+      }
+      .score-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+      }
+      .score-row .btn {
+        min-width: 8rem;
+        font-weight: 600;
+      }
+      .score-row .btn[aria-pressed='true'].c {
+        background: var(--good);
+        color: var(--bg);
+        border-color: var(--good);
+      }
+      .score-row .btn[aria-pressed='true'].p {
+        background: var(--mid);
+        color: var(--bg);
+        border-color: var(--mid);
+      }
+      .score-row .btn[aria-pressed='true'].w {
+        background: var(--bad);
+        color: var(--bg);
+        border-color: var(--bad);
+      }
+      kbd {
+        border: 1px solid var(--line);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        padding: 0 0.35rem;
+        font-size: 0.8rem;
+        background: var(--bg);
+      }
+      textarea {
+        width: 100%;
+        min-height: 4.5rem;
+        border: 2px solid var(--line);
+        border-radius: 8px;
+        padding: 0.5rem;
+        background: var(--panel);
+      }
+      .ai-box {
+        border-left: 4px solid var(--focus);
+      }
+      .flag {
+        background: var(--mid-bg);
+        border: 1px solid var(--mid);
+        border-radius: 6px;
+        padding: 0.35rem 0.6rem;
+      }
+      .sketch-wrap {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .sk-page {
+        width: 13rem;
+        border: 2px solid var(--sketch-ink);
+        border-radius: 10px;
+        padding: 0.6rem;
+        background: var(--panel);
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+      }
+      .sk-cap {
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin: 0 0 0.25rem;
+      }
+      .sk-heading {
+        font-weight: 700;
+        font-size: 1.05rem;
+      }
+      .sk-input {
+        border: 1.5px solid var(--sketch-ink);
+        border-radius: 6px;
+        padding: 0.2rem 0.4rem;
+        font-size: 0.85rem;
+      }
+      .sk-input small {
+        display: block;
+        color: var(--muted);
+      }
+      .sk-btn {
+        background: var(--sketch-ink);
+        color: var(--panel);
+        border-radius: 999px;
+        text-align: center;
+        padding: 0.3rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+      }
+      .sk-list {
+        border: 1.5px solid var(--sketch-ink);
+        border-radius: 6px;
+        padding: 0.3rem 0.4rem;
+        font-size: 0.8rem;
+      }
+      .sk-list i {
+        display: block;
+        border-bottom: 1.5px dashed var(--muted);
+        height: 0.9rem;
+      }
+      .sk-stat {
+        border: 1.5px solid var(--sketch-ink);
+        border-radius: 6px;
+        text-align: center;
+        padding: 0.25rem;
+        width: 60%;
+      }
+      .sk-stat b {
+        display: block;
+        font-size: 1.2rem;
+      }
+      .sk-photo {
+        border: 1.5px dashed var(--sketch-ink);
+        border-radius: 6px;
+        padding: 1rem 0.4rem;
+        text-align: center;
+        font-size: 0.85rem;
+      }
+      .sk-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.9rem;
+      }
+      .sk-toggle span {
+        width: 2rem;
+        height: 1rem;
+        border: 1.5px solid var(--sketch-ink);
+        border-radius: 999px;
+        position: relative;
+      }
+      .sk-toggle span::after {
+        content: '';
+        position: absolute;
+        left: 2px;
+        top: 1px;
+        width: 0.6rem;
+        height: 0.6rem;
+        border-radius: 50%;
+        background: var(--sketch-ink);
+      }
+      .sk-text {
+        font-style: italic;
+      }
+      .sk-box {
+        border: 1.5px dashed var(--sketch-ink);
+        padding: 0.5rem;
+        font-size: 0.85rem;
+        text-align: center;
+      }
+      .sk-box.ellipse {
+        border-radius: 50%;
+      }
+      img.photo {
+        max-width: 100%;
+        max-height: 22rem;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+      dialog {
+        border: 2px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--ink);
+        max-width: 34rem;
+      }
+      dialog::backdrop {
+        background: rgba(0, 0, 0, 0.5);
+      }
+      details > summary {
+        cursor: pointer;
+        min-height: 32px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#case-heading">Skip to the case</a>
+    <div class="wrap">
+      <header class="top">
+        <h1>Kalam scoring page</h1>
+        <p class="muted">
+          Read what was asked, look at what Kalam built, and choose Correct, Partly or Wrong. Nothing leaves this page:
+          it makes no network requests. Your scores are saved in this browser as you go.
+        </p>
+      </header>
+
+      <noscript
+        ><p class="error">This page needs JavaScript to show cases. It does not contact any server.</p></noscript
+      >
+
+      <section id="loader" aria-labelledby="loader-h">
+        <h2 id="loader-h" class="sr-only">Open a report</h2>
+        <label class="drop" id="drop" for="file">
+          <strong>Drop the report file here, or press to choose it.</strong><br />
+          <span class="muted"
+            >Use the file that ends in <code>-prescored.json</code> (or the plain <code>-live.json</code> if you have no
+            AI pre-scores). Sketch photos can be dropped here too.</span
+          >
+          <input id="file" type="file" accept=".json,application/json,image/*" multiple />
+        </label>
+        <div id="load-error" class="error" role="alert" hidden></div>
+      </section>
+
+      <section id="app" hidden>
+        <div class="bar" role="region" aria-label="Progress and filters">
+          <div>
+            <progress id="prog" max="1" value="0" aria-labelledby="prog-text"></progress>
+            <span id="prog-text">0 of 0 scored</span>
+          </div>
+          <div class="tally" id="tally" aria-label="Your scores so far"></div>
+          <label for="show"
+            >Show
+            <select id="show">
+              <option value="all">All built apps</option>
+              <option value="unscored">Not scored yet</option>
+              <option value="nothing">Nothing built (no score needed)</option>
+            </select>
+          </label>
+          <label
+            ><input type="checkbox" id="disagree" /> <span>Only cases where I may disagree with the AI</span></label
+          >
+          <label><input type="checkbox" id="hideai" /> <span>Hide the AI score until I score</span></label>
+          <label for="reviewer">Your name <input id="reviewer" type="text" autocomplete="name" size="14" /></label>
+          <button class="btn" id="help-btn" type="button">Keys (?)</button>
+          <button class="btn primary" id="export" type="button">Export my scores</button>
+        </div>
+        <p id="filter-note" class="muted" hidden></p>
+        <p id="status" class="sr-only" role="status" aria-live="polite"></p>
+        <p id="export-note" class="muted" aria-live="polite"></p>
+
+        <div class="layout">
+          <nav class="panel cases" aria-label="Cases">
+            <h2>Cases</h2>
+            <ul id="case-list"></ul>
+            <p class="muted" style="margin-top: 0.75rem">
+              <label for="photos"
+                >Add sketch photos (optional). Name each photo after its case, for example s01-calculator.jpg.</label
+              ><br />
+              <input id="photos" type="file" accept="image/*" multiple />
+            </p>
+          </nav>
+          <main id="card" class="stack" aria-live="off"></main>
+        </div>
+      </section>
+    </div>
+
+    <dialog id="help" aria-labelledby="help-h">
+      <h2 id="help-h">Keyboard keys</h2>
+      <table class="f">
+        <tr>
+          <td><kbd>C</kbd> or <kbd>1</kbd></td>
+          <td>Correct</td>
+        </tr>
+        <tr>
+          <td><kbd>P</kbd> or <kbd>2</kbd></td>
+          <td>Partly</td>
+        </tr>
+        <tr>
+          <td><kbd>W</kbd> or <kbd>3</kbd></td>
+          <td>Wrong</td>
+        </tr>
+        <tr>
+          <td><kbd>A</kbd></td>
+          <td>Same as the AI pre-score</td>
+        </tr>
+        <tr>
+          <td><kbd>X</kbd> or <kbd>Backspace</kbd></td>
+          <td>Clear this score</td>
+        </tr>
+        <tr>
+          <td><kbd>N</kbd></td>
+          <td>Write a note (press Escape to leave the box)</td>
+        </tr>
+        <tr>
+          <td><kbd>J</kbd> or <kbd>Right arrow</kbd></td>
+          <td>Next case</td>
+        </tr>
+        <tr>
+          <td><kbd>K</kbd> or <kbd>Left arrow</kbd></td>
+          <td>Previous case</td>
+        </tr>
+        <tr>
+          <td><kbd>U</kbd></td>
+          <td>Jump to the next case you have not scored</td>
+        </tr>
+        <tr>
+          <td><kbd>E</kbd></td>
+          <td>Export your scores</td>
+        </tr>
+        <tr>
+          <td><kbd>?</kbd></td>
+          <td>Show or hide this list</td>
+        </tr>
+      </table>
+      <p style="margin-top: 0.75rem"><button class="btn primary" id="help-close" type="button">Close</button></p>
+    </dialog>
+
+    <script>
+      (function () {
+        'use strict';
+
+        // ---------- tiny helpers ----------
+        var $ = function (id) {
+          return document.getElementById(id);
+        };
+        function h(tag, props) {
+          var el = document.createElement(tag);
+          if (props) {
+            Object.keys(props).forEach(function (k) {
+              var v = props[k];
+              if (v === undefined || v === null || v === false) return;
+              if (k === 'class') el.className = v;
+              else if (k.slice(0, 2) === 'on') el.addEventListener(k.slice(2), v);
+              else el.setAttribute(k, v === true ? '' : String(v));
+            });
+          }
+          for (var i = 2; i < arguments.length; i++) append(el, arguments[i]);
+          return el;
+        }
+        function append(el, kid) {
+          if (kid === undefined || kid === null || kid === false) return;
+          if (Array.isArray(kid)) {
+            kid.forEach(function (k) {
+              append(el, k);
+            });
+            return;
+          }
+          el.appendChild(kid && kid.nodeType ? kid : document.createTextNode(String(kid)));
+        }
+        var cap = function (s) {
+          return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+        };
+        var VERDICTS = ['correct', 'partly', 'wrong'];
+        var LABEL = { correct: 'Correct', partly: 'Partly', wrong: 'Wrong' };
+        var DATASET = {
+          text: 'Typed request',
+          sketch: 'Sketch',
+          image: 'Photo',
+          audio: 'Voice note',
+          video: 'Video',
+          mixed: 'Mixed input',
+        };
+        var CONTROL = {
+          text: 'text',
+          heading: 'heading',
+          number: 'number box',
+          textInput: 'text box',
+          date: 'date picker',
+          choice: 'choice',
+          toggle: 'switch',
+          counter: 'counter',
+          bigButton: 'button',
+          list: 'list',
+          stat: 'summary number',
+          photo: 'photo',
+        };
+
+        // ---------- state ----------
+        var state = {
+          report: null,
+          cases: [],
+          entries: {},
+          currentId: null,
+          reviewer: '',
+          photos: {},
+          show: 'all',
+          onlyDisagree: false,
+          hideAI: false,
+        };
+        var storeKey = function () {
+          return 'kalam-review:' + state.report.evaluationId;
+        };
+
+        function save() {
+          try {
+            localStorage.setItem(
+              storeKey(),
+              JSON.stringify({ entries: state.entries, reviewer: state.reviewer, currentId: state.currentId }),
+            );
+          } catch (e) {
+            /* storage may be blocked: scores still live on this page */
+          }
+        }
+        function restore() {
+          try {
+            var raw = localStorage.getItem(storeKey());
+            if (!raw) return;
+            var s = JSON.parse(raw);
+            if (s && s.entries) state.entries = s.entries;
+            if (s && typeof s.reviewer === 'string') state.reviewer = s.reviewer;
+            if (s && s.currentId) state.currentId = s.currentId;
+          } catch (e) {
+            /* ignore */
+          }
+        }
+
+        var isBuilt = function (c) {
+          return !!(c.detail && c.detail.spec);
+        };
+        var scoreOf = function (id) {
+          var e = state.entries[id];
+          return e && e.score;
+        };
+        var byId = function (id) {
+          for (var i = 0; i < state.cases.length; i++) if (state.cases[i].id === id) return state.cases[i];
+          return null;
+        };
+        var hasAI = function () {
+          return state.cases.some(function (c) {
+            return c.aiPreScore;
+          });
+        };
+
+        function visible() {
+          return state.cases.filter(function (c) {
+            var built = isBuilt(c);
+            if (state.show === 'nothing') return !built;
+            if (!built) return false;
+            if (state.show === 'unscored' && scoreOf(c.id)) return false;
+            if (state.onlyDisagree && !(c.mayDisagree && c.mayDisagree.flag)) return false;
+            return true;
+          });
+        }
+
+        // ---------- loading ----------
+        function showError(msg) {
+          var e = $('load-error');
+          e.textContent = msg;
+          e.hidden = !msg;
+        }
+
+        function loadReport(text, name) {
+          var data;
+          try {
+            data = JSON.parse(text);
+          } catch (e) {
+            showError(name + ' is not a JSON file.');
+            return;
+          }
+          if (!data || data.schema !== 'kalam-eval-report/1' || !Array.isArray(data.cases)) {
+            showError(name + ' is not a Kalam evaluation report.');
+            return;
+          }
+          if (
+            !data.cases.some(function (c) {
+              return c.detail;
+            })
+          ) {
+            showError('This report has no case details. Make a new one with: node scripts/eval.mjs --live --budget N');
+            return;
+          }
+          showError('');
+          state.report = data;
+          state.cases = data.cases;
+          state.entries = {};
+          state.reviewer = '';
+          state.currentId = null;
+          restore();
+          $('reviewer').value = state.reviewer;
+          $('loader').hidden = true;
+          $('app').hidden = false;
+          $('disagree').disabled = !state.cases.some(function (c) {
+            return c.mayDisagree;
+          });
+          $('hideai').disabled = !hasAI();
+          var first = visible()[0] || state.cases[0];
+          if (!state.currentId || !byId(state.currentId)) state.currentId = first && first.id;
+          attachPendingPhotos();
+          renderAll();
+          focusCard();
+        }
+
+        var pendingPhotos = [];
+        function addPhoto(file) {
+          var key = file.name.replace(/\.[^.]+$/, '').toLowerCase();
+          pendingPhotos.push({ key: key, file: file });
+          attachPendingPhotos();
+        }
+        function attachPendingPhotos() {
+          if (!state.report) return;
+          var used = 0;
+          pendingPhotos.forEach(function (p) {
+            var match = state.cases.filter(function (c) {
+              return (
+                c.id.toLowerCase() === p.key || (p.key.length >= 3 && c.id.toLowerCase().indexOf(p.key + '-') === 0)
+              );
+            })[0];
+            if (match && !state.photos[match.id]) {
+              state.photos[match.id] = URL.createObjectURL(p.file);
+              used++;
+            }
+          });
+          if (used) renderCard();
+        }
+
+        function handleFiles(files) {
+          Array.prototype.forEach.call(files, function (f) {
+            if (/^image\//.test(f.type)) {
+              addPhoto(f);
+              return;
+            }
+            var reader = new FileReader();
+            reader.onload = function () {
+              loadReport(String(reader.result), f.name);
+            };
+            reader.onerror = function () {
+              showError('Could not read ' + f.name + '.');
+            };
+            reader.readAsText(f);
+          });
+        }
+
+        // ---------- rendering ----------
+        function renderAll() {
+          renderBar();
+          renderNav();
+          renderCard();
+        }
+
+        function counts() {
+          var built = state.cases.filter(isBuilt);
+          var t = { total: built.length, done: 0, correct: 0, partly: 0, wrong: 0 };
+          built.forEach(function (c) {
+            var s = scoreOf(c.id);
+            if (s) {
+              t.done++;
+              t[s]++;
+            }
+          });
+          return t;
+        }
+
+        function renderBar() {
+          var t = counts();
+          $('prog').max = Math.max(1, t.total);
+          $('prog').value = t.done;
+          $('prog-text').textContent = t.done + ' of ' + t.total + ' built apps scored';
+          var tally = $('tally');
+          tally.textContent = '';
+          VERDICTS.forEach(function (v) {
+            tally.appendChild(h('span', { class: 'pill ' + v }, LABEL[v] + ' ' + t[v]));
+          });
+          var n = state.cases.length - t.total;
+          var note = $('filter-note');
+          note.hidden = false;
+          note.textContent =
+            n +
+            ' case(s) built nothing, for example because they need real photos or video, or were too vague. They need no score. ' +
+            (hasAI() ? '' : 'This report has no AI pre-scores, so the AI filters are off.');
+        }
+
+        function navLabel(c) {
+          var s = scoreOf(c.id);
+          if (!isBuilt(c)) return h('span', { class: 'pill info' }, 'Nothing built');
+          return s ? h('span', { class: 'pill ' + s }, LABEL[s]) : h('span', { class: 'muted' }, 'To score');
+        }
+
+        function renderNav() {
+          var list = $('case-list');
+          list.textContent = '';
+          var vis = visible();
+          if (!vis.length) list.appendChild(h('li', { class: 'muted' }, 'No cases match these filters.'));
+          vis.forEach(function (c) {
+            var flagged = c.mayDisagree && c.mayDisagree.flag;
+            list.appendChild(
+              h(
+                'li',
+                null,
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    'data-id': c.id,
+                    'aria-current': c.id === state.currentId ? 'true' : 'false',
+                    onclick: function () {
+                      go(c.id);
+                    },
+                  },
+                  h(
+                    'span',
+                    null,
+                    c.id,
+                    flagged ? h('span', { class: 'sr-only' }, ' (may differ from the AI)') : '',
+                    flagged ? ' *' : '',
+                  ),
+                  navLabel(c),
+                ),
+              ),
+            );
+          });
+        }
+
+        function friendlyControls(list) {
+          return list
+            .map(function (t) {
+              return CONTROL[t] || t;
+            })
+            .join(', ');
+        }
+
+        function describeExpected(e, note) {
+          var rows = [];
+          rows.push(['Built by', e.route === 'template' ? 'a ready-made template (no AI)' : 'the cloud AI']);
+          rows.push(['At least', e.minScreens + ' screen(s) and ' + e.minCollections + ' kind(s) of stored record']);
+          if (e.requiredFields && e.requiredFields.length)
+            rows.push([
+              'Fields',
+              e.requiredFields
+                .map(function (f) {
+                  return f.anyOf.slice(0, 4).join(' or ') + (f.type ? ' (' + f.type + ')' : '');
+                })
+                .join('; '),
+            ]);
+          if (e.requiredComponents && e.requiredComponents.length)
+            rows.push(['Controls', friendlyControls(e.requiredComponents)]);
+          if (e.forbiddenText && e.forbiddenText.length) rows.push(['Must not contain', e.forbiddenText.join('; ')]);
+          if (e.lowConfidence) rows.push(['Vague request', 'Kalam should ask a question instead of building']);
+          if (note) rows.push(['Note', note]);
+          var dl = h('dl', { class: 'kv' });
+          rows.forEach(function (r) {
+            dl.appendChild(h('dt', null, r[0]));
+            dl.appendChild(h('dd', null, r[1]));
+          });
+          return dl;
+        }
+
+        function renderSketch(input, photoUrl) {
+          var wrap = h('div', null);
+          if (photoUrl)
+            wrap.appendChild(
+              h(
+                'p',
+                null,
+                h('img', { class: 'photo', src: photoUrl, alt: 'Photo of the hand-drawn sketch for this case' }),
+              ),
+            );
+          if (input.photo)
+            wrap.appendChild(
+              h(
+                'p',
+                { class: 'muted' },
+                'This case was run from a real photo (' +
+                  input.photo.file +
+                  '). Kalam saw the photo, not the layout below.',
+              ),
+            );
+          if (input.sketch) {
+            var pages = h('div', { class: 'sketch-wrap' });
+            input.sketch.pages.forEach(function (p, i) {
+              var page = h('div', {
+                class: 'sk-page',
+                role: 'group',
+                'aria-label': 'Sketch page ' + (i + 1) + ': ' + p.title,
+              });
+              page.appendChild(h('p', { class: 'sk-cap' }, 'Page ' + (i + 1) + ': ' + p.title));
+              p.items.forEach(function (it) {
+                if (it.stamp) {
+                  var l = it.label || '';
+                  if (it.stamp === 'heading') page.appendChild(h('div', { class: 'sk-heading' }, l));
+                  else if (it.stamp === 'textInput')
+                    page.appendChild(h('div', { class: 'sk-input' }, h('small', null, l), ' '));
+                  else if (it.stamp === 'bigButton') page.appendChild(h('div', { class: 'sk-btn' }, l));
+                  else if (it.stamp === 'list')
+                    page.appendChild(h('div', { class: 'sk-list' }, l, h('i'), h('i'), h('i')));
+                  else if (it.stamp === 'stat') page.appendChild(h('div', { class: 'sk-stat' }, h('b', null, '0'), l));
+                  else if (it.stamp === 'photo') page.appendChild(h('div', { class: 'sk-photo' }, 'Photo ', l));
+                  else if (it.stamp === 'toggle') page.appendChild(h('div', { class: 'sk-toggle' }, h('span'), l));
+                  else page.appendChild(h('div', { class: 'sk-box' }, it.stamp + ' ' + l));
+                } else if (it.text !== undefined) page.appendChild(h('div', { class: 'sk-text' }, it.text));
+                else
+                  page.appendChild(
+                    h('div', { class: 'sk-box ' + (it.box === 'ellipse' ? 'ellipse' : '') }, it.label || ''),
+                  );
+              });
+              pages.appendChild(page);
+            });
+            wrap.appendChild(pages);
+          }
+          return wrap;
+        }
+
+        function renderAsked(c) {
+          var d = c.detail,
+            i = d.input,
+            box = h(
+              'section',
+              { class: 'panel asked', 'aria-labelledby': 'asked-h' },
+              h('h3', { id: 'asked-h' }, 'What was asked'),
+            );
+          if (i.text) box.appendChild(h('blockquote', null, i.text));
+          if (i.audioTranscript)
+            box.appendChild(
+              h('p', null, h('strong', null, 'Voice note said: '), h('blockquote', null, i.audioTranscript)),
+            );
+          if (i.untranscribedAudio) box.appendChild(h('p', { class: 'muted' }, 'A voice note with no transcript.'));
+          if (i.images)
+            box.appendChild(
+              h('p', { class: 'muted' }, i.images.count + ' ' + i.images.source + '(s) were meant to be attached.'),
+            );
+          if (i.video)
+            box.appendChild(
+              h(
+                'p',
+                null,
+                'Video, ' + i.video.frames + ' frames, ' + Math.round(i.video.durationSec) + ' seconds. ',
+                i.video.summary || '',
+              ),
+            );
+          if (i.assetNote) box.appendChild(h('p', { class: 'muted' }, 'Real media needed: ' + i.assetNote));
+          if (i.sketch || state.photos[c.id]) box.appendChild(renderSketch(i, state.photos[c.id]));
+          return box;
+        }
+
+        function renderBuilt(c) {
+          var d = c.detail,
+            u = d.understanding;
+          var box = h(
+            'section',
+            { class: 'panel', 'aria-labelledby': 'built-h' },
+            h('h3', { id: 'built-h' }, 'What Kalam built'),
+          );
+          if (!isBuilt(c)) {
+            box.appendChild(h('p', { class: 'error' }, 'Nothing was built. ' + (d.notBuilt || '')));
+            return box;
+          }
+          box.appendChild(h('p', null, h('strong', null, u ? u.appName : d.spec.name), u ? ': ' + u.purpose : ''));
+          var b = c.build,
+            parts = [];
+          if (b.stage === 'template') parts.push('ready-made template, no AI');
+          else
+            parts.push(
+              (b.model || 'cloud AI') +
+                (b.route === 'cloud+repair' ? ', needed the repair pass' : ', first answer was valid'),
+            );
+          parts.push(Math.round(c.latencyMs.build) + ' ms');
+          if (c.usage)
+            parts.push(
+              c.usage.httpCalls +
+                ' request(s), ' +
+                c.usage.inputTokens +
+                ' tokens in, ' +
+                c.usage.outputTokens +
+                ' out',
+            );
+          box.appendChild(h('p', { class: 'muted' }, 'Built by: ' + parts.join('; ')));
+          if (u) {
+            u.screens.forEach(function (s) {
+              box.appendChild(
+                h(
+                  'div',
+                  { class: 'screen' },
+                  h('h4', null, 'Screen: ' + s.title),
+                  s.items.length
+                    ? h(
+                        'ul',
+                        null,
+                        s.items.map(function (it) {
+                          return h('li', null, it);
+                        }),
+                      )
+                    : h('p', { class: 'muted' }, 'Empty'),
+                ),
+              );
+            });
+            if (u.collections.length) {
+              box.appendChild(h('h4', null, 'Information it keeps'));
+              u.collections.forEach(function (col) {
+                box.appendChild(h('p', null, h('strong', null, col.name), ': '));
+                box.appendChild(
+                  h(
+                    'div',
+                    { class: 'fields' },
+                    col.fields.map(function (f) {
+                      return h(
+                        'span',
+                        { class: 'chip' },
+                        f.label + ' (' + f.type + ')' + (f.required ? ', required' : ''),
+                      );
+                    }),
+                  ),
+                );
+              });
+            }
+            if (u.actions.length) {
+              box.appendChild(h('h4', null, 'What the buttons do'));
+              box.appendChild(
+                h(
+                  'ul',
+                  null,
+                  u.actions.map(function (a) {
+                    return h('li', null, a);
+                  }),
+                ),
+              );
+            }
+            if (u.aiFeatures && u.aiFeatures.length) {
+              box.appendChild(h('h4', null, 'AI features inside the app'));
+              box.appendChild(
+                h(
+                  'ul',
+                  null,
+                  u.aiFeatures.map(function (a) {
+                    return h('li', null, a.description + ' (' + a.verified + ')');
+                  }),
+                ),
+              );
+            }
+            if (u.assumptions && u.assumptions.length) {
+              box.appendChild(h('h4', null, 'What Kalam assumed'));
+              box.appendChild(
+                h(
+                  'ul',
+                  null,
+                  u.assumptions.map(function (a) {
+                    return h('li', null, a);
+                  }),
+                ),
+              );
+            }
+          }
+          if (d.formulas && d.formulas.length) {
+            box.appendChild(h('h4', null, 'Formulas'));
+            var tb = h(
+              'table',
+              { class: 'f' },
+              h('thead', null, h('tr', null, h('th', null, 'Where'), h('th', null, 'Shows'), h('th', null, 'Formula'))),
+            );
+            var body = h('tbody');
+            d.formulas.forEach(function (f) {
+              body.appendChild(
+                h('tr', null, h('td', null, f.where), h('td', null, f.label), h('td', null, h('code', null, f.expr))),
+              );
+            });
+            tb.appendChild(body);
+            box.appendChild(tb);
+          }
+          if (d.clarifications && d.clarifications.length) {
+            box.appendChild(h('h4', null, 'Questions Kalam still has'));
+            box.appendChild(
+              h(
+                'ul',
+                null,
+                d.clarifications.map(function (q) {
+                  return h('li', null, q);
+                }),
+              ),
+            );
+          }
+          var det = h('details', null, h('summary', null, 'Technical details (the saved app file)'));
+          det.addEventListener('toggle', function () {
+            if (det.open && !det.querySelector('pre')) det.appendChild(h('pre', null, JSON.stringify(d.spec, null, 2)));
+          });
+          box.appendChild(det);
+          return box;
+        }
+
+        function renderChecks(c) {
+          var checks = c.detail.checks || [];
+          var box = h(
+            'section',
+            { class: 'panel', 'aria-labelledby': 'checks-h' },
+            h('h3', { id: 'checks-h' }, 'Automatic checks (no AI involved)'),
+          );
+          if (!checks.length) {
+            box.appendChild(h('p', { class: 'muted' }, 'No checks ran because nothing was built.'));
+            return box;
+          }
+          var fails = checks.filter(function (x) {
+            return x.status === 'fail';
+          }).length;
+          box.appendChild(h('p', { class: 'muted' }, fails ? fails + ' check(s) failed.' : 'Every check passed.'));
+          box.appendChild(
+            h(
+              'ul',
+              { class: 'checks' },
+              checks.map(function (x) {
+                var cls = x.status === 'pass' ? 'correct' : x.status === 'fail' ? 'wrong' : 'info';
+                return h(
+                  'li',
+                  null,
+                  h(
+                    'span',
+                    { class: 'pill tag ' + cls },
+                    x.status === 'pass' ? 'Pass' : x.status === 'fail' ? 'Fail' : 'Note',
+                  ),
+                  h('span', null, x.label + (x.detail ? ' (' + x.detail + ')' : '')),
+                );
+              }),
+            ),
+          );
+          return box;
+        }
+
+        function renderAI(c) {
+          var ai = c.aiPreScore;
+          var box = h(
+            'section',
+            { class: 'panel ai-box', 'aria-labelledby': 'ai-h' },
+            h('h3', { id: 'ai-h' }, 'AI pre-score (advice, not a human score)'),
+          );
+          if (!isBuilt(c)) {
+            box.appendChild(h('p', { class: 'muted' }, 'Nothing was built, so there is nothing to score.'));
+            return box;
+          }
+          if (!ai) {
+            box.appendChild(
+              h(
+                'p',
+                { class: 'muted' },
+                'This report has no AI pre-score. Run: node scripts/eval-judge.mjs --budget N',
+              ),
+            );
+            return box;
+          }
+          if (state.hideAI && !scoreOf(c.id)) {
+            box.appendChild(h('p', { class: 'muted' }, 'Hidden until you score this case.'));
+            return box;
+          }
+          if (!ai.score) {
+            box.appendChild(h('p', null, ai.note || 'The AI gave no score.'));
+          } else {
+            box.appendChild(
+              h(
+                'p',
+                null,
+                h('span', { class: 'pill ' + ai.score }, 'AI says ' + LABEL[ai.score]),
+                ' ',
+                h('span', { class: 'muted' }, 'confidence ' + Math.round((ai.confidence || 0) * 100) + '%'),
+              ),
+            );
+            box.appendChild(
+              h(
+                'ul',
+                null,
+                ai.reasons.map(function (r) {
+                  return h('li', null, r);
+                }),
+              ),
+            );
+          }
+          var m = c.mayDisagree;
+          if (m && m.flag)
+            box.appendChild(
+              h(
+                'div',
+                { class: 'flag' },
+                h('strong', null, 'You may disagree with the AI here. '),
+                m.reasons.join('. ') + '.',
+              ),
+            );
+          return box;
+        }
+
+        function renderScore(c) {
+          var cur = scoreOf(c.id),
+            entry = state.entries[c.id] || {};
+          var box = h(
+            'section',
+            { class: 'panel', 'aria-labelledby': 'score-h' },
+            h('h3', { id: 'score-h' }, 'Your score'),
+          );
+          box.appendChild(
+            h(
+              'p',
+              { class: 'muted' },
+              'Correct: I could use this app as it is. Partly: usable, but something important is missing or wrong. Wrong: not what was asked, or not usable.',
+            ),
+          );
+          var row = h('div', { class: 'score-row', role: 'group', 'aria-label': 'Choose a score' });
+          [
+            ['correct', 'c', 'C'],
+            ['partly', 'p', 'P'],
+            ['wrong', 'w', 'W'],
+          ].forEach(function (x) {
+            row.appendChild(
+              h(
+                'button',
+                {
+                  type: 'button',
+                  id: 'score-' + x[0],
+                  class: 'btn ' + x[1],
+                  'aria-pressed': cur === x[0] ? 'true' : 'false',
+                  'aria-keyshortcuts': x[2],
+                  onclick: function () {
+                    setScore(c.id, x[0], true);
+                  },
+                },
+                LABEL[x[0]] + ' (' + x[2] + ')',
+              ),
+            );
+          });
+          var ai = c.aiPreScore;
+          if (ai && ai.score)
+            row.appendChild(
+              h(
+                'button',
+                {
+                  type: 'button',
+                  id: 'same-ai',
+                  class: 'btn',
+                  'aria-keyshortcuts': 'A',
+                  onclick: function () {
+                    setScore(c.id, ai.score, true);
+                  },
+                },
+                'Same as AI (A)',
+              ),
+            );
+          if (cur)
+            row.appendChild(
+              h(
+                'button',
+                {
+                  type: 'button',
+                  id: 'clear',
+                  class: 'btn',
+                  onclick: function () {
+                    clearScore(c.id);
+                  },
+                },
+                'Clear (X)',
+              ),
+            );
+          box.appendChild(row);
+          box.appendChild(
+            h('p', { style: 'margin-top:.75rem' }, h('label', { for: 'note' }, 'Note (optional, press N to write)')),
+          );
+          var ta = h('textarea', { id: 'note', rows: '3' });
+          ta.value = entry.note || '';
+          ta.addEventListener('input', function () {
+            setNote(c.id, ta.value);
+          });
+          ta.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+              ta.blur();
+            }
+          });
+          box.appendChild(ta);
+          return box;
+        }
+
+        function renderCard() {
+          var card = $('card');
+          card.textContent = '';
+          var c = byId(state.currentId);
+          if (!c) {
+            card.appendChild(h('p', { class: 'panel muted' }, 'No case to show.'));
+            return;
+          }
+          var vis = visible(),
+            pos = vis.findIndex(function (x) {
+              return x.id === c.id;
+            });
+          var head = h(
+            'header',
+            { class: 'panel' },
+            h('h2', { id: 'case-heading', tabindex: '-1' }, c.id + ': ' + c.detail.title),
+            h(
+              'p',
+              { class: 'muted' },
+              (DATASET[c.dataset] || c.dataset) +
+                (c.language ? ', ' + c.language : '') +
+                (c.ambiguous ? ', ambiguous' : '') +
+                (pos >= 0 ? '. Case ' + (pos + 1) + ' of ' + vis.length + ' in this list.' : '.'),
+            ),
+            h(
+              'div',
+              { class: 'score-row' },
+              h(
+                'button',
+                {
+                  type: 'button',
+                  class: 'btn',
+                  id: 'prev',
+                  onclick: function () {
+                    step(-1);
+                  },
+                },
+                'Previous (K)',
+              ),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  class: 'btn',
+                  id: 'next',
+                  onclick: function () {
+                    step(1);
+                  },
+                },
+                'Next (J)',
+              ),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  class: 'btn',
+                  id: 'next-unscored',
+                  onclick: function () {
+                    jumpUnscored();
+                  },
+                },
+                'Next not scored (U)',
+              ),
+            ),
+          );
+          card.appendChild(head);
+          var cols = h(
+            'div',
+            { class: 'cols' },
+            h(
+              'div',
+              { class: 'stack' },
+              renderAsked(c),
+              h(
+                'section',
+                { class: 'panel', 'aria-labelledby': 'exp-h' },
+                h('h3', { id: 'exp-h' }, 'What the team expected, at least'),
+                describeExpected(c.detail.expected, c.detail.goldenNote),
+              ),
+            ),
+            h('div', { class: 'stack' }, renderBuilt(c)),
+          );
+          card.appendChild(cols);
+          card.appendChild(h('div', { class: 'cols' }, renderChecks(c), renderAI(c)));
+          if (isBuilt(c)) card.appendChild(renderScore(c));
+        }
+
+        function focusCard() {
+          var hd = $('case-heading');
+          if (hd) hd.focus({ preventScroll: false });
+        }
+
+        // ---------- actions ----------
+        function say(msg) {
+          $('status').textContent = msg;
+        }
+
+        function go(id) {
+          state.currentId = id;
+          save();
+          renderNav();
+          renderCard();
+          focusCard();
+        }
+        function step(dir) {
+          var vis = visible();
+          if (!vis.length) return;
+          var pos = vis.findIndex(function (x) {
+            return x.id === state.currentId;
+          });
+          var next = pos < 0 ? vis[0] : vis[Math.max(0, Math.min(vis.length - 1, pos + dir))];
+          go(next.id);
+        }
+        function jumpUnscored() {
+          var vis = visible().filter(function (c) {
+            return isBuilt(c) && !scoreOf(c.id);
+          });
+          if (!vis.length) {
+            say('Every case in this list has a score.');
+            return;
+          }
+          var all = visible(),
+            pos = all.findIndex(function (x) {
+              return x.id === state.currentId;
+            });
+          var after = all.slice(pos + 1).filter(function (c) {
+            return isBuilt(c) && !scoreOf(c.id);
+          })[0];
+          go((after || vis[0]).id);
+        }
+        function setScore(id, score, advance) {
+          if (!isBuilt(byId(id))) return;
+          var vis = visible(),
+            pos = vis.findIndex(function (x) {
+              return x.id === id;
+            });
+          var e = state.entries[id] || (state.entries[id] = {});
+          e.score = score;
+          save();
+          var t = counts();
+          say('Scored ' + id + ' as ' + LABEL[score] + '. ' + t.done + ' of ' + t.total + ' done.');
+          $('export-note').textContent = '';
+          renderBar();
+          if (advance) {
+            var list = visible();
+            var from = list.findIndex(function (x) {
+              return x.id === id;
+            });
+            var start = from >= 0 ? from + 1 : Math.min(pos, list.length);
+            var next =
+              list.slice(start).filter(function (c) {
+                return isBuilt(c) && !scoreOf(c.id);
+              })[0] ||
+              list.filter(function (c) {
+                return isBuilt(c) && !scoreOf(c.id);
+              })[0];
+            if (next) {
+              go(next.id);
+              return;
+            }
+          }
+          renderNav();
+          renderCard();
+          var btn = $('score-' + score);
+          if (btn) btn.focus();
+        }
+        function clearScore(id) {
+          var e = state.entries[id];
+          if (!e) return;
+          delete e.score;
+          if (!e.note) delete state.entries[id];
+          save();
+          say('Cleared the score for ' + id + '.');
+          renderBar();
+          renderNav();
+          renderCard();
+        }
+        function setNote(id, text) {
+          var e = state.entries[id] || (state.entries[id] = {});
+          e.note = text;
+          if (!text && !e.score) delete state.entries[id];
+          save();
+        }
+
+        function exportScores() {
+          var scores = [],
+            orphan = 0;
+          state.cases.forEach(function (c) {
+            var e = state.entries[c.id];
+            if (!e) return;
+            if (e.score)
+              scores.push(
+                Object.assign({ id: c.id, score: e.score }, e.note && e.note.trim() ? { note: e.note.trim() } : {}),
+              );
+            else if (e.note && e.note.trim()) orphan++;
+          });
+          if (!scores.length) {
+            $('export-note').textContent = 'Score at least one case before exporting.';
+            return;
+          }
+          var file = {
+            schema: 'kalam-human-scores/1',
+            evaluationId: state.report.evaluationId,
+            datasetHash: state.report.datasetHash,
+            exportedAt: new Date().toISOString(),
+            scores: scores,
+          };
+          if (state.reviewer.trim()) file.reviewer = state.reviewer.trim();
+          var blob = new Blob([JSON.stringify(file, null, 2) + '\n'], { type: 'application/json' });
+          var url = URL.createObjectURL(blob);
+          var a = h('a', { href: url, download: 'kalam-scores-' + state.report.evaluationId + '.json' });
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(function () {
+            URL.revokeObjectURL(url);
+          }, 1000);
+          var t = counts();
+          $('export-note').textContent =
+            'Exported ' +
+            scores.length +
+            ' score(s) as kalam-scores-' +
+            state.report.evaluationId +
+            '.json. ' +
+            (t.done < t.total ? t.total - t.done + ' built app(s) are not scored yet and were left out. ' : '') +
+            (orphan ? orphan + ' note(s) on unscored cases were left out. ' : '') +
+            'Next: node scripts/eval-merge-scores.mjs ' +
+            'kalam-scores-' +
+            state.report.evaluationId +
+            '.json';
+        }
+
+        // ---------- wiring ----------
+        $('file').addEventListener('change', function (e) {
+          handleFiles(e.target.files);
+          e.target.value = '';
+        });
+        $('photos').addEventListener('change', function (e) {
+          Array.prototype.forEach.call(e.target.files, addPhoto);
+          e.target.value = '';
+        });
+        var drop = $('drop');
+        ['dragenter', 'dragover'].forEach(function (n) {
+          document.addEventListener(n, function (e) {
+            e.preventDefault();
+            drop.classList.add('over');
+          });
+        });
+        ['dragleave', 'drop'].forEach(function (n) {
+          document.addEventListener(n, function (e) {
+            e.preventDefault();
+            drop.classList.remove('over');
+          });
+        });
+        document.addEventListener('drop', function (e) {
+          if (e.dataTransfer && e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+        });
+        $('show').addEventListener('change', function (e) {
+          state.show = e.target.value;
+          var v = visible();
+          if (
+            v.length &&
+            !v.some(function (c) {
+              return c.id === state.currentId;
+            })
+          )
+            state.currentId = v[0].id;
+          renderAll();
+        });
+        $('disagree').addEventListener('change', function (e) {
+          state.onlyDisagree = e.target.checked;
+          var v = visible();
+          if (
+            v.length &&
+            !v.some(function (c) {
+              return c.id === state.currentId;
+            })
+          )
+            state.currentId = v[0].id;
+          renderAll();
+        });
+        $('hideai').addEventListener('change', function (e) {
+          state.hideAI = e.target.checked;
+          renderCard();
+        });
+        $('reviewer').addEventListener('input', function (e) {
+          state.reviewer = e.target.value;
+          save();
+        });
+        $('export').addEventListener('click', exportScores);
+        var help = $('help');
+        var toggleHelp = function () {
+          if (help.open) help.close();
+          else if (help.showModal) help.showModal();
+          else help.setAttribute('open', '');
+        };
+        $('help-btn').addEventListener('click', toggleHelp);
+        $('help-close').addEventListener('click', toggleHelp);
+
+        document.addEventListener('keydown', function (e) {
+          if (e.ctrlKey || e.metaKey || e.altKey) return;
+          var t = e.target,
+            tag = t && t.tagName;
+          if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+          if (!state.report) return;
+          var k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+          var c = byId(state.currentId);
+          var built = c && isBuilt(c);
+          var handled = true;
+          if (k === '?') toggleHelp();
+          else if ((k === 'c' || k === '1') && built) setScore(c.id, 'correct', true);
+          else if ((k === 'p' || k === '2') && built) setScore(c.id, 'partly', true);
+          else if ((k === 'w' || k === '3') && built) setScore(c.id, 'wrong', true);
+          else if (k === 'a' && built && c.aiPreScore && c.aiPreScore.score) setScore(c.id, c.aiPreScore.score, true);
+          else if ((k === 'x' || k === 'Backspace') && built) clearScore(c.id);
+          else if (k === 'n' && built) {
+            var ta = $('note');
+            if (ta) {
+              e.preventDefault();
+              ta.focus();
+            }
+          } else if (k === 'j' || k === 'ArrowRight') step(1);
+          else if (k === 'k' || k === 'ArrowLeft') step(-1);
+          else if (k === 'u') jumpUnscored();
+          else if (k === 'e') exportScores();
+          else handled = false;
+          if (handled && k !== 'n') e.preventDefault();
+        });
+
+        // Test hook: lets a script load a report without a file picker. Not used by people.
+        window.__kalamReview = {
+          load: function (text) {
+            loadReport(text, 'report');
+          },
+          state: state,
+        };
+      })();
+    </script>
+  </body>
+</html>

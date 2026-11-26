@@ -1,5 +1,347 @@
 {
-  "$meta": { "draft": false },
+  "$meta": {
+    "draft": false
+  },
+  "media": {
+    "kind": {
+      "image": "picture",
+      "audio": "sound recording",
+      "video": "video",
+      "file": "file"
+    },
+    "unit": {
+      "mb": "{n} MB",
+      "seconds": {
+        "one": "{count} second",
+        "other": "{count} seconds"
+      },
+      "minutes": {
+        "one": "{count} minute",
+        "other": "{count} minutes"
+      }
+    },
+    "error": {
+      "permission": "Kalam is not allowed to use this. Allow it in your device settings, or attach an existing file instead.",
+      "unsupportedKind": "This file is a {found}, not a {what}. Choose another file.",
+      "unsupported": "Kalam cannot read this kind of {what}. Choose another file.",
+      "tooLongDuration": "This {what} is {length} long. Choose one that is {limit} or shorter, or trim it first.",
+      "tooLargeSize": "This {what} is {size}. The limit is {limit}. Compress it, trim it or choose another file.",
+      "tooLarge": "This {what} is too large. Compress it, trim it or choose another file.",
+      "damaged": "This {what} looks damaged or empty. Choose another file.",
+      "imageDecode": "This picture could not be opened. Try a JPEG or PNG.",
+      "audioRecording": "The recording stopped unexpectedly. Try again, or attach an existing recording.",
+      "audioTranscription": "Kalam could not turn this recording into text. Try again, type what it says, or continue without it.",
+      "videoDecode": "This video could not be played here. Try an MP4 file.",
+      "videoExtraction": "Kalam could not read pictures from this video. Try a shorter video, or describe it in words instead.",
+      "drawingExport": "The drawing could not be turned into a picture. Your drawing is saved. Try again.",
+      "storage": "This file could not be kept on this device. It stays in this session until you leave it.",
+      "contextBuild": "Kalam could not put your inputs together. Your inputs are saved. Try again.",
+      "inputTooLarge": "There is more here than Kalam can send at once. Remove a few pictures or shorten the description.",
+      "cloudConsent": "This needs Firebase cloud AI, which is off. Turn it on in Settings, or keep going without it.",
+      "offline": "You are offline. Your session is saved. Try again when you are connected.",
+      "interrupted": "Kalam was closed while it worked on this {what}. Replace it or remove it.",
+      "missing": "This {what} is no longer on this device. Replace it or remove it.",
+      "onlineService": "The online speech service",
+      "speechConsent": "This device has no speech model for this language. {service} can turn the recording into text, but it will hear the recording. Kalam does not keep it there. You can also type what it says.",
+      "speechBlockedOffline": "Offline only is on, and this device has no speech model for this language. Type what the recording says instead.",
+      "speechBlockedCloudOff": "Online AI is off in Settings, and this device has no speech model for this language. Type what the recording says instead."
+    },
+    "status": {
+      "pending": "Waiting",
+      "validating": "Checking the file",
+      "processing_local": "Working on this device",
+      "preparing_cloud": "Getting ready to send",
+      "ready": "Ready",
+      "partial": "Partly understood",
+      "failed": "Could not be used"
+    },
+    "session": {
+      "draft": "New",
+      "collecting": "Adding inputs",
+      "preprocessing": "Working on your files",
+      "ready_for_review": "Ready to check",
+      "compiling": "Building",
+      "understanding_review": "Check what Kalam understood",
+      "completed": "Done",
+      "attachment_failed": "One file could not be used. The rest are fine.",
+      "preprocessing_failed": "Kalam could not finish reading your files. Your inputs are saved.",
+      "compilation_failed": "Building did not finish. Your inputs are saved, so you can try again.",
+      "interrupted": "Kalam was closed while working. Your inputs are saved, so you can carry on.",
+      "cancelled": "Stopped. Your inputs are kept.",
+      "restored": "Your last session is back, with its files.",
+      "restoredMissing": {
+        "one": "Your last session is back. {count} file is no longer on this device.",
+        "other": "Your last session is back. {count} files are no longer on this device."
+      }
+    },
+    "conflict": {
+      "heading": "A few things to confirm",
+      "answered": "Answered",
+      "change": "Change answer",
+      "where": {
+        "text": "Your description",
+        "voice": "Your voice note",
+        "drawing": "your drawing"
+      },
+      "nField": {
+        "one": "{count} field",
+        "other": "{count} fields"
+      },
+      "nScreen": {
+        "one": "{count} screen",
+        "other": "{count} screens"
+      },
+      "fieldsSays": "{a} says {na}, but {b} says {nb}. Which should Kalam use?",
+      "fieldsShows": "{a} says {na}, but {b} shows {nb}. Which should Kalam use?",
+      "screensSays": "{a} says {na}, but {b} says {nb}. Which should Kalam use?",
+      "screensShows": "{a} says {na}, but {b} shows {nb}. Which should Kalam use?",
+      "languageSpoke": "You spoke in {said}, but the app language is {chosen}. Which language should the app use?",
+      "languageAsked": "You asked for {said}, but the app language is {chosen}. Which language should the app use?",
+      "currency": "Your inputs mention {a} and {b}. Which currency should the app use?",
+      "useFields": {
+        "one": "{count} field, as in {where}",
+        "other": "{count} fields, as in {where}"
+      },
+      "useScreens": {
+        "one": "{count} screen, as in {where}",
+        "other": "{count} screens, as in {where}"
+      },
+      "useLanguage": "Use {name}",
+      "useCurrency": "Use {name}"
+    },
+    "workflow": {
+      "nameLabel": "What the video shows",
+      "stepPlaceholder": "What happens here?",
+      "heading": "Steps in your video",
+      "intro": "Kalam put these steps in time order. Check each one, fix the words, and remove anything that is not part of the task.",
+      "confirm": "These steps look right",
+      "confirmed": "Checked",
+      "addStep": "Add a step",
+      "moveUp": "Move step {n} up",
+      "moveDown": "Move step {n} down",
+      "remove": "Remove step {n}",
+      "stepLabel": "Step {n}, at {clock}",
+      "describeWithAI": "Describe the steps with cloud AI",
+      "describing": "Asking Firebase cloud AI to describe the steps",
+      "describedBy": {
+        "draft": "Times from your video",
+        "transcript": "Words from the video sound",
+        "on_device": "Described on this device",
+        "cloud": "Described by Firebase cloud AI",
+        "person": "Edited by you"
+      },
+      "aiFailed": "Cloud AI could not describe the steps. You can write them yourself.",
+      "locked": "You changed or checked these steps, so Kalam keeps your version.",
+      "keptYours": "You changed the steps while cloud AI was working, so Kalam kept your version.",
+      "noSpeech": "Speech in this video cannot be turned into text on this device, so only its pictures are used.",
+      "cloudNote": "Up to six pictures from the video are sent to Firebase cloud AI. The video itself stays on this device."
+    },
+    "audio": {
+      "choose": "Choose an audio file",
+      "replace": "Replace audio file",
+      "stop": "Stop",
+      "play": "Play",
+      "pause": "Pause",
+      "resume": "Resume",
+      "remove": "Remove audio",
+      "transcribe": "Turn into text",
+      "transcribing": "Turning the recording into text on this device",
+      "transcriptLabel": "What the recording says",
+      "transcriptHelper": "Fix names, numbers and dates. Kalam keeps the first version too.",
+      "originalLabel": "First version",
+      "showOriginal": "Show the first version",
+      "hideOriginal": "Hide the first version",
+      "restoreOriginal": "Use the first version again",
+      "webUnsupported": "This browser cannot turn an audio file into text. Type what it says below, or record your voice in the Voice tab instead.",
+      "androidTooOld": "Turning a file into text needs Android 13 or newer. Type what it says below instead.",
+      "formatUnreadable": "Kalam could not read the sound format of this file. Try a WAV or MP3 file, or type what it says.",
+      "sounds": "Sounds like {name}",
+      "kept": "The recording is kept on this device only.",
+      "notKept": "The recording is not kept after you leave this session. Turn on \"Keep recordings\" in Settings to keep it.",
+      "tooLargeToKeep": "This recording is too large to keep on this device. You can play it until you leave this session.",
+      "useOnlineSpeech": "Use the online speech service",
+      "gone": "The recording is no longer on this device. Type what it says instead.",
+      "pausedAt": "Paused at {clock}",
+      "recordingPaused": "Paused. Press Resume to carry on.",
+      "recordingResumed": "Listening again."
+    },
+    "video": {
+      "choose": "Choose a video",
+      "replace": "Replace video",
+      "record": "Record a video",
+      "stop": "Stop",
+      "noteLabel": "Anything Kalam should know about this video",
+      "noteHelper": "For example: \"This is how I update a customer balance.\"",
+      "notKeptOnWeb": "The video itself is not kept after the page reloads. Its pictures and steps are.",
+      "missing": "The video file is no longer on this device. Its pictures and steps are kept.",
+      "playerLabel": "Video preview"
+    },
+    "attachment": {
+      "remove": "Remove {name}",
+      "replace": "Replace {name}",
+      "describe": "Describe {name}",
+      "zoom": "Show {name} larger",
+      "rotate": "Turn {name} a quarter to the right",
+      "noteLabel": "What is this?",
+      "noteHelper": "For example: \"This is the paper register I use now.\"",
+      "close": "Close",
+      "duplicate": "This is the same file as {name}, so it was not added again.",
+      "listLabel": "Attached files",
+      "photoName": "Photo {n}",
+      "audioName": "Recording {n}",
+      "videoName": "Video {n}",
+      "photoLimit": "{n} photos is the limit. Some were not added.",
+      "originalKept": "The original stays on this device. Only a smaller copy is ever sent.",
+      "originalTooLarge": "The original is too large to keep here. The smaller copy is kept.",
+      "droppedSkipped": {
+        "one": "{count} file was not a picture and was skipped.",
+        "other": "{count} files were not pictures and were skipped."
+      }
+    },
+    "handoff": {
+      "excluded": "Kalam can send {max} pictures at a time, so these were left out: {parts}. Remove some pictures if you want them included.",
+      "part": {
+        "drawing": {
+          "one": "{count} drawing page",
+          "other": "{count} drawing pages"
+        },
+        "photo": {
+          "one": "{count} photo",
+          "other": "{count} photos"
+        },
+        "video_frame": {
+          "one": "{count} video frame",
+          "other": "{count} video frames"
+        },
+        "screenshot": {
+          "one": "{count} screenshot",
+          "other": "{count} screenshots"
+        }
+      },
+      "notesLeftOut": {
+        "one": "Your description is long, so {count} note about your files was left out. Shorten the description to include it.",
+        "other": "Your description is long, so {count} notes about your files were left out. Shorten the description to include them."
+      },
+      "descriptionShortened": "The end of your description was shortened to make room for your answers to Kalam's questions."
+    }
+  },
+  "templates": {
+    "page": {
+      "title": "Templates",
+      "intro": "Start from a ready-made app. Look at it with made-up entries first, then make it your own.",
+      "packsTitle": "Starter packs",
+      "packsIntro": "A few apps for one kind of work, added together.",
+      "galleryTitle": "All templates"
+    },
+    "search": {
+      "label": "Search templates",
+      "placeholder": "Search, for example credit, attendance or medicine",
+      "categoryLabel": "Category",
+      "results": {
+        "one": "{count} template",
+        "other": "{count} templates"
+      },
+      "emptyTitle": "No template matches that",
+      "emptyBody": "Try a shorter word, or pick All. You can also describe the app you want and Kalam will build it."
+    },
+    "card": {
+      "open": "Preview {title}",
+      "openHint": "Shows the template with made-up entries before you add it.",
+      "madeBy": "Made by {author}"
+    },
+    "preview": {
+      "exampleBadge": "Example entries",
+      "exampleNote": "The entries in this preview are made up. They are not copied into your app.",
+      "regionLabel": "Preview of {title} with example entries",
+      "firstScreen": "First screen",
+      "otherScreens": "Other screens",
+      "fieldsOn": "Fields",
+      "more": "and {n} more",
+      "emptyList": "Nothing here yet",
+      "goodToKnow": "Good to know",
+      "offline": "Works with no signal. Your entries stay on this device.",
+      "noAi": "No AI needed.",
+      "nameLabel": "Name of your app",
+      "nameHelper": "You can change it any time.",
+      "lookLabel": "Look",
+      "use": "Use this template",
+      "using": "Adding to your shelf",
+      "close": "Close",
+      "added": "{name} is on your shelf",
+      "failed": "The template could not be added. Nothing was saved."
+    },
+    "looks": {
+      "calm_green": "Calm green",
+      "warm_paper": "Warm paper",
+      "ocean_blue": "Ocean blue",
+      "soft_lavender": "Soft lavender",
+      "minimal_neutral": "Plain",
+      "high_contrast": "High contrast"
+    },
+    "packs": {
+      "open": "Open the {title} pack",
+      "openHint": "Shows what is in the pack and how to start.",
+      "whoFor": "Who it is for",
+      "howToStart": "How to start",
+      "tips": "Tips",
+      "inPack": "Apps in this pack",
+      "close": "Close",
+      "status": {
+        "new": "New",
+        "have": "On your shelf"
+      },
+      "modes": {
+        "large": "large mode",
+        "highContrast": "high contrast",
+        "simple": "simple mode",
+        "readAloud": "read aloud"
+      },
+      "listAnd": "{rest} and {last}",
+      "modesLine": "These apps work well with {list}. You can turn that on in Settings. Nothing is switched on for you."
+    },
+    "shelf": {
+      "label": "Show apps by category",
+      "archive": "Archived {n}",
+      "backToShelf": "Back to my shelf",
+      "archived": "Moved to the archive. Nothing was deleted.",
+      "unarchived": "Moved back to your shelf.",
+      "archiveFailed": "The app could not be moved. Nothing was changed.",
+      "emptyArchive": "Nothing is archived."
+    },
+    "clone": {
+      "open": "Make a copy",
+      "openHint": "Makes a separate copy of this app.",
+      "cancel": "Cancel"
+    },
+    "entry": {
+      "open": "Export this entry",
+      "title": "Export this entry",
+      "intro": "Save it as a file, or copy it as text to paste into a message. Nothing is sent anywhere.",
+      "json": "Save as a file (JSON)",
+      "csv": "Save for a spreadsheet (CSV)",
+      "text": "Copy as text",
+      "pictures": "Pictures and signatures are not included.",
+      "saved": "The file is ready.",
+      "notSaved": "Saving files is not available on this device.",
+      "copied": "Copied. You can paste it into a message.",
+      "failed": "That did not work. Nothing was changed.",
+      "close": "Close"
+    },
+    "restore": {
+      "changesHeading": "What would change",
+      "more": {
+        "one": "and {count} more change",
+        "other": "and {count} more changes"
+      },
+      "showDetail": "Show details",
+      "hideDetail": "Hide details",
+      "before": "Before:",
+      "after": "After:",
+      "entriesHeading": "Your saved entries",
+      "problemsHeading": "This version cannot be restored",
+      "ok": "OK"
+    }
+  },
   "app": {
     "name": "Kalam",
     "tagline": "Draw the app you need. Own it forever."
@@ -45,7 +387,15 @@
     "preparing": "Preparing on-device AI",
     "notDownloaded": "On-device AI not downloaded",
     "unavailable": "On-device AI unavailable",
-    "checking": "Checking on-device AI"
+    "checking": "Checking on-device AI",
+    "failed": "AI status is unavailable",
+    "short": {
+      "ready": "On-device AI",
+      "preparing": "Preparing AI",
+      "notDownloaded": "Set up AI",
+      "unavailable": "No on-device AI",
+      "checking": "Checking AI"
+    }
   },
   "source": {
     "template": "Template",
@@ -63,10 +413,22 @@
   },
   "time": {
     "justNow": "Just now",
-    "minutesAgo": { "one": "{count} min ago", "other": "{count} min ago" },
-    "hoursAgo": { "one": "{count} h ago", "other": "{count} h ago" },
+    "minutesAgo": {
+      "one": "{count} min ago",
+      "other": "{count} min ago"
+    },
+    "hoursAgo": {
+      "one": "{count} h ago",
+      "other": "{count} h ago"
+    },
     "yesterday": "Yesterday",
-    "daysAgo": { "one": "{count} day ago", "other": "{count} days ago" }
+    "daysAgo": {
+      "one": "{count} day ago",
+      "other": "{count} days ago"
+    },
+    "ms": "{value} ms",
+    "seconds": "{value} s",
+    "notTimed": "Not timed"
   },
   "errors": {
     "generic": "Something went wrong.",
@@ -80,7 +442,10 @@
   "shelf": {
     "title": "Your shelf",
     "create": "Create an app",
-    "count": { "one": "{count} app", "other": "{count} apps" },
+    "count": {
+      "one": "{count} app",
+      "other": "{count} apps"
+    },
     "loading": "Opening your shelf…",
     "loadError": "Could not read your apps from this device.",
     "pinned": "Pinned",
@@ -88,15 +453,26 @@
       "label": "Search your apps",
       "hint": "Search looks at app names and descriptions.",
       "clear": "Clear search",
-      "none": "No apps match your search."
+      "none": "No apps match your search.",
+      "noneFor": "No apps match “{query}”"
     },
     "empty": {
       "title": "Nothing on your shelf yet",
-      "cta": "Create your first app",
+      "cta": "Make your first app",
       "ideas": "Or start from an idea",
       "expenses": "A personal expense tracker",
       "measurements": "A customer measurement book",
-      "habits": "A daily habit counter"
+      "habits": "A daily habit counter",
+      "attendance": "An attendance register",
+      "body": "Apps you make live here and keep working without internet. Describe one in your own words, or start from an idea.",
+      "ideaHint": "{title}. Opens Make with this idea filled in.",
+      "line": "Your shelf is empty. Make your first app.",
+      "prompt": {
+        "attendance": "An attendance register for my class: student name, date, and present or absent, with a count for each student.",
+        "expenses": "Track my daily expenses with amount, category and date, and show what I spent this month.",
+        "habits": "Count my daily habits like glasses of water and walks, and start fresh every morning.",
+        "measurements": "A measurement book for my tailoring customers: name, phone, chest, waist, length and notes."
+      }
     },
     "actions": {
       "title": "App actions",
@@ -104,20 +480,331 @@
       "unpin": "Unpin",
       "duplicate": "Duplicate",
       "export": "Export as JSON",
-      "delete": "Delete…"
+      "delete": "Delete…",
+      "details": "Details",
+      "rename": "Rename",
+      "share": "Share in Kalam Bazaar"
     },
     "toast": {
       "pinned": "Pinned to the top of your shelf",
       "unpinned": "Unpinned",
       "duplicated": "Made a copy of {name}. Records were not copied.",
-      "exported": "Exported {name}"
+      "exported": "Exported {name}",
+      "deleted": "Deleted {name}",
+      "renamed": "Renamed to {name}"
     },
     "delete": {
       "title": "Delete “{name}”?",
-      "message": "This removes the app, its saved versions and every record stored in it on this device. Backups you exported stay wherever you saved them."
+      "message": "This removes the app, its saved versions and every record stored in it on this device. Backups you exported stay wherever you saved them.",
+      "confirm": "Delete app",
+      "links": "Links with other apps are removed too."
+    },
+    "countOnDevice": {
+      "one": "{count} app on this device",
+      "other": "{count} apps on this device"
+    },
+    "details": {
+      "built": "Built",
+      "builtCloud": "By Gemini in the cloud through Firebase",
+      "builtCloudRepair": "By Gemini in the cloud through Firebase, then fixed by a check",
+      "builtImport": "Imported from a file",
+      "builtManual": "By hand",
+      "builtOnDevice": "From a template, filled in by Gemini Nano on this device",
+      "builtSpecialist": "By a specialist model through the Kalam server",
+      "builtTemplate": "From a ready-made template on this device",
+      "entries": "Saved entries",
+      "kinds": "Kinds of entries",
+      "language": "Language",
+      "lastOpened": "Last opened",
+      "made": "Made",
+      "noKinds": "None. This app does not save entries.",
+      "notOpened": "Not opened yet",
+      "offline": "Works offline",
+      "offlineValue": "Yes. Opening and using it never needs the internet.",
+      "screens": "Screens",
+      "title": "Details",
+      "version": "Version"
+    },
+    "entries": {
+      "one": "{count} entry",
+      "other": "{count} entries"
+    },
+    "loadErrorBody": "Nothing was deleted. Try again. If it keeps happening, restart the browser or free some space.",
+    "loadErrorTitle": "Your apps could not be read",
+    "made": "Made {when}",
+    "menuFor": "More actions for {name}",
+    "noEntries": "No entries yet",
+    "onDeviceCount": {
+      "one": "{count} AI action ran on this device",
+      "other": "{count} AI actions ran on this device"
+    },
+    "onDeviceNone": "No AI actions have run on this device yet",
+    "openSettings": "{status}. Open settings.",
+    "opened": "Opened {when}",
+    "opensOffline": "Opens offline",
+    "readAloud": "Your shelf. {summary}.",
+    "rename": {
+      "empty": "Give the app a name.",
+      "failed": "The new name could not be saved. Try again.",
+      "invalid": "That name cannot be used.",
+      "label": "App name",
+      "save": "Save name",
+      "title": "Rename app"
+    },
+    "screens": {
+      "one": "{count} screen",
+      "other": "{count} screens"
+    },
+    "sort": {
+      "label": "Sort apps",
+      "name": "Name",
+      "recent": "Recent"
+    },
+    "stamp": {
+      "import": "Imported",
+      "manual": "By hand"
+    },
+    "readAloudBar": {
+      "label": "Read aloud",
+      "idle": "Read aloud is on",
+      "reading": "Reading your shelf",
+      "paused": "Paused",
+      "done": "Finished reading",
+      "pause": "Pause",
+      "resume": "Resume",
+      "stop": "Stop",
+      "repeat": "Repeat"
     }
   },
   "create": {
+    "ws": {
+      "typeTab": "Type",
+      "hasInput": "{label}, has input",
+      "build": "Build app",
+      "using": "Using: {summary}",
+      "offlineBuild": "Offline. Simple apps still build",
+      "blockEmpty": "Type your idea, add a photo or sketch, speak, attach a video or draw it first.",
+      "blockLong": "Keep the description under {max} characters."
+    },
+    "startOver": {
+      "button": "Start over",
+      "title": "Start over?",
+      "message": "Everything you added for this app is removed from this device: your words, voice note, photos, video and drawing. Your app preferences stay."
+    },
+    "tray": {
+      "title": "In this app",
+      "empty": "Nothing added yet. Mix any of these: words, a voice note, photos, a video, a drawing.",
+      "single": "Add more if you like. Kalam reads everything here together.",
+      "several": "{summary}. Kalam reads them together to build one app.",
+      "honestCloud": "Items with a cloud mark go to Gemini through Firebase when you build.",
+      "honestVoice": "The voice recording stays on this device. Only its words are sent.",
+      "honestDevice": "Nothing here leaves this device. Kalam builds this app from a ready-made template.",
+      "cloudMark": "Goes to Gemini in the cloud when you build",
+      "voiceCloudMark": "Only the words go to the cloud, never the recording",
+      "deviceMark": "Stays on this device",
+      "open": "Open",
+      "description": "Description",
+      "chars": {
+        "one": "{count} character",
+        "other": "{count} characters"
+      },
+      "voice": "Voice note",
+      "heardDevice": "Heard on this device",
+      "heardOnline": "Heard online",
+      "typedIn": "Typed in",
+      "voiceDetail": "{seconds} s. {where}",
+      "photo": "Photo {n}",
+      "video": "Video",
+      "videoDetail": {
+        "one": "{seconds} s, {count} frame",
+        "other": "{seconds} s, {count} frames"
+      },
+      "drawing": "Drawing",
+      "screens": {
+        "one": "{count} screen",
+        "other": "{count} screens"
+      },
+      "removeText": "Remove the description",
+      "removeVoice": "Remove the voice note",
+      "removePhoto": "Remove photo {n}",
+      "removeVideo": "Remove the video",
+      "removeDrawing": "Remove the drawing",
+      "addMore": "Add more",
+      "addMoreLabel": "Add another input",
+      "removed": "{item} removed."
+    },
+    "parts": {
+      "text": "text",
+      "voice": "voice",
+      "photos": {
+        "one": "{count} photo",
+        "other": "{count} photos"
+      },
+      "video": "video",
+      "drawing": {
+        "one": "{count} drawing",
+        "other": "a {count}-screen drawing"
+      }
+    },
+    "look": {
+      "title": "Cover for your app",
+      "calm_green": "Calm green",
+      "warm_paper": "Warm paper",
+      "ocean_blue": "Ocean blue",
+      "soft_lavender": "Soft lavender",
+      "minimal_neutral": "Minimal",
+      "high_contrast": "High contrast"
+    },
+    "money": {
+      "title": "Money",
+      "INR": "₹ Rupee",
+      "USD": "$ Dollar",
+      "EUR": "€ Euro",
+      "GBP": "£ Pound",
+      "AED": "AED Dirham"
+    },
+    "forecast": {
+      "template": "Likely: template on this device",
+      "needsCloud": "Needs the cloud",
+      "cloud": "Likely: Firebase cloud AI",
+      "templateBody": "This matches a ready-made template, so it builds on this device. Nothing is sent online.",
+      "cloudBody": "This needs the cloud to build. Your finished app runs on this device.",
+      "photoBody": "A photo needs the cloud to read. Your finished app runs on this device.",
+      "offlineBody": "You are offline. This idea needs the cloud to build. Simple apps still build from a template.",
+      "cloudOffBody": "Cloud AI is off in Settings, so only simple apps that match a template can be built."
+    },
+    "build": {
+      "yourInputs": "Your inputs",
+      "reading": "Your inputs stay here, and you can cancel at any time.",
+      "routeNow": "Building with: {route}",
+      "rowActive": "Step {n}, in progress: {label}",
+      "rowDone": "Step {n}, done: {label}",
+      "verifyCount": "Testing AI step {n} of {total}",
+      "step": {
+        "understand": "Understanding your idea",
+        "template": "Looking for a ready-made template",
+        "on_device": "Filling in details on this device",
+        "cloud": "Building the app with cloud AI",
+        "validate": "Checking the app works",
+        "verify_ai": "Checking AI steps",
+        "repair": "Fixing problems found in the check"
+      }
+    },
+    "route": {
+      "template": "Built from a template on this device",
+      "templateOnDevice": "Template filled in by on-device AI",
+      "cloud": "Built with Firebase cloud AI",
+      "cloudRepair": "Built with cloud AI, then repaired",
+      "specialist": "Planned by a specialist model",
+      "import": "Imported",
+      "manual": "Made by hand"
+    },
+    "fail": {
+      "offlineIdea": "Or describe a simpler app that matches a template, like \"a checklist for daily tasks\" or \"an expense tracker in ₹\".",
+      "checks": "The result did not pass Kalam's checks, so nothing was saved. Your input is kept.",
+      "nameFields": "Try naming what to track and the fields, for example \"a tailor order book with customer name, measurements and delivery date\"."
+    },
+    "clarify": {
+      "intro": "Answer what you can, and Kalam will try again.",
+      "submit": "Add answers and try again"
+    },
+    "notice": {
+      "title": "This app needs Gemini in the cloud",
+      "description": "It is too detailed to build on this device. Kalam asks before sending anything online for the first time.",
+      "sentTitle": "Sent to Gemini through Firebase",
+      "sentBody": "Your description, the words from your voice note, and your photos, video frames and drawing as pictures. Photos are made smaller and their location is removed first.",
+      "laterTitle": "Later, only when this device cannot do it",
+      "laterBody": "A voice command you give an app, a change you ask for with the app's design, or an app's labels when you translate it. Gemini Nano on this device is always tried first.",
+      "neverTitle": "Never leaves this device",
+      "neverBody": "Your voice recording, your saved apps and the records you keep in them. An AI step you add to an app sends only the fields it works on.",
+      "footer": "Using the app you build never needs the internet. You can turn off cloud AI in Settings at any time.",
+      "send": "Send and build",
+      "notNow": "Not now",
+      "fallbackTitle": "Allow cloud help?",
+      "fallbackBody": "This device could not do this on its own. With your OK, Kalam sends this one request to Gemini through Firebase. Kalam asks only once, and you can turn off cloud AI in Settings at any time.",
+      "fallbackSend": "Allow cloud help"
+    },
+    "compose": {
+      "placeholder": "Describe the app you want to create.\nFor example: a tailoring order book with customer name, measurements, delivery date and advance paid.",
+      "cleared": "Description cleared.",
+      "count": "{count} of {max} characters",
+      "exampleHint": "Puts this example in the box so you can change it"
+    },
+    "examples": {
+      "calculator": "Calculator",
+      "expense": "Expense tracker in ₹",
+      "tailor": "Tailor order book",
+      "kirana": "Kirana udhaar ledger"
+    },
+    "photos": {
+      "intro": "Photograph a paper sketch, a register page or a form you already use. Photos are resized and stripped of location data on this device before anything is sent.",
+      "dropHint": "You can also drop image files here or paste one.",
+      "useCamera": "Use camera",
+      "takePhoto": "Take a photo",
+      "tooBig": "Files over 20 MB were skipped.",
+      "someSkipped": "Four photos is the limit. Some were not added."
+    },
+    "speak": {
+      "language": "Listening language",
+      "languagesOff": "Not available for listening on this device: {names}.",
+      "intro": "Explain your app out loud: who uses it, what to record, what to add up. You can fix the words before building.",
+      "unavailable": "Speech recognition is not available here. Type your idea instead.",
+      "downloadBody": "On-device speech recognition can be downloaded for {locale}. Your voice then never leaves this device.",
+      "download": "Download speech model",
+      "downloadFailed": "The on-device speech model could not be downloaded right now.",
+      "useService": "Use {service}",
+      "useServiceBody": "Your voice is sent to that service to be turned into text. Kalam does not upload the recording.",
+      "cloudOff": "Online AI is turned off in Settings, so only on-device speech can be used.",
+      "start": "Start speaking",
+      "stop": "Stop listening",
+      "pause": "Pause",
+      "resume": "Carry on speaking",
+      "done": "Done",
+      "paused": "Paused at {time}. Tap the microphone to carry on.",
+      "listening": "Listening {time}",
+      "checking": "Checking the microphone",
+      "tap": "Tap to speak",
+      "chooseFirst": "Choose how to transcribe first",
+      "onDevice": "Transcribed on this device",
+      "byService": "Transcribed by {service}",
+      "kept": "The recording is kept on this device only.",
+      "startFailed": "Speech recognition could not start."
+    },
+    "film": {
+      "intro": "Record yourself going through the paper register or routine the app should replace. Up to 60 seconds. Kalam keeps a few distinct frames; the video itself stays on this device.",
+      "choose": "Choose a video",
+      "replace": "Replace video",
+      "reading": "Reading frames from your video",
+      "noFrames": "No frames could be read from this video.",
+      "kept": {
+        "one": "{seconds} s, {count} frame kept.",
+        "other": "{seconds} s, {count} frames kept."
+      },
+      "skipped": {
+        "one": "{count} repeated frame skipped.",
+        "other": "{count} repeated frames skipped."
+      },
+      "frame": "Video frame {n}"
+    },
+    "sketch": {
+      "intro": "Draw each screen on its own page. Stamps for buttons, lists and inputs tell Kalam exactly what you mean. Your drawing is saved separately from the app.",
+      "open": "Open Drawing Studio",
+      "continue": "Continue drawing",
+      "detach": "Detach drawing",
+      "summary": "{title}: {screens} and {parts}",
+      "components": {
+        "one": "{count} component",
+        "other": "{count} components"
+      },
+      "page": "Drawing page",
+      "use": "Use this drawing",
+      "useShort": "Use",
+      "saveFailed": "The drawing could not be saved. Try again.",
+      "prepareFailed": "The drawing could not be prepared. Try again.",
+      "props": "Colour, size and objects",
+      "pages": "Screens, {n} of {total}",
+      "settings": "Drawing settings"
+    },
     "title": "New app",
     "intro": "Use one way or mix several. Everything you add goes into the same app.",
     "cta": "Create app",
@@ -127,6 +814,9 @@
     "addDetails": "Add these details to your description:",
     "backToCreation": "Back to creation",
     "empty": "Nothing added yet. You can combine several inputs.",
+    "templates": {
+      "open": "Use a template"
+    },
     "modality": {
       "label": "Input method",
       "describe": "Describe",
@@ -143,12 +833,18 @@
       "draw": "Draw the screens"
     },
     "text": {
+      "instructions": {
+        "one": "Kalam reads this as {count} instruction.",
+        "other": "Kalam reads this as {count} separate instructions, in the order you wrote them."
+      },
       "placeholder": "Describe the app you want to create",
       "examples": "Start from an example",
       "exampleHint": "Replaces the description with this example"
     },
     "photo": {
       "choose": "Choose photos",
+      "crop": "Choose and crop",
+      "stop": "Stop",
       "limit": "Four photos is the limit. Remove one to add another.",
       "error": "That image could not be opened. Try a JPEG or PNG."
     },
@@ -168,16 +864,51 @@
     "draw": {
       "empty": "Draw something or place a component first.",
       "screens": "Screens",
-      "screensHint": "Each page becomes one screen of your app."
+      "screensHint": "Each page becomes one screen of your app.",
+      "sensitive": {
+        "title": "This drawing may have private details",
+        "body": "Kalam found what looks like {kinds} in the text of your drawing. The drawing stays on this device. If the cloud is needed to read it, Kalam sends a picture cropped to the drawing, and asks you first every time.",
+        "use": "Use drawing",
+        "edit": "Keep editing",
+        "kind": {
+          "card": "a card number",
+          "id": "an ID number",
+          "phone": "a phone number",
+          "email": "an email address",
+          "secret": "a password or PIN"
+        }
+      }
+    },
+    "crop": {
+      "title": "Crop the picture",
+      "description": "Drag the corners or the edges to keep just the part you need. With a keyboard, use the arrow keys to move the box, and Shift with the arrow keys to make it bigger or smaller.",
+      "boxLabel": "Part of the picture to keep",
+      "keys": "Arrow keys move the box. Shift with the arrow keys resizes it.",
+      "pictureLabel": "The picture you chose",
+      "size": "Keeping {w}% by {h}% of the picture",
+      "use": "Use this part",
+      "useWhole": "Use the whole picture",
+      "reset": "Start again",
+      "failed": "The picture could not be cropped. Try again, or use the whole picture."
+    },
+    "brief": {
+      "title": "About the app",
+      "who": "Who will use it",
+      "whoExample": "For example: shopkeepers who have no signal",
+      "limits": "What it must or must not do",
+      "limitsExample": "For example: big buttons, no sign in, works in rupees",
+      "helper": "Kalam reads this when it builds. It stays with this app only."
     },
     "prefs": {
       "title": "App preferences",
       "hint": "Optional. Kalam picks sensible defaults when these are left empty.",
       "look": "Look",
       "language": "App language",
-      "currency": "Currency"
+      "currency": "Currency",
+      "whileBuilding": "You can change these after this build."
     },
     "progress": {
+      "background": "Stopping keeps everything you entered. A build already sent to the cloud may still finish in the background. It is never added to your shelf unless you save it.",
       "title": "Building your app",
       "preparing": "Getting your inputs ready",
       "sketching": "Kalam is sketching your app"
@@ -190,6 +921,69 @@
     }
   },
   "review": {
+    "savedChoice": {
+      "title": "{name} is on your shelf",
+      "body": "Open it now, or go back to your shelf and open it later.",
+      "open": "Open {name}",
+      "shelf": "Go to my shelf"
+    },
+    "changePrefix": "Change: {change}",
+    "discardConfirm": "Discard app",
+    "tabLabel": "View",
+    "body": {
+      "appName": "App name",
+      "appNameHelper": "Change it now or later. The preview uses this name.",
+      "builtFrom": "Built from:",
+      "start": "Opens first",
+      "emptyScreen": "Empty screen",
+      "noRecords": "This app does not store records.",
+      "required": "Required",
+      "optional": "Optional",
+      "noActions": "No buttons that change data.",
+      "dataSaved": "{names}. Saved on this device and usable offline.",
+      "dataNone": "Nothing is saved between uses."
+    },
+    "edit": {
+      "screenName": "Name of screen {n}",
+      "moveUp": "Move {name} up",
+      "moveDown": "Move {name} down",
+      "removeScreen": "Remove the screen {name}",
+      "newScreen": "New screen",
+      "addScreen": "Add screen",
+      "field": "Change the field {name}",
+      "closeField": "Close the field {name}",
+      "fieldName": "Field name",
+      "fieldType": "Type of {name}",
+      "required": "{name} must be filled in",
+      "options": "Choices for {name}",
+      "optionsHelper": "Separate the choices with commas.",
+      "removeField": "Remove the field {name}",
+      "changes": {
+        "one": "You made {count} change.",
+        "other": "You made {count} changes."
+      },
+      "reset": "Undo my changes"
+    },
+    "item": {
+      "check": "Kalam noticed",
+      "assumption": "Kalam assumed",
+      "question": "Kalam asks",
+      "answerLabel": "What should Kalam do instead?",
+      "answerSubmit": "Use this answer"
+    },
+    "keep": {
+      "label": "Keep my photos and sketches with this app",
+      "description": "They stay on this device and are never uploaded. Otherwise they are deleted when you save."
+    },
+    "rebuild": {
+      "title": "Some answers need a rebuild",
+      "body": {
+        "one": "Kalam can use {count} of your answers only by building the app again with the cloud. Rebuild now, or save the app as it is.",
+        "other": "Kalam can use {count} of your answers only by building the app again with the cloud. Rebuild now, or save the app as it is."
+      },
+      "now": "Rebuild with my answers",
+      "saveAsIs": "Save as it is"
+    },
     "title": "Review before saving",
     "understood": "Here is what Kalam understood",
     "tabUnderstood": "What Kalam understood",
@@ -221,18 +1015,348 @@
       "ai": "AI features",
       "noAi": "None. Everything in this app runs without AI.",
       "assumptions": "Assumptions"
+    },
+    "action": {
+      "accept": "Keep it",
+      "change": "Change it",
+      "remove": "Remove it"
+    },
+    "actionFor": "{action}. Item: {message}",
+    "fieldType": {
+      "text": "Text",
+      "number": "Number",
+      "date": "Date",
+      "enum": "Choice",
+      "boolean": "Yes or no",
+      "image": "Photo"
+    },
+    "componentType": {
+      "text": "Text",
+      "heading": "Heading",
+      "number": "Number entry",
+      "textInput": "Text entry",
+      "date": "Date entry",
+      "choice": "Choice",
+      "toggle": "Yes or no switch",
+      "counter": "Counter",
+      "bigButton": "Button",
+      "list": "List",
+      "stat": "Total",
+      "photo": "Photo",
+      "chart": "Chart",
+      "timer": "Timer",
+      "reminder": "Reminder",
+      "signature": "Signature box"
+    },
+    "fallback": {
+      "cloud": "Use the cloud when this device cannot do it",
+      "none": "Run only on this device"
+    },
+    "onError": {
+      "keep_input": "Keep what was entered",
+      "manual_entry": "Ask the person to type it"
+    },
+    "leave": {
+      "title": "Leave without saving your changes?",
+      "message": "Your changes to this app are not saved yet. If you go back now, they are lost.",
+      "confirm": "Discard changes",
+      "stay": "Keep editing"
     }
   },
   "run": {
+    "migratedSummary": "Updated from format {from}",
     "back": "Back to your apps",
     "opening": "Opening app",
     "missing": {
       "title": "This app isn't on this device",
       "description": "It may have been deleted, or the link came from another device.",
       "cta": "Go to your apps"
+    },
+    "ask": "Ask about this app",
+    "draw": "Draw a change",
+    "more": "More actions",
+    "offlineAiSteps": "No signal. Your app still saves. Its AI steps wait for the internet.",
+    "offlineHint": "Offline. Your app still saves.",
+    "onThisPhone": "On this phone",
+    "onThisPhoneHint": "This app and its entries are saved on this device.",
+    "reminders": "Reminders",
+    "reports": "Reports",
+    "share": "Share with another app",
+    "unsupported": {
+      "cta": "Open history",
+      "format": "This app uses a format Kalam cannot open.",
+      "problems": {
+        "one": "This app's design has {count} problem Kalam can't open safely. Open History to restore an earlier version.",
+        "other": "This app's design has {count} problems Kalam can't open safely. Open History to restore an earlier version."
+      },
+      "storage": "This app couldn't be read from this device's storage.",
+      "title": "Kalam can't open this app"
+    }
+  },
+  "runtime": {
+    "chrome": {
+      "opening": "Opening app",
+      "dataFailedTitle": "This app's data couldn't be opened.",
+      "dataFailedBody": "Your records are still on this device. Close the app and open it again.",
+      "backTo": "Back to {name}",
+      "close": "Close app",
+      "readAgain": "Read that again",
+      "stopReading": "Stop reading",
+      "preview": "Preview. Records added here are not saved.",
+      "wentWrong": "Something went wrong. Nothing was changed.",
+      "countFailed": "Couldn't save the count.",
+      "pickerFailed": "Couldn't open the photo picker.",
+      "nothingFilled": "Nothing was filled in.",
+      "showMore": "Show more ({count})",
+      "showLess": "Show less",
+      "checkSuggested": "Check the suggested values before filling them in.",
+      "newerPart": "This part ({kind}) needs a newer version of Kalam. The rest of the screen works. Update Kalam to see it.",
+      "countUp": "{label} up",
+      "countDown": "{label} down",
+      "required": "(required)",
+      "confirmDelete": "Delete \"{title}\"? This can't be undone."
+    },
+    "translate": {
+      "title": "Language of this app",
+      "description": "Kalam changes the labels and buttons. Your entries stay exactly as you typed them.",
+      "group": "App language",
+      "changeHint": "Change the language of this app",
+      "noteOwn": "Original language of this app",
+      "noteSaved": "Saved on this device",
+      "noteNeedsInternet": "Needs internet",
+      "noteTranslate": "Translate this app",
+      "translating": "Translating into {name}. This takes a few seconds.",
+      "checking": "Looking for a saved translation.",
+      "savedOnDevice": "Saved translation, made on this device",
+      "savedInCloud": "Saved translation, made in the cloud",
+      "newOnDevice": "Translated, made on this device",
+      "newInCloud": "Translated, made in the cloud",
+      "translateInto": "Translate into {name}",
+      "needsInternetHint": "Needs an internet connection",
+      "review": "Review and change labels",
+      "cloudAgain": "Translate again in the cloud",
+      "again": "Translate again",
+      "againReplaces": "Translating again replaces the wording you changed.",
+      "offline": "You are offline. Saved translations still work.",
+      "reviewTitle": "Review the {name} labels",
+      "reviewDescription": "Tap a row to change its wording. Your changes are saved on this device.",
+      "changeRow": "Change {where}: {text}",
+      "notTranslated": "Not translated. The original shows.",
+      "correctTitle": "Change this label",
+      "correctDescription": "Write the label in {name}. People will see it exactly as you write it.",
+      "saveWording": "Save wording",
+      "original": "Original, {where}",
+      "wordingIn": "Wording in {name}",
+      "saveFailed": "This could not be saved. Try again."
+    },
+    "failed": {
+      "title": "{name} stopped on this screen",
+      "body": "Something in this screen could not be shown. Your saved records are safe. Try again, or go back and restore an earlier version from Edit.",
+      "retry": "Try again",
+      "back": "Go back"
+    },
+    "list": {
+      "search": "Search",
+      "searchIn": "Search {name}",
+      "thisList": "this list",
+      "noMatch": "Nothing matches “{query}”.",
+      "empty": "Nothing here yet.",
+      "untitled": "Untitled",
+      "done": "Done",
+      "delete": "Delete {title}",
+      "opensDetails": "Opens details",
+      "showMore": "Show {count} more"
+    },
+    "stat": {
+      "unavailable": "not available"
+    },
+    "photo": {
+      "reading": "Reading the photo…",
+      "another": "Tap to choose another photo",
+      "choose": "Tap to choose a photo",
+      "hintAi": "Choose a photo. The app will suggest values for you to check.",
+      "hint": "Choose a photo"
+    },
+    "sheet": {
+      "fillIn": {
+        "one": "Fill in {count} field",
+        "other": "Fill in {count} fields"
+      },
+      "discardAll": "Discard suggestions",
+      "checkTitle": "Check before filling in",
+      "checkDialog": "Check the AI suggestions",
+      "empty": "Empty",
+      "notUsed": "Not used: {reason}.",
+      "hardToRead": "Hard to read. Check it against the photo.",
+      "confirmYes": "Yes, do it"
+    },
+    "badge": {
+      "onDevice": "On-device",
+      "cloud": "Cloud",
+      "deterministic": "Deterministic",
+      "offline": "Offline: AI unavailable",
+      "ran": "Ran: {label}"
+    },
+    "v11": {
+      "untitled": "Untitled",
+      "missingLink": "Missing entry",
+      "noLinkChosen": "None chosen",
+      "chooseLink": "Choose {label}",
+      "clearLink": "Clear",
+      "searchLinks": "Search",
+      "noLinkOptions": "Add an entry to {collection} first.",
+      "noLinkMatches": "Nothing matches.",
+      "deleteBlocked": {
+        "one": "This can't be deleted: {count} entry in {collection} still uses it. Change or delete it first.",
+        "other": "This can't be deleted: {count} entries in {collection} still use it. Change or delete them first."
+      },
+      "deleteTooMany": "This would delete too many linked entries at once, so nothing was deleted.",
+      "alsoDeletes": {
+        "one": "This also deletes {count} linked entry.",
+        "other": "This also deletes {count} linked entries."
+      },
+      "alsoClears": {
+        "one": "{count} linked entry loses the link.",
+        "other": "{count} linked entries lose the link."
+      },
+      "deleteFailed": "Couldn't delete. Nothing was changed.",
+      "deletePartly": "Couldn't finish deleting. Some linked entries may have changed, so check them.",
+      "deleteChanged": "Entries linked to this one changed while you were deciding. Nothing was deleted. Please try again.",
+      "linkNotFound": "Pick an entry from the list.",
+      "signatureNotDrawn": "Sign in the box, or use Type your name instead.",
+      "start": "Start",
+      "pause": "Pause",
+      "resume": "Resume",
+      "reset": "Reset",
+      "timeUp": "{label}: time is up.",
+      "timerValue": "{spoken} so far",
+      "timerLeft": "{spoken} left",
+      "seconds": {
+        "one": "{count} second",
+        "other": "{count} seconds"
+      },
+      "minutes": {
+        "one": "{count} minute",
+        "other": "{count} minutes"
+      },
+      "hours": {
+        "one": "{count} hour",
+        "other": "{count} hours"
+      },
+      "remindMe": "Remind me",
+      "reminderStatus": {
+        "off": "Off. Nothing is scheduled until you switch it on.",
+        "on": "On. Reminders stay on this device.",
+        "no_permission": "On, but notifications are blocked, so nothing will pop up. Allow them in your phone's settings.",
+        "unsupported": "On, but this device can't show reminders. Due entries still show in the app.",
+        "error": "On, but the reminders couldn't be scheduled. Kalam tries again next time you open the app."
+      },
+      "reminderWhy": "Why it asks: {reason}",
+      "reminderOnDay": "On the day of {field}, at {time}.",
+      "reminderBefore": {
+        "one": "{count} day before {field}, at {time}.",
+        "other": "{count} days before {field}, at {time}."
+      },
+      "reminderSkipsDone": "Entries marked {field} are skipped.",
+      "reminderSaveFailed": "Couldn't change the reminder. Please try again.",
+      "openSettings": "Open settings",
+      "signHere": "Sign here with your finger or mouse",
+      "signed": "Signed",
+      "clearSignature": "Clear signature",
+      "signatureTooLong": "That signature has too many lines to save. Clear it and sign once more.",
+      "signedState": "{label}. Signed.",
+      "unsignedState": "{label}. Not signed yet.",
+      "typeInstead": "Type your name instead",
+      "drawInstead": "Draw instead",
+      "typeToSign": "Type your full name to sign",
+      "modeLarge": "Large text",
+      "modeHighContrast": "High contrast",
+      "modeSimple": "Simple mode",
+      "modeReadAloud": "Read aloud",
+      "listAnd": "{head} and {last}",
+      "modesOfferOne": "This app suggests {list}. Turn it on? You can switch it off again in Settings.",
+      "modesOfferMany": "This app suggests {list}. Turn them on? You can switch them off again in Settings.",
+      "turnOn": "Turn on",
+      "notNow": "Not now"
     }
   },
   "edit": {
+    "checkSummary": {
+      "onDevice": "Checked \"{name}\" on this device: {pass} of {total} passed, runs on this device",
+      "cloud": "Checked \"{name}\" on this device: {pass} of {total} passed, will prefer the cloud",
+      "unverified": "Checked \"{name}\" on this device: {pass} of {total} passed, stays unverified"
+    },
+    "draw": {
+      "hint": {
+        "title": "Draw on your app",
+        "body": "Circle a part to change it. Cross it out to remove it. Draw an arrow to move it.",
+        "empty": "Draw around a part of the app to pick it.",
+        "noSource": "Start the arrow on the part you want to move.",
+        "samePlace": "It is already there."
+      },
+      "pickFromList": "Pick from a list",
+      "offline": "You're offline. This change needs the internet, so Kalam didn't make it. Your words are kept. Colours, sizes and names still work offline.",
+      "couldNot": "Kalam couldn't make that change. Try saying it differently.",
+      "example": {
+        "button": "For example: bigger, green",
+        "field": "For example: make it required",
+        "text": "For example: call it Today",
+        "any": "For example: move it up"
+      },
+      "thisPart": "this part",
+      "parts": {
+        "one": "{count} part",
+        "other": "{count} parts"
+      },
+      "hideInstead": "Hide it instead",
+      "rename": "Rename",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "picked": {
+        "circled": "You circled {name}.",
+        "picked": "You picked {name}.",
+        "underlined": "You underlined {name}.",
+        "marked": "You marked {name}."
+      },
+      "newWordsFor": "New words for {name}",
+      "whatChange": "What should change?",
+      "newWords": "New words",
+      "typeNewWords": "Type the new words",
+      "crossedOut": "You crossed out {name}.",
+      "moving": "Moving {name}.",
+      "noteOn": "Your note on {name}",
+      "addingNote": "Adding your note",
+      "stopListening": "Stop listening",
+      "speak": "Speak the change",
+      "working": "Working out the change",
+      "holdBefore": "Hold to see before",
+      "holdBeforeHint": "Shows the app without the change while you hold it",
+      "nothingSaved": "Nothing is saved until you keep it.",
+      "note": {
+        "label": "Note",
+        "placeholder": "Closed on Sundays",
+        "add": "Add note"
+      },
+      "picker": {
+        "title": "Pick parts of this screen",
+        "description": "Choose what to change. You can pick more than one.",
+        "pick": "Pick",
+        "none": "Nothing on this screen can be picked yet."
+      },
+      "tools": {
+        "label": "Drawing tools",
+        "draw": "Draw",
+        "note": "Write a note",
+        "scroll": "Scroll the app",
+        "startOver": "Start over"
+      },
+      "speech": {
+        "askTitle": "Use online speech?",
+        "askConfirm": "Use it",
+        "askMessage": "{service} will hear you to turn your words into text. Kalam does not keep the recording.",
+        "couldNotStart": "Listening could not start. You can type instead."
+      }
+    },
     "back": "Back to the app",
     "describe": "Describe a change",
     "placeholder": "Add a phone number field, or make the buttons blue",
@@ -241,11 +1365,138 @@
     "proposed": "Proposed change",
     "proposedHint": "The preview shows it. Nothing is saved until you keep it.",
     "tools": "Edit tools",
-    "tab": { "preview": "Preview", "theme": "Theme", "history": "History" },
+    "tab": {
+      "preview": "Preview",
+      "theme": "Theme",
+      "history": "History",
+      "ai": "AI steps",
+      "cover": "Cover",
+      "numbers": "Numbers"
+    },
     "savedAs": "Saved as version {version}",
     "discarded": "Change discarded",
     "saveFailed": "Couldn't save the change. Your app is unchanged.",
-    "historyNone": "No saved versions yet."
+    "historyNone": "No saved versions yet.",
+    "ai": {
+      "blocked": "Keep or discard the proposed change before running a check.",
+      "checkFailed": "The check couldn't run. Nothing was changed.",
+      "explain": "A check writes five sample cases online, then runs them with this device's own AI model. If at least four pass, the step runs on this device, even offline.",
+      "kind": {
+        "classify": "Sorts text into labels",
+        "extractFromPhoto": "Reads a photo and fills in fields",
+        "summarise": "Summarises text",
+        "translate": "Translates text"
+      },
+      "lastCheck": "Last check: {pass} of {total} passed",
+      "lastCheckModel": "Last check: {pass} of {total} passed with {model}",
+      "none": "This app doesn't use AI. Everything in it runs with ordinary app logic, on this device.",
+      "result": "{pass} of {total} passed: {status}",
+      "status": {
+        "cloud": "Prefers the cloud",
+        "onDevice": "Runs on this device",
+        "unverified": "Not checked yet"
+      },
+      "verify": "Check on this device"
+    },
+    "error": {
+      "couldNot": "Kalam couldn't make that change. Try describing it differently.",
+      "notPossible": "That change isn't possible.",
+      "unchanged": "Kalam couldn't make that change. Your app is unchanged."
+    },
+    "frame": {
+      "full": "Full width",
+      "label": "Preview size",
+      "phone": "Phone",
+      "tablet": "Tablet"
+    },
+    "history": {
+      "askMessage": "It becomes the current design as a new version. The design you have now stays in History, and your entries are kept.",
+      "askTitle": "Restore version {version}?",
+      "askTitleNone": "Restore this version?",
+      "backToCurrent": "Back to current",
+      "gone": "That version is no longer stored on this device.",
+      "openFailed": "That version couldn't be opened.",
+      "previewing": "Previewing version {version}. Your current design is unchanged.",
+      "restore": "Restore version",
+      "restoreFailed": "Couldn't restore that version. Nothing was changed.",
+      "restoreThis": "Restore this version",
+      "restored": "Restored version {version} as version {next}",
+      "restoredSummary": "Restored version {version}"
+    },
+    "leave": {
+      "confirm": "Discard change",
+      "message": "The change you are previewing is not saved yet. Your app stays as it is.",
+      "title": "Discard the proposed change?"
+    },
+    "loading": "Loading app",
+    "missing": "It may have been deleted.",
+    "offlineHelper": "No signal. Small changes still work. Bigger ones need the internet.",
+    "preparing": "Preparing preview",
+    "stopDrawing": "Stop drawing",
+    "title": "Edit {name}",
+    "titleNone": "Edit app",
+    "unsupported": "This version can't be opened",
+    "version": "Version {version}",
+    "theme": {
+      "adjusted": "Buttons use a slightly deeper shade of this colour so their text stays readable.",
+      "background": "Background",
+      "colour": {
+        "berry": "Berry",
+        "brick": "Brick",
+        "clay": "Clay",
+        "coral": "Coral",
+        "forest": "Forest",
+        "graphite": "Graphite",
+        "indigo": "Indigo",
+        "lavender": "Lavender",
+        "marigold": "Marigold",
+        "mint": "Mint",
+        "ocean": "Ocean",
+        "plum": "Plum",
+        "rose": "Rose",
+        "saffron": "Saffron",
+        "sky": "Sky",
+        "teal": "Teal"
+      },
+      "corners": {
+        "round": "Round",
+        "sharp": "Sharp",
+        "soft": "Soft"
+      },
+      "cornersLabel": "Corners",
+      "cover": "Cover",
+      "coverHint": "The cloth on your shelf and the colours inside the app.",
+      "main": "Main colour",
+      "mood": {
+        "dark": "Dark",
+        "light": "Light",
+        "warm": "Warm"
+      },
+      "preset": {
+        "calm_green": "Calm green",
+        "high_contrast": "High contrast",
+        "minimal_neutral": "Minimal",
+        "ocean_blue": "Ocean blue",
+        "soft_lavender": "Soft lavender",
+        "warm_paper": "Warm paper"
+      },
+      "second": "Second colour",
+      "size": {
+        "default": "Default",
+        "large": "Large",
+        "larger": "Larger",
+        "small": "Small"
+      },
+      "sizeLabel": "Text size",
+      "summary": {
+        "background": "Background: {name}",
+        "corners": "Corners: {name}",
+        "cover": "Cover: {name}",
+        "main": "Main colour: {name}",
+        "second": "Second colour: {name}",
+        "size": "Text size: {name}"
+      }
+    }
   },
   "settings": {
     "title": "Settings",
@@ -263,7 +1514,23 @@
       "readAloud": "Read aloud",
       "readAloudHint": "Your apps speak headings and results.",
       "leftHanded": "Left-handed",
-      "leftHandedHint": "Main actions move to the left in your apps. Text direction never changes."
+      "leftHandedHint": "Main actions move to the left in your apps. Text direction never changes.",
+      "readAloudShellHint": "Kalam and your apps speak headings and results.",
+      "voiceOnly": "Voice only",
+      "voiceOnlyHint": "Your apps say each screen and what you can say. Tap the microphone to talk.",
+      "allOff": "Turn all modes off",
+      "preview": {
+        "title": "Try {mode} first",
+        "body": "This is how Kalam looks with {mode} on. Nothing changes until you turn it on.",
+        "turnOn": "Turn on",
+        "keep": "Not now",
+        "sampleTitle": "Your shelf",
+        "sampleBody": "Rent due on 5 December. Tap an app to open it.",
+        "sampleButton": "Add entry"
+      },
+      "toastOn": "{mode} is on",
+      "toastOff": "{mode} is off",
+      "toastAllOff": "All access modes are off"
     },
     "appearance": {
       "title": "Appearance",
@@ -273,7 +1540,16 @@
       "dark": "Dark",
       "motion": "Motion",
       "reduce": "Reduce motion",
-      "full": "Full motion"
+      "full": "Full motion",
+      "paper": "Paper",
+      "ink": "Ink night",
+      "deviceWins": "If your device asks for less motion or more contrast, Kalam always follows it.",
+      "textSize": "Text size",
+      "textSmaller": "Smaller",
+      "textDefault": "Default",
+      "textLarger": "Larger",
+      "textLargest": "Largest",
+      "textSizeHint": "This line changes size as you choose. The Large mode above makes everything bigger on top of this."
     },
     "language": {
       "title": "Language",
@@ -282,7 +1558,7 @@
       "newApp": "Language for new apps",
       "speech": "Speech recognition language",
       "voice": "Read-aloud language",
-      "draft": "This translation is a draft. Some wording may read wrong."
+      "draft": "This language is machine translated. Native speakers are welcome to review it."
     },
     "about": "About",
     "storage": {
@@ -293,8 +1569,14 @@
       "deleteAll": "Delete all apps and data",
       "deleteTitle": "Delete everything on this device?",
       "deleteMessage": "Every app, version, record, drawing and the activity log will be permanently removed from this device. This cannot be undone.",
-      "backupSaved": { "one": "Backup saved with {count} app", "other": "Backup saved with {count} apps" },
-      "imported": { "one": "Imported {count} app", "other": "Imported {count} apps" },
+      "backupSaved": {
+        "one": "Backup saved with {count} app",
+        "other": "Backup saved with {count} apps"
+      },
+      "imported": {
+        "one": "Imported {count} app",
+        "other": "Imported {count} apps"
+      },
       "importFailed": "Import failed.",
       "backupFailed": "Could not create a backup.",
       "deleted": "All apps and data were deleted from this device",
@@ -306,7 +1588,104 @@
       "hybrid": "Hybrid",
       "offlineOnly": "Offline only",
       "useCloud": "Use cloud AI when needed",
-      "onDevice": "On-device AI"
+      "onDevice": "On-device AI",
+      "intro": "Kalam builds simple apps with templates and on-device AI first. Using your apps never needs the internet.",
+      "routeTemplate": "Ready-made templates and plain app logic. No AI model, and nothing leaves this device.",
+      "routeDevice": "Gemini Nano runs inside the browser or phone. What it handles stays on this device.",
+      "routeDeviceIos": "Apple Intelligence runs on this iPhone or iPad. What it handles stays on this device.",
+      "routeCloud": "Gemini through Firebase, only for work that needs a bigger model and only if you allow it.",
+      "offlineOnlyHint": "Kalam never goes online. Requests that need a bigger model will explain why they cannot run.",
+      "hybridHint": "Kalam tries templates and on-device AI first, and only goes online for work that needs it.",
+      "useCloudHint": "Complex apps and reading sketches use Gemini through Firebase: what you describe, the words of a voice note, and any photo, video frame or drawing you attach. When Gemini Nano cannot handle it on this device, a voice command, a change you ask for with the app's design, or an app's labels to translate can be sent too. Your records are never sent, except the fields an AI step you added works on.",
+      "useCloudHintIos": "Complex apps and reading sketches use Gemini through Firebase: what you describe, the words of a voice note, and any photo, video frame or drawing you attach. When Apple Intelligence cannot handle it on this device, a voice command, a change you ask for with the app's design, or an app's labels to translate can be sent too. Your records are never sent, except the fields an AI step you added works on.",
+      "specialists": "Allow specialist models",
+      "specialistsHint": "For rare, very hard requests, Kalam's server may ask Claude or Nebius models. Only your app description is sent, through Kalam's server. Your records and keys are never sent.",
+      "onDeviceIntro": "Gemini Nano in Chrome and on Android runs on this device. Nothing it handles leaves this device.",
+      "onDeviceIntroIos": "Apple Intelligence runs on this iPhone or iPad. Nothing it handles leaves this device.",
+      "status": "Status",
+      "checkFailed": "Could not check",
+      "platform": "Platform",
+      "apiFound": "{platform}: on-device AI found",
+      "apiMissing": "{platform}: no on-device AI",
+      "preparing": "Preparing on-device AI",
+      "prepare": "Prepare on-device AI",
+      "progressLabel": "Download progress",
+      "downloading": "Downloading the model: {percent}%",
+      "cannotRun": "This browser or device cannot run Gemini Nano. Kalam will use templates and, if you allow it, the cloud.",
+      "downloadNote": "The first download can be large and needs Wi-Fi. Afterwards it works offline.",
+      "readyToast": "On-device AI is ready. Simple requests now stay on this device.",
+      "unavailableToast": "On-device AI is not available on this device.",
+      "prepareFailed": "Could not prepare on-device AI."
+    },
+    "install": "Install Kalam on this device",
+    "installHint": "Opens from your home screen or desktop and works without internet.",
+    "version": "Version {version}. Built for #BuildHybridAI 2026 with Firebase AI Logic: Gemini Nano on device, Gemini in the cloud, and plain app logic first.",
+    "versionIos": "Version {version}. Built for #BuildHybridAI 2026 with Firebase AI Logic: Apple Intelligence on device, Gemini in the cloud, and plain app logic first.",
+    "lab": "Evaluation lab",
+    "wipe": {
+      "title": "Delete everything",
+      "intro": "Your apps and their records are stored only on this device.",
+      "keeps": "Your settings stay. Backups you exported are not affected.",
+      "confirm": "Every app, version, record, drawing, unfinished draft, saved AI answer, usage count and timing, and the activity log will be permanently removed from this device. This cannot be undone.",
+      "confirmLabel": "Delete everything"
+    },
+    "cloud": {
+      "title": "Cloud and security",
+      "intro": "How Kalam connects to Firebase when you allow cloud AI.",
+      "network": "Network",
+      "configured": "Configured",
+      "notConfigured": "Not configured",
+      "firebaseHint": "Add the EXPO_PUBLIC_FIREBASE_* values to turn on cloud building.",
+      "appCheckHint": "Proves requests come from the real Kalam app, so nobody else can spend its AI quota.",
+      "acActive": "Active",
+      "acDebug": "Active with a debug token, for development only",
+      "acNotConfigured": "Not configured",
+      "acUnsupported": "Not available on this platform",
+      "acError": "Did not start",
+      "acPending": "Set up. Starts with the first cloud request",
+      "specialists": "Specialist models",
+      "specialistsOn": "Available through Kalam's server",
+      "specialistsOff": "Not set up"
+    },
+    "speech": {
+      "title": "Voice and speech",
+      "intro": "Choose the language Kalam listens for, and the voice it speaks with. Listening only starts when you tap the microphone.",
+      "listening": "Listening language",
+      "speaking": "Speaking language",
+      "voice": "Voice",
+      "automatic": "Automatic",
+      "needsInternet": "{name}, needs the internet",
+      "speed": "Speaking speed",
+      "slower": "Speak slower",
+      "faster": "Speak faster",
+      "test": "Test voice",
+      "check": "Check",
+      "keep": "Keep recordings on this device",
+      "keepHint": "When you describe an app by voice, the recording is deleted as soon as it has been turned into text. Turn this on to keep a copy here. Recordings are never uploaded.",
+      "savedHere": "Speech settings are saved on this device only.",
+      "cannotSpeak": "This device cannot speak aloud.",
+      "sample": "This is how Kalam will sound.",
+      "rec": {
+        "unchecked": "Kalam checks what this device can hear when you tap Check, or the first time you use a microphone.",
+        "unsupported": "Speech recognition is not available here. You can type commands instead.",
+        "onDevice": "Your voice is turned into text on this device.",
+        "download": "Your voice goes to {service} to be turned into text. Download the on-device model when asked, and it stays on this device.",
+        "cloud": "Your voice goes to {service} to be turned into text. Kalam asks first, and never uploads the recording."
+      },
+      "voiceNote": {
+        "none": "This device cannot speak aloud, so spoken replies and read-aloud stay silent.",
+        "checking": "Checking the voices on this device.",
+        "using": "Speaking with {voice}.",
+        "base": "No {language} voice is installed. Kalam will use {voice} ({code}).",
+        "missing": "No {language} voice is installed on this device. Kalam will use the default voice, which may not read {language} well. Install a voice in your device settings."
+      }
+    },
+    "notices": {
+      "button": "Open-source notices",
+      "title": "Open-source notices",
+      "intro": "Kalam is open source under the MIT License, copyright Vishav Mehra. It is built with the packages and fonts below, and each one keeps its own licence.",
+      "packages": "Packages",
+      "fonts": "Fonts (SIL Open Font License 1.1)"
     }
   },
   "activity": {
@@ -322,7 +1701,145 @@
     "empty": {
       "title": "No AI activity yet",
       "description": "Create an app to see its steps here. Each one shows if it used a template, Gemini Nano on this device, or Gemini in the cloud, and how long it took.",
-      "cta": "Create an app"
+      "cta": "Create an app",
+      "descriptionAny": "Make an app to see its steps here. Each one shows if it used a template, AI on this device, or Gemini in the cloud, and how long it took."
+    },
+    "intro": "Each AI step Kalam took on this device: where it ran, how long it took, and why it went online. This log stays on this device and is never uploaded.",
+    "clearFailed": "Could not clear activity.",
+    "noRuns": "No runs yet",
+    "latency": "Typical {median}, slowest 5% {slow}",
+    "fallbacks": "Fallbacks",
+    "fallbacksHint": "A provider failed or was unavailable, so the next one ran",
+    "failed": "Failed",
+    "failedHint": "No valid result. Nothing was saved.",
+    "stayed": {
+      "one": "of {count} recorded step never left this device (on-device AI or plain app logic).",
+      "other": "of {count} recorded steps never left this device (on-device AI or plain app logic)."
+    },
+    "barLabel": "Where AI work ran: {parts}",
+    "showMore": {
+      "one": "Show {count} more",
+      "other": "Show {count} more"
+    },
+    "fallback": "Fallback",
+    "succeeded": "Succeeded",
+    "failedRow": "Failed",
+    "note": {
+      "onDevice": "Gemini Nano on this device",
+      "onDeviceIos": "Apple Intelligence on this device",
+      "cloud": "Gemini through Firebase AI Logic",
+      "deterministic": "Templates and rules, no model"
+    },
+    "route": {
+      "rules": "Rules",
+      "template": "Template",
+      "onDevice": "On-device model",
+      "cloud": "Cloud model",
+      "specialist": "Specialist"
+    },
+    "metrics": {
+      "title": "Model runs",
+      "intro": "Only real calls to a model count here. Reused answers, cancels and stops before a call are listed apart.",
+      "runs": "{ok} of {runs} worked. Typical {p50}, slowest 5% {p95}",
+      "none": "None yet",
+      "fallback": "Cloud after on-device failed",
+      "fallbackLine": "{ok} of {runs} worked",
+      "saved": "Answers reused from this device",
+      "retries": "Retries",
+      "cancelled": "Cancelled by you",
+      "stopped": "Stopped before any model ran",
+      "tokens": "Cloud tokens",
+      "tokensLine": "{input} in, {output} out",
+      "platform": "Failures on {platform}",
+      "platformLine": "{failed} of {requests} failed ({rate})"
+    },
+    "week": {
+      "line": "This week, AI actions on this device: {device}. Cloud runs: {cloud}.",
+      "atLeast": "This week, AI actions on this device: at least {device}. Cloud runs: {cloud}.",
+      "hint": "Counted from the activity log on this device. Clearing it resets the count."
+    },
+    "why": {
+      "title": "Why work went to the cloud",
+      "intro": "The reasons Kalam gave for not doing the work on this device."
+    },
+    "detail": {
+      "saved": "Saved answer",
+      "retries": {
+        "one": "{count} retry",
+        "other": "{count} retries"
+      },
+      "tokens": {
+        "one": "{count} token",
+        "other": "{count} tokens"
+      }
+    },
+    "prompt": "Prompt {version}",
+    "task": {
+      "create_app": "Make an app",
+      "modify_app": "Change an app",
+      "interpret_sketch": "Read a sketch",
+      "generate_patch": "Plan a change",
+      "extract_data": "Read details",
+      "classify": "Sort the request",
+      "summarize": "Make a summary",
+      "translate": "Translate",
+      "voice_action": "Voice command",
+      "verify_ai_block": "Check an AI step",
+      "safety_review": "Safety check",
+      "extract_template_params": "Fill a template",
+      "repair_spec": "Repair an app",
+      "plan_app": "Plan an app"
+    },
+    "complexity": {
+      "simple": "simple request",
+      "medium": "medium request",
+      "complex": "complex request"
+    },
+    "platform": {
+      "web": "Web",
+      "android": "Android",
+      "ios": "iPhone and iPad",
+      "otherDevice": "Other devices",
+      "unknown": "Unknown device"
+    },
+    "reason": {
+      "complexRequest": "Complex request",
+      "externalConsented": "You allowed an outside AI provider",
+      "compilerUnavailable": "Needed the cloud builder, which was not available",
+      "templateIncomplete": "Template details were incomplete",
+      "templateInvalid": "The template made an app that did not pass checks",
+      "translationFailed": "Translation on this device failed",
+      "needsCloud": "The task needs cloud reasoning",
+      "rateLimited": "Cloud fallback skipped: too many requests",
+      "noTime": "No time left for the cloud fallback",
+      "cloudFallback": "One cloud fallback through Firebase",
+      "budgetSpent": "Time ran out, so no more retries",
+      "toCloud": "Moved to the cloud",
+      "toDevice": "Moved to this device",
+      "cloudUnavailable": "Cloud AI was not available",
+      "deviceLacks": "The on-device model cannot do this",
+      "deviceFailed": "The on-device model failed",
+      "retried": {
+        "one": "Retried {count} time",
+        "other": "Retried {count} times"
+      },
+      "checkSkipped": {
+        "one": "Build-time check not done for {count} AI step",
+        "other": "Build-time check not done for {count} AI steps"
+      },
+      "assistant": "Assistant: {why}",
+      "formula": "Formula helper: {why}",
+      "reports": "Reports: {why}",
+      "why": {
+        "fromSpec": "answered from the app's own details",
+        "ruleCalc": "calculated by rules",
+        "ruleFormula": "formula made by rules",
+        "period": "a period a formula cannot express",
+        "refused": "request declined",
+        "nothing": "nothing to explain, so a plain sentence",
+        "offline": "offline, so a plain sentence",
+        "noModel": "no model available, so a plain sentence"
+      }
     }
   },
   "onboarding": {
@@ -335,6 +1852,2116 @@
     "language": "Your language",
     "languageHint": "Used for new apps, voice and read-aloud. Change it any time in Settings.",
     "local": "Everything you make is saved on this device.",
-    "saveError": "Could not save your choice. Try again."
+    "saveError": "Could not save your choice. Try again.",
+    "know": {
+      "title": "Good to know",
+      "ai": {
+        "title": "Honest about the AI",
+        "body": "Kalam builds each app the simplest way that works: a ready-made template, Gemini Nano on your phone, or Firebase cloud AI only when it is needed. It always tells you which one ran."
+      },
+      "access": {
+        "title": "Made for every hand and eye",
+        "body": "Large text, high contrast, read aloud, voice only and left-handed mode apply to Kalam and to every app you make. Turn them on above."
+      },
+      "offline": {
+        "title": "Works with no signal",
+        "body": "Building a new app can need the cloud. Opening and using the apps you made never does."
+      }
+    }
+  },
+  "shell": {
+    "make": "Make",
+    "skip": "Skip to main content",
+    "navLabel": "Kalam menu",
+    "pageOpened": "{page} page",
+    "theme": {
+      "toInk": "Switch to ink night",
+      "toPaper": "Switch to paper"
+    },
+    "updateReady": "A new version of Kalam is ready. Updating reloads the page. Your apps and typed description are kept.",
+    "toastDismiss": "Tap to dismiss"
+  },
+  "stamp": {
+    "template": "Template",
+    "device": "On device",
+    "cloud": "Cloud",
+    "checked": "Checked",
+    "needs": "Needs check",
+    "offline": "Offline",
+    "explain": {
+      "device": "Handled on this device. Nothing was sent online.",
+      "cloud": "Processed online by Gemini through Firebase.",
+      "template": "Ordinary app logic. No AI model was used.",
+      "offline": "Offline. Online AI is unavailable. Your apps and data still work."
+    }
+  },
+  "auth": {
+    "google": "Continue with Google",
+    "googleBusy": "Opening Google",
+    "orEmail": "or use email",
+    "modeLabel": "Account",
+    "signIn": "Sign in",
+    "createAccount": "Create account",
+    "signInEmail": "Sign in with email",
+    "name": "Your name",
+    "nameHelp": "Shown on apps you share. Your email is never shown.",
+    "email": "Email",
+    "password": "Password",
+    "passwordHelp": "At least 6 characters.",
+    "gate": {
+      "title": "Sign in to use Kalam",
+      "lede": "Sign in once on this device. Kalam then keeps you signed in, and your apps open without internet.",
+      "checking": "Checking your sign-in",
+      "offline": "No signal. The first sign-in needs the internet. After that, Kalam works offline.",
+      "fact1": "Your apps are stored on this device.",
+      "fact2": "Once you are signed in, they open with no signal.",
+      "fact3": "Your apps are copied to your account only if you turn on account sync."
+    },
+    "sheet": {
+      "title": "Sign in to Kalam",
+      "privacy": "Signing in does not upload your apps. They stay on this device unless you turn on account sync, and then records are uploaded only encrypted with your passphrase."
+    },
+    "toast": {
+      "signedIn": "Signed in"
+    },
+    "button": {
+      "signIn": "Sign in",
+      "account": "Account, {name}",
+      "accountNoName": "Your account"
+    },
+    "errors": {
+      "missing": "Enter your email and password.",
+      "not_configured": "Accounts are not set up in this build of Kalam.",
+      "offline": "You are offline. Connect to the internet to sign in.",
+      "cancelled": "Sign-in was cancelled.",
+      "invalid_credentials": "That email and password do not match.",
+      "email_in_use": "An account with this email already exists. Sign in instead.",
+      "weak_password": "Use a password with at least 6 characters.",
+      "invalid_email": "Check the email address.",
+      "popup_blocked": "Your browser blocked the sign-in window. Allow pop-ups for Kalam and try again.",
+      "unsupported": "Google sign-in is not available in this version of Kalam. Use email instead.",
+      "too_many_requests": "Too many attempts. Wait a few minutes and try again.",
+      "not_allowed": "This way of signing in is turned off for Kalam.",
+      "unauthorized_domain": "Sign-in does not work from this web address yet.",
+      "requires_recent_login": "Please sign in again to do that.",
+      "unknown": "Sign-in did not work. Please try again."
+    }
+  },
+  "account": {
+    "title": "Account",
+    "lede": "Your account signs you in to Kalam. It also lets you share apps in Kalam Bazaar and like other people's apps.",
+    "notConfiguredTitle": "Accounts are not set up in this build",
+    "notConfiguredBody": "Sign-in and Kalam Bazaar need Firebase to be configured.",
+    "checking": "Checking your account",
+    "nameSaved": "Name saved.",
+    "nameFailed": "Could not save your name.",
+    "noName": "No name yet",
+    "viaGoogle": "Signed in with Google",
+    "viaEmail": "Signed in with email",
+    "nameLabel": "Name shown on apps you share",
+    "nameHelp": "People see this name in Kalam Bazaar. Your email stays private.",
+    "saveName": "Save name",
+    "studio": "Creator Studio",
+    "library": "My library",
+    "bazaar": "Go to Kalam Bazaar",
+    "signOut": "Sign out",
+    "signOutHint": "Your apps stay on this device. You sign in again to open them.",
+    "signOutConfirm": {
+      "title": "Sign out of Kalam?",
+      "message": "Your apps stay on this device. To open them again you sign in, and signing in needs the internet."
+    },
+    "signedOut": "Signed out. Your apps are still on this device.",
+    "storesTitle": "What an account stores",
+    "stores1": "Your email and the name you choose. Firebase Authentication uses them to sign you in.",
+    "stores2": "Your apps and everything you type into them stay on this device unless you turn on account sync. Then they are uploaded to your account, and records only encrypted with your passphrase.",
+    "stores3": "Apps you share in Kalam Bazaar are public. Only the app design is shared, never your records.",
+    "stores4": "Signing out keeps all your apps on this device."
+  },
+  "slip": {
+    "no": "No."
+  },
+  "accountSync": {
+    "prompt": {
+      "title": "Keep your apps in your Google account?",
+      "titleEmail": "Keep your apps in your account?",
+      "description": "They appear on your other devices when you sign in there. You can change this later in Settings.",
+      "apps": "Apps only",
+      "appsHelp": "App designs and their versions. Your records stay on this device.",
+      "records": "Apps and their records",
+      "recordsHelp": "Your records are locked on this device with a passphrase you set. Kalam and Google cannot read them.",
+      "notNow": "Not now",
+      "keep": "Keep my apps",
+      "nothingYet": "Nothing is uploaded until you choose."
+    },
+    "passphrase": {
+      "label": "Passphrase",
+      "again": "Type the passphrase again",
+      "help": "At least 10 characters. Use the same passphrase on all your devices.",
+      "warning": "If you forget this passphrase, the records in your account cannot be opened. Kalam cannot reset it. The records on this device are not affected.",
+      "mismatch": "The two passphrases are different.",
+      "unlock": "Use this passphrase",
+      "save": "Save passphrase"
+    },
+    "settings": {
+      "title": "Your apps in your account",
+      "description": "Keep your apps in your account so they appear on your other devices. Signing out keeps everything on this device.",
+      "signedOut": "Sign in with Google or email to keep your apps in your account.",
+      "choice": "What to keep",
+      "off": "Off",
+      "status": "Status",
+      "lastSynced": "Last synced",
+      "never": "Not yet",
+      "appsInAccount": "Apps in your account",
+      "pending": "Changes waiting to upload",
+      "recordsBackup": "Records backup",
+      "recordsHere": "Photos and files stay on this device.",
+      "restored": "Records brought back for {count} of your apps.",
+      "syncNow": "Sync now",
+      "remove": "Remove my apps from my account",
+      "removeTitle": "Remove your apps from your account?",
+      "removeBody": "This deletes the app designs and the records backup from your account. The apps on your devices stay.",
+      "removeConfirm": "Remove from account",
+      "removed": "Your apps were removed from your account."
+    },
+    "phase": {
+      "idle": "Up to date",
+      "syncing": "Syncing",
+      "offline": "Offline",
+      "error": "Could not sync",
+      "off": "Off",
+      "signed_out": "Signed out"
+    },
+    "problem": {
+      "signed_out": "Sign in first.",
+      "guest": "To keep your apps in your account, sign in with Google or email.",
+      "offline": "You are offline. Changes upload when you are back online.",
+      "denied": "Your account could not be reached. Sign in again.",
+      "not_set_up": "Accounts are not set up in this build of Kalam.",
+      "unavailable": "Could not reach your account. Kalam will try again.",
+      "spec_too_big": "An app is too large to keep in your account. It stays on this device.",
+      "needs_passphrase": "Enter your passphrase to keep backing up your records.",
+      "passphrase_changed": "Your passphrase was changed on another device. Enter the new one.",
+      "records_too_big": "Your records are too large to back up to your account. They stay on this device.",
+      "wrong_passphrase": "That passphrase does not open the records in your account.",
+      "weak_passphrase": "Use a passphrase of at least 10 characters."
+    },
+    "badge": {
+      "inAccount": "In your account",
+      "waiting": "Waiting to sync"
+    }
+  },
+  "landing": {
+    "nav": {
+      "label": "Page sections",
+      "how": "How it works",
+      "shelf": "Shelf"
+    },
+    "hero": {
+      "line1": "Draw the app you need.",
+      "line2": "Own it forever.",
+      "lede": "Describe it, snap your paper sketch, say it or draw it. Kalam builds a working app that lives on your phone.",
+      "make": "Make your first app"
+    },
+    "access": {
+      "open": "Make Kalam easier to use",
+      "body": "Turn on what helps. You see the change straight away, and you can change it later in Settings.",
+      "saveError": "Could not save that setting. Try again."
+    },
+    "draftNote": "This language was translated by a machine and a native speaker has not checked it yet. Some words may read oddly.",
+    "stage": {
+      "label": "A handwritten Hindi order book for a tailor becomes a working app on a phone. Kalam reads each field, builds the form, checks it, and the app keeps saving with no signal.",
+      "pause": "Pause the story",
+      "play": "Play the story",
+      "replay": "Play the story again",
+      "read": "Reads your page",
+      "build": "Turns it into an app",
+      "check": "Checks it",
+      "keep": "Keeps it on your phone",
+      "routeCloud": "Built with Firebase cloud AI",
+      "routeDevice": "Saved on this phone",
+      "offline": "No signal. Your app still saves.",
+      "onThisPhone": "On this phone"
+    },
+    "how": {
+      "title": "From the page you keep to the app you use.",
+      "lede": "Kalam shows you every step, and nothing is saved until it passes its checks.",
+      "s1Title": "Show it your way",
+      "s1Body": "Type a few lines, photograph the page you drew, say it out loud, film your counter or draw it here. Mix them. They all go into one app.",
+      "trayLabel": "Five ways in",
+      "type": "Type",
+      "photo": "Photo",
+      "voice": "Voice",
+      "video": "Video",
+      "draw": "Draw",
+      "s2Title": "It reads it back to you",
+      "s2Body": "Before anything is built, you see the screens, fields and sums Kalam found. Change what it got wrong.",
+      "kindText": "Text",
+      "kindInches": "Number, inches",
+      "kindDate": "Date",
+      "s3Title": "Built the simplest way that works",
+      "s3Template": "A ready-made app, filled in. No AI.",
+      "s3Device": "Gemini Nano, on your phone.",
+      "s3Cloud": "Firebase AI Logic, only when needed.",
+      "s3Foot": "Kalam always tells you which one ran.",
+      "s4Title": "Checked before it is saved",
+      "s4Body": "If a check fails, nothing is saved and your input is kept.",
+      "s5Title": "Yours, on your phone",
+      "s5Body": "Open it on a bus with no signal. Add records, see totals, fix a mistake. Building may need the cloud. Using your app never does.",
+      "s5Offline": "Works offline",
+      "s5Share": "Export or share in Kalam Bazaar"
+    },
+    "shelf": {
+      "title": "Every app sits on your shelf, like your registers do.",
+      "lede": "Example apps, with example numbers. Each one opens and saves with no signal.",
+      "label": "Example apps",
+      "opensOffline": "Opens offline",
+      "tailor": "Tailor order book",
+      "tailorStat": "38 orders",
+      "kirana": "Kirana ledger",
+      "kiranaStat": "₹23,640 due",
+      "tuition": "Tuition fees",
+      "tuitionStat": "₹9,815 due",
+      "attendance": "Attendance, 7B",
+      "attendanceStat": "31 of 34 here",
+      "home": "Home expenses",
+      "homeStat": "₹18,920 spent",
+      "milk": "Milk account",
+      "milkStat": "41.5 litres"
+    },
+    "create": {
+      "title": "Mix what you have. Kalam reads it as one app.",
+      "lede": "Type a little, add the photo of your page, say the rest. Anything that will go to the cloud is marked before you build.",
+      "window": "New app",
+      "example": "Example",
+      "inThisApp": "In this app",
+      "description": "Description",
+      "photo": "Photo of the order book",
+      "voice": "Voice note, heard on this phone",
+      "cloudMark": "Goes to the cloud",
+      "deviceMark": "Stays on this phone",
+      "honest": "Items with a cloud mark go to Gemini through Firebase when you build. The voice recording stays on this phone. Only its words are sent.",
+      "forecast": "Likely: Firebase cloud AI",
+      "forecastBody": "A photo needs the cloud to read. Your finished app runs on this phone."
+    },
+    "close": {
+      "line1": "Building may need the cloud.",
+      "line2": "Using your app never does."
+    }
+  },
+  "bazaar": {
+    "mod": {
+      "title": "Moderation",
+      "lede": "Apps waiting for a review and apps people have reported. Every decision is saved in an audit log with its reason.",
+      "notAllowed": {
+        "title": "This page is for Kalam moderators",
+        "body": "Your account does not have moderator access."
+      },
+      "filter": {
+        "all": "All ({count})",
+        "pending": "Waiting ({count})",
+        "reported": "Reported ({count})"
+      },
+      "empty": "Nothing to review right now.",
+      "emptyBody": "New apps and new reports show up here.",
+      "loading": "Loading the queue",
+      "reports": {
+        "one": "{count} report since the last decision",
+        "other": "{count} reports since the last decision"
+      },
+      "reportNotes": "What people wrote",
+      "safety": {
+        "pass": "Automatic check passed",
+        "flagged": "Automatic check flagged this app",
+        "unavailable": "Automatic check did not run"
+      },
+      "action": {
+        "approve": "Approve",
+        "reject": "Reject",
+        "suspend": "Suspend",
+        "unsuspend": "Lift suspension",
+        "feature": "Feature",
+        "unfeature": "Remove feature",
+        "keep": "Keep, reports reviewed"
+      },
+      "reason": {
+        "policy_ok": "Meets the rules",
+        "quality": "Needs quality changes",
+        "else": "Other",
+        "auto": "Not picked: the usual reason for each decision is saved."
+      },
+      "note": {
+        "label": "Note",
+        "helper": "The maker sees this note when you reject an app. Up to 500 characters.",
+        "required": "Write what the maker should change."
+      },
+      "saved": "Decision saved.",
+      "reviews": {
+        "title": "Reviews",
+        "none": "No reviews yet.",
+        "hide": "Hide",
+        "show": "Show again",
+        "hidden": "Hidden",
+        "stars": "{count} out of 5 stars"
+      },
+      "error": {
+        "offline": "Kalam could not be reached. Check the connection and try again.",
+        "denied": "This account is not allowed to moderate.",
+        "signIn": "Sign in with your moderator account.",
+        "notDeployed": "The moderation service is not available yet.",
+        "gone": "This app is no longer in Kalam Bazaar.",
+        "failed": "That did not work. Try again."
+      },
+      "counts": {
+        "line": "Views {views}, previews {previews}, installs {installs}",
+        "note": "Views and previews count only people who chose to share them. No names are kept."
+      },
+      "share": {
+        "label": "Share anonymous view counts",
+        "hint": "When on, opening an app in Kalam Bazaar or starting its preview adds one to a count the maker can see. No name, account or device is kept. Off by default."
+      }
+    },
+    "title": "Kalam Bazaar",
+    "lede": "Apps made by other people. Add a copy to your shelf and it is yours. It keeps working offline, and your entries stay on your device.",
+    "share": "Share an app",
+    "by": "by {name}",
+    "installs": {
+      "one": "{count} install",
+      "other": "{count} installs"
+    },
+    "likes": {
+      "one": "{count} like",
+      "other": "{count} likes"
+    },
+    "featured": "Featured",
+    "featuredByTeam": "Featured by the Kalam team",
+    "featuredNote": "Chosen by the Kalam team. Featured apps are not ranked by installs or ratings.",
+    "needsNewer": "Needs a newer Kalam",
+    "newIn": "New in Kalam Bazaar",
+    "results": "Results",
+    "seeAll": "See all",
+    "loading": "Loading apps",
+    "more": "Show more apps",
+    "stamp": {
+      "checked": "Checked"
+    },
+    "cache": {
+      "offline": "No signal. These are apps you looked at before. Apps you opened can still be added.",
+      "unreachable": "Kalam Bazaar could not be reached. These are apps you looked at before."
+    },
+    "category": {
+      "business": "Business",
+      "creative": "Creative",
+      "education": "Education",
+      "field_work": "Field work",
+      "finance": "Finance",
+      "health": "Health and wellness",
+      "personal": "Personal",
+      "productivity": "Productivity",
+      "utilities": "Utilities"
+    },
+    "filter": {
+      "all": "All",
+      "anyLanguage": "Any language",
+      "anyPrice": "Any price",
+      "category": "Category",
+      "language": "Language",
+      "paid": "Paid",
+      "price": "Price"
+    },
+    "price": {
+      "free": "Free",
+      "credits": {
+        "one": "{count} credit",
+        "other": "{count} credits"
+      }
+    },
+    "rating": {
+      "none": "No reviews yet",
+      "summary": {
+        "one": "{stars} stars from {count} review",
+        "other": "{stars} stars from {count} reviews"
+      }
+    },
+    "search": {
+      "go": "Search",
+      "label": "Search apps",
+      "placeholder": "Search by name, use or maker"
+    },
+    "sort": {
+      "label": "Sort",
+      "new": "Newest",
+      "popular": "Most installed",
+      "rating": "Top rated"
+    },
+    "unreachable": {
+      "title": "Kalam Bazaar cannot be reached",
+      "body": "Kalam could not load apps from Bazaar just now. Check your connection and try again. The apps on your shelf are not affected."
+    },
+    "none": {
+      "body": "Be the first to share an app you made.",
+      "cacheHint": "Only apps you looked at before are saved for use without signal.",
+      "filters": "No apps match these filters",
+      "hint": "Try another word or category.",
+      "savedBody": "Open Kalam Bazaar while online and the apps you see are saved for later.",
+      "savedTitle": "No saved apps yet",
+      "search": "No apps match “{query}”",
+      "showAll": "Show all apps",
+      "title": "No apps here yet"
+    },
+    "notSetUp": {
+      "body": "Your own apps work the same. Sharing needs Firebase to be configured.",
+      "studio": "Sharing needs Firebase to be configured.",
+      "title": "Kalam Bazaar is not set up in this build"
+    },
+    "status": {
+      "passed": "Passed automatic checks",
+      "rejected": "Needs changes",
+      "reviewed": "Reviewed",
+      "suspended": "Suspended",
+      "unpublished": "Unpublished",
+      "waiting": "Waiting for checks"
+    },
+    "license": {
+      "all_rights_reserved": "Install and use only. Remixing is not allowed.",
+      "personal": "For personal use. Remixing is not allowed.",
+      "remix_allowed": "You may remix it. The maker stays credited."
+    },
+    "listing": {
+      "access": "Accessibility and languages",
+      "accessModes": "Works with Kalam's Large, High contrast, Simple and Read aloud modes.",
+      "add": "Add to my shelf",
+      "addAnother": "Add another copy",
+      "ai": "AI features",
+      "aiExplain": "These try the AI on your device first. If that is not possible, they may use Firebase cloud AI, which needs the internet. The text or photo you give them is sent for that one task. Each AI feature is checked again on your device before it runs offline.",
+      "aiNone": "This app has no AI features. Everything works offline.",
+      "backHome": "Back to Kalam Bazaar",
+      "basedOn": "Based on",
+      "basedOnBy": "{title} by {name}",
+      "basedOnOther": "Another Kalam Bazaar app",
+      "buy": "Buy for {price}",
+      "buyHint": "Shows the price and your balance before anything is charged.",
+      "buyNeedsAccount": "Buying apps needs an account with email or Google.",
+      "data": "Your data",
+      "details": "Details",
+      "does": "What it does",
+      "doesNothing": "Shows information. It has no buttons that save or change data.",
+      "finance": "This app is for keeping your own records. It is not financial advice.",
+      "fullyOffline": "Works fully offline",
+      "health": "This app is for keeping your own notes. It is not medical advice and has not been checked by a doctor.",
+      "installsLabel": "Installs",
+      "keeps": "Keeps {what} on your device.",
+      "keepsNothing": "Does not keep any entries.",
+      "labelsIn": "Labels are in {language}.",
+      "license": "Licence",
+      "like": "Like ({count})",
+      "likeNeedsAccount": "Sign in with Google or email to like apps.",
+      "liked": "Liked ({count})",
+      "loading": "Loading app details",
+      "makerCannotSee": "The maker cannot see anything you enter. Your copy is yours.",
+      "missing": "This app is not available",
+      "needsNewer": "This app needs a newer version of Kalam. Update Kalam to add it.",
+      "newerKalam": "A newer version of Kalam",
+      "notSaved": "There is no signal, and this app was not saved on this device.",
+      "openCopy": "Open your copy",
+      "paidOff": "This app is not free, and paid apps cannot be added in this build.",
+      "photos": "Can use photos you choose.",
+      "rating": "Rating",
+      "remix": "Remix",
+      "remixHint": "Makes your own copy to change. The original maker stays credited.",
+      "removed": "It may have been removed by its maker.",
+      "report": "Report",
+      "reportNeedsAccount": "Sign in with Google or email to report an app.",
+      "safety": "Safety",
+      "safetyAuto": "This app passed automatic checks when it was shared. It has not been reviewed by a person.",
+      "safetyData": "Kalam checks the app design again on your device before adding it. Apps in Kalam are data, not code, so they cannot run programs on your device.",
+      "safetyReviewed": "This app was reviewed by the Kalam team.",
+      "savedCopy": "No signal. This is a saved copy of the listing. Likes, reviews and reports need a connection.",
+      "screenshot": "Screenshot {n} of {total}",
+      "screenshots": "Screenshots",
+      "updated": "Updated",
+      "worksWith": "Works with",
+      "worksWithKalam": "Kalam {major}.x and this device",
+      "permissions": "What it asks to use"
+    },
+    "preview": {
+      "hint": "Try it with made-up sample entries. AI features are off in the preview.",
+      "loading": "Getting the app",
+      "needsInternet": "The preview needs the internet the first time.",
+      "paid": "Buy this app to try it. Paid apps have no free preview yet.",
+      "paidOff": "This app has no free preview in this build.",
+      "reset": "Start over",
+      "title": "Preview",
+      "try": "Try it first",
+      "tryHint": "Opens a preview with made-up entries. Nothing you type is saved."
+    },
+    "update": {
+      "available": "Version {next} is available. You have version {mine}.",
+      "copy": "Add as a separate app",
+      "different": "What is different",
+      "edited": "You changed your copy. To keep your changes, add the update as a separate app.",
+      "fromMaker": "From the maker: {summary}",
+      "keep": "Keep my version",
+      "replace": "Update my copy",
+      "review": "Review the update",
+      "safe": "Your entries stay. The old design stays in the app history, so you can go back.",
+      "small": "Only small details changed.",
+      "title": "Version {version} is available"
+    },
+    "reviews": {
+      "comment": "What did you think? (optional)",
+      "commentHint": "Plain text only. Your name from your account is shown with it.",
+      "installFirst": "Add this app to your shelf to review it.",
+      "makerReply": "Reply from the maker",
+      "offline": "Reviews need a connection.",
+      "post": "Post review",
+      "postReply": "Post reply",
+      "reply": "Reply",
+      "signInFirst": "Sign in and add this app to your shelf to review it.",
+      "someone": "Kalam user",
+      "stars": {
+        "one": "{count} star",
+        "other": "{count} stars"
+      },
+      "starsOf": {
+        "one": "{count} out of 5 stars",
+        "other": "{count} out of 5 stars"
+      },
+      "title": "Ratings and reviews",
+      "update": "Update review",
+      "write": "Write a review",
+      "yourReply": "Your reply",
+      "yours": "Your review"
+    },
+    "signIn": {
+      "title": "Sign in to continue"
+    },
+    "report": {
+      "description": "Tell us what is wrong. Your report is private. The maker does not see who sent it.",
+      "details": "Details (optional)",
+      "note": "Reports are saved for the Kalam team to review. Sending one does not remove the app straight away.",
+      "reason": {
+        "broken": "Does not work",
+        "copyright": "Copied without credit",
+        "inappropriate": "Inappropriate content",
+        "label": "Reason",
+        "malicious": "Harmful or unsafe",
+        "misleading": "Misleading description",
+        "privacy": "Asks for private information",
+        "spam": "Spam"
+      },
+      "send": "Send report",
+      "title": "Report “{name}”"
+    },
+    "buy": {
+      "after": "After buying",
+      "app": "App",
+      "balance": "Your credits",
+      "description": "Credits are a test currency inside Kalam. No real money is charged.",
+      "maker": "Maker",
+      "notEnough": "You do not have enough credits for this app.",
+      "note": "Nothing is charged until Kalam Bazaar confirms the purchase.",
+      "pay": "Pay {price}",
+      "price": "Price",
+      "starting": "100, your starting credits",
+      "title": "Buy “{name}”?"
+    },
+    "attribution": {
+      "from": "From Kalam Bazaar",
+      "fromBy": "From Kalam Bazaar, by {name}",
+      "open": "{what}. Open the listing.",
+      "remix": "Remix of a Kalam Bazaar app",
+      "remixBy": "Remix of an app by {name}"
+    },
+    "library": {
+      "again": "Add again",
+      "bought": "Bought for {price}",
+      "browse": "Browse Kalam Bazaar",
+      "elsewhere": "Not on this device",
+      "elsewhereNote": "Apps your account added or bought before. Add them again here at no cost.",
+      "emptyBody": "Apps you add from Kalam Bazaar show here, with updates when their makers publish them.",
+      "emptyTitle": "Nothing added from Kalam Bazaar yet",
+      "fromBazaar": "An app from Kalam Bazaar",
+      "installedApp": "Added app",
+      "lede": "Apps you added from Kalam Bazaar. They are yours and keep working offline.",
+      "listing": "Listing",
+      "loading": "Loading your library",
+      "newest": "You have the newest version.",
+      "offline": "No signal. Your added apps still open. Updates and apps added on other devices show when you are back online.",
+      "openListing": "Open listing",
+      "title": "My library",
+      "update": "Update available"
+    },
+    "wallet": {
+      "bought": "You bought an app",
+      "claim": "Get 100 starting credits",
+      "grant": "Starting credits",
+      "history": "History",
+      "lede": "Use credits to buy apps that their makers price. Makers receive the credits.",
+      "loading": "Loading your credits",
+      "none": "No credit activity yet.",
+      "note": "Credits are a test currency inside Kalam, not money. Purchases cannot be undone from the app. If something went wrong, report the app and the Kalam team can refund it.",
+      "offBody": "Every app in Kalam Bazaar is free to add in this build.",
+      "offTitle": "This page is not available in this build",
+      "refundIn": "Refund",
+      "refundOut": "Refund to a buyer",
+      "refunded": "{what} (refunded)",
+      "signIn": "Sign in to use credits",
+      "sold": "Someone bought your app",
+      "title": "Credits",
+      "yours": "Your credits"
+    },
+    "studio": {
+      "action": {
+        "edit": "Edit details",
+        "newVersion": "Publish a new version",
+        "recheck": "Run the checks again",
+        "showAgain": "Show it again",
+        "unpublish": "Unpublish",
+        "view": "View"
+      },
+      "appGone": "The app is no longer on this device.",
+      "checkingAccount": "Checking your account",
+      "drafts": "Drafts",
+      "draftsNote": "Kept on this device until you share them.",
+      "emptyBody": "Share an app you made so other people can add their own copy.",
+      "emptyTitle": "You have not shared any apps yet",
+      "lede": "Apps you shared in Kalam Bazaar. Hiding a listing never removes copies people already added.",
+      "listings": "Listings",
+      "loadFailed": "Your listings could not be loaded. Try again.",
+      "loading": "Loading your listings",
+      "offline": "No signal. Your listings will show when you are back online. Your drafts and apps still work.",
+      "saved": "Saved {when}.",
+      "signIn": "Sign in to see your listings",
+      "stat": {
+        "changes": "Needs changes",
+        "earned": "Credits earned",
+        "likes": "Likes",
+        "live": "Live",
+        "noneYet": "None yet",
+        "waiting": "Waiting"
+      },
+      "suspended": "This listing was suspended by the Kalam team. Copies people added keep working.",
+      "title": "Creator Studio",
+      "unpublishBody": "It will no longer show in Kalam Bazaar. People who added it keep their copy. You can show it again later.",
+      "unpublishTitle": "Unpublish {name}?",
+      "untitled": "Untitled",
+      "versionUpdated": "Version {version}. Updated {when}."
+    },
+    "publish": {
+      "addShots": "Add screenshots",
+      "aiFeatures": "Listed AI features: {what}.",
+      "appIcon": "Use the app's icon",
+      "appToShare": "App to share",
+      "changeIcon": "Change icon",
+      "changed": "What changed in this version?",
+      "changedHint": "Shown to people who added it.",
+      "checks": "Before it goes live, Kalam checks the design on this device and runs a safety check with Firebase cloud AI.",
+      "chooseFirst": "Choose an app to see what will be shared.",
+      "description": "Description",
+      "descriptionHint": "What it is for and who it helps. {used} of {max} characters.",
+      "discardDraft": "Discard draft",
+      "draftRemoved": "Draft removed.",
+      "iconFailed": "That icon could not be used.",
+      "iconNote": "Icons are checked and cleaned. Scripts, links and pictures inside SVG files are not allowed.",
+      "keeps": "Listed as keeping: {what}.",
+      "lede": "People can add a copy of your app. Only the app design is shared. The entries you saved in it stay on this device.",
+      "ledeDetails": "Change how your listing looks. The app itself stays the same. To change the app or its licence, publish a new version.",
+      "licenseInstall": "Licence: install and use only.",
+      "licenseRemix": "Licence: others may remix it.",
+      "looks": "How it will look in Kalam Bazaar",
+      "mainLanguage": "Main language",
+      "mainLanguageIs": "Main language: {language}",
+      "makerName": "Your name in Kalam Bazaar",
+      "makerNameHint": "Shown on the listing. Your email is never shown.",
+      "nameNeeded": "Choose the name people will see.",
+      "needsAccount": "Sharing needs a Google or email account so your listings stay yours.",
+      "noApps": "No apps on this device yet",
+      "noAppsBody": "Make an app first, then come back to share it.",
+      "notShared": "Not shared: anything saved in the app, your photos, your drawings and what you typed to make it.",
+      "offline": "No signal. Your details are saved on this device. Share when you are back online.",
+      "ownIcon": "Use your own icon (SVG)",
+      "price": "Price in credits",
+      "priceHint": "0 means free. Up to {max}. Credits are a test currency, not money.",
+      "publishVersion": "Publish version {version}",
+      "remixNo": "No, install only",
+      "remixPersonal": "Personal use only",
+      "remixQuestion": "Can other people remix it?",
+      "remixYes": "Yes, credit me",
+      "restored": "Your unsent details were restored.",
+      "result": {
+        "another": "Share another app",
+        "cached": "Safety check: the earlier result for the same content was used.",
+        "cloud": "Safety check: Firebase cloud AI{model}, {time}.",
+        "editApp": "Edit the app",
+        "notRun": "Safety check: not run.",
+        "shared": "Shared",
+        "view": "View listing",
+        "waiting": "Saved, waiting for checks"
+      },
+      "saveDetails": "Save details",
+      "shared": {
+        "one": "Shared: the design of {name}, with {count} screen.",
+        "other": "Shared: the design of {name}, with {count} screens."
+      },
+      "shotsFailed": "Those screenshots could not be used.",
+      "shotsNote": "Up to 3. Pictures are made smaller and location details are removed. Make sure they show no private entries.",
+      "signIn": "Sign in to share",
+      "stage": {
+        "checking": "Running the safety check with Firebase cloud AI",
+        "saving": "Saving your listing",
+        "validating": "Checking the app design"
+      },
+      "step": {
+        "check": "Check what is shared",
+        "choose": "Choose an app",
+        "describe": "Describe it",
+        "media": "Icon and screenshots (optional)"
+      },
+      "tags": "Tags",
+      "tagsHint": "Words people might search for, separated by commas.",
+      "title": "Title",
+      "titleDetails": "Edit details of {name}",
+      "titleDetailsNone": "Edit details of your listing",
+      "titleVersion": "New version of {name}",
+      "you": "You",
+      "yourApp": "Your app"
+    }
+  },
+  "inputs": {
+    "select": {
+      "placeholder": "Choose one",
+      "choose": "Choose {label}"
+    },
+    "number": {
+      "increase": "Increase {label}",
+      "decrease": "Decrease {label}",
+      "invalid": "Enter a number, like 12 or 12.5.",
+      "min": "Enter {min} or more.",
+      "max": "Enter {max} or less."
+    },
+    "date": {
+      "hint": "Type the date as 2026-11-25 or 25/11/2026.",
+      "invalid": "Enter a real date, like 2026-11-25.",
+      "min": "Choose {min} or later.",
+      "max": "Choose {max} or earlier.",
+      "setToday": "Set {label} to today"
+    }
+  },
+  "visualStudio": {
+    "start": "Arrange",
+    "stop": "Done arranging",
+    "toolbar": "Arrange tools",
+    "scroll": "Scroll the app",
+    "hint": {
+      "select": "Tap a part to select it. Drag it to move it.",
+      "scroll": "Scroll the app, then switch Scroll off to pick a part."
+    },
+    "kind": {
+      "button": "Button",
+      "field": "Field",
+      "list": "List",
+      "words": "Text",
+      "part": "Part"
+    },
+    "dropOnScreen": "Drop on a screen to move the part there",
+    "panel": "Selected part",
+    "more": "More options",
+    "less": "Fewer options",
+    "rename": "Rename",
+    "up": "Move up",
+    "down": "Move down",
+    "moveTo": "Move to screen",
+    "duplicate": "Duplicate",
+    "nameLabel": "Name",
+    "size": {
+      "label": "Size",
+      "small": "Small",
+      "medium": "Medium",
+      "large": "Large",
+      "handle": "Resize handle. Drag to change the size."
+    },
+    "width": "Full width",
+    "field": {
+      "type": "Answer type",
+      "text": "Short text",
+      "longText": "Long text",
+      "number": "Number",
+      "date": "Date",
+      "yesNo": "Yes or no",
+      "required": "Required",
+      "fixedType": "A choice keeps its type. Describe the change to edit its options."
+    },
+    "summary": {
+      "moved": "Moved {name}",
+      "movedToScreen": "Moved {name} to {screen}",
+      "resized": "Resized {name}",
+      "widened": "Changed the width of {name}",
+      "renamed": "Renamed {name}",
+      "required": "Made {name} required",
+      "optional": "Made {name} optional",
+      "retyped": "Changed the answer type of {name}",
+      "duplicated": "Copied {name}"
+    },
+    "fail": {
+      "missing": "That part is no longer on the screen.",
+      "stays": "This part works with the fields on its screen, so it stays here.",
+      "hasEntries": "This field already holds saved entries, so its type stays. Add a new field instead.",
+      "unsupported": "That change is not available for this part.",
+      "invalid": "That change would break the app, so Kalam did not make it."
+    },
+    "history": {
+      "label": "Undo and redo",
+      "undone": "Change undone",
+      "redone": "Change redone"
+    }
+  },
+  "docIntel": {
+    "title": "Add records from documents",
+    "open": "Add from documents",
+    "intro": "Choose photos or a scanned PDF. Kalam reads each page and shows what it found. Nothing is saved until you add it.",
+    "choose": "Choose photos or PDF",
+    "camera": "Take a photo",
+    "limits": "Scanned PDFs work. A PDF made of typed text, not scanned pages, cannot be read here, so save its pages as photos. Up to {max} pages at a time.",
+    "privacy": "Pages are read one at a time and are not stored. The reader may use the cloud if you allowed that in Settings.",
+    "progress": "Reading page {done} of {total}",
+    "stop": "Stop reading",
+    "stopped": "Pages left to read: {count}.",
+    "readRest": "Read the rest",
+    "pageOf": "{name}, page {page} of {pages}",
+    "where": "Seen at the {area} of the page",
+    "area": {
+      "top_left": "top left",
+      "top": "top",
+      "top_right": "top right",
+      "left": "left side",
+      "center": "middle",
+      "right": "right side",
+      "bottom_left": "bottom left",
+      "bottom": "bottom",
+      "bottom_right": "bottom right"
+    },
+    "preview": "Picture of {name}, page {page}. Marked squares show where fields were read.",
+    "confidence": {
+      "high": "Read clearly",
+      "medium": "Some doubt",
+      "low": "Hard to read",
+      "unrated": "Not rated"
+    },
+    "estimate": "Confidence is the reader's own estimate, not a guarantee. Check any value you depend on.",
+    "check": "This is right",
+    "checked": "Checked",
+    "issue": {
+      "invalid": "Read as “{text}”, which does not fit this field. Type the right value or leave it empty.",
+      "date": "Read as “{text}”. Pick the date.",
+      "missing": "Required. Type a value."
+    },
+    "useDate": "Use {date}",
+    "leaveEmpty": "Leave empty",
+    "include": "Add this record",
+    "duplicate": {
+      "batch": "Looks the same as an earlier page. It is left out unless you add it.",
+      "existing": "Looks the same as a record already in the list. It is left out unless you add it."
+    },
+    "summary": "Ready: {ready}. To check: {fix}. Not read: {failed}.",
+    "add": "Add records ({count})",
+    "error": {
+      "offline": "No connection, and this page needs the cloud reader. Try again when you are online.",
+      "cloud": "Cloud reading is off or not set up. Turn it on in Settings, or read this page when the device reader is ready.",
+      "timeout": "The reader took too long on this page. Try again.",
+      "quota": "The cloud reader has reached its limit for now. Try again in a few minutes.",
+      "unreadable": "The reader could not make sense of this page. Try a clearer photo.",
+      "device": "The reader on this device cannot read this page yet.",
+      "unknown": "This page could not be read. Try again."
+    },
+    "pdf": {
+      "not_pdf": "{name} is not a PDF.",
+      "too_large": "{name} is too large. Split it, or save its pages as photos.",
+      "encrypted": "{name} is locked. Remove the password and try again.",
+      "no_pages": "{name} has no scanned pages Kalam can read here. Save its pages as photos and add those."
+    },
+    "skipped": "{count} pictures in the PDF were left out: too small, or not scanned pages.",
+    "cut": "Only {max} pages can be read at a time.",
+    "reading": "Reading this page",
+    "waiting": "Waiting to be read",
+    "added": "Records added: {count}"
+  },
+  "queue": {
+    "title": "Queued tasks",
+    "intro": "Tasks that need internet wait here while you are offline. They start by themselves when internet is back, and you can cancel any of them.",
+    "unknownApp": "an app",
+    "empty": {
+      "title": "Nothing is waiting",
+      "body": "When you are offline, a task that needs internet can wait here instead of failing."
+    },
+    "pill": {
+      "active": {
+        "one": "{count} task queued",
+        "other": "{count} tasks queued"
+      },
+      "failed": {
+        "one": "{count} task stopped",
+        "other": "{count} tasks stopped"
+      },
+      "done": {
+        "one": "{count} task finished",
+        "other": "{count} tasks finished"
+      },
+      "hint": "Opens the queued tasks"
+    },
+    "kind": {
+      "compile": "Build a new app",
+      "translate": "Translate {app} into {language}",
+      "ai_step": "Run an AI step in {app}"
+    },
+    "status": {
+      "waiting_for_network": "Waiting for internet",
+      "ready": "Starting",
+      "processing": "Working",
+      "completed": "Done",
+      "failed": "Stopped",
+      "cancelled": "Cancelled"
+    },
+    "detail": {
+      "waitingOffline": "You are offline. This starts when internet is back.",
+      "retrySoon": "Attempt {count} did not go through. Trying again soon.",
+      "ready": "Starting now.",
+      "processing": "Running now. Cancel stops it.",
+      "cancelled": "Cancelled. The input it kept was removed.",
+      "stopped": {
+        "one": "Stopped after {count} try.",
+        "other": "Stopped after {count} tries."
+      },
+      "compileDone": "Your app is ready to review. Nothing is saved until you save it.",
+      "translateDone": "Translated. Open the app to use it.",
+      "translateMissing": {
+        "one": "Translated. {count} label stayed in the original language.",
+        "other": "Translated. {count} labels stayed in the original language."
+      },
+      "aiDone": "Finished. Open the app to review what the step found."
+    },
+    "error": {
+      "offline": "The connection dropped before it finished.",
+      "cloud_off": "Cloud help is off in Settings, so nothing was sent. Turn it on, then try again.",
+      "not_configured": "Cloud AI is not set up in this build, so nothing was sent.",
+      "source_missing": "What this task needed is no longer on this device.",
+      "invalid_result": "The answer was too large to keep.",
+      "failed": "It did not work. Try again, or remove it."
+    },
+    "sends": {
+      "text": "your description",
+      "photos": "your pictures",
+      "voice_text": "your spoken words as text",
+      "video_frames": "frames from your video",
+      "drawing": "your drawing",
+      "labels": "the app's text labels",
+      "ai_input": "the text you typed for the step",
+      "ai_photo": "the picture you chose for the step"
+    },
+    "sendsLine": "Will send: {items}",
+    "action": {
+      "cancel": "Cancel",
+      "retry": "Try again",
+      "dismiss": "Remove",
+      "openReview": "Review the app",
+      "openApp": "Open the app",
+      "failed": "That did not work. Try again."
+    },
+    "open": {
+      "busy": "Finish or cancel the build that is running first.",
+      "unavailable": "This result can no longer be opened. Remove it and queue it again."
+    },
+    "offer": {
+      "pickPhoto": "Choose a picture to queue",
+      "button": "Queue until online",
+      "title": "Queue this until you are online?",
+      "body": "Kalam keeps this on your device and runs it by itself when internet is back. You can cancel it at any time.",
+      "confirm": "Queue it",
+      "done": "Queued. It runs when you are back online.",
+      "full": "Too many tasks are queued. Cancel one first.",
+      "failed": "This could not be queued. Your input is still here."
+    },
+    "toast": {
+      "done": "A queued task finished.",
+      "failed": "A queued task stopped. Open the queue to see why."
+    }
+  },
+  "importLink": {
+    "intro": "Someone shared this app with you. Try it here. Nothing is saved until you choose to save it.",
+    "save": "Save to your shelf",
+    "exists": "You already have this app. Replace your copy, or keep both.",
+    "replace": "Replace my copy",
+    "keepBoth": "Keep both",
+    "replaceTitle": "Replace {name}?",
+    "replaceMessage": "Your saved entries and history stay. The design changes to the one in this link, and you can restore the old one from its history.",
+    "summaryOpened": "Opened from a link",
+    "summaryReplaced": "Replaced from a link",
+    "saved": "{name} saved to your shelf",
+    "saveFailed": "The app could not be saved. Try again.",
+    "badTitle": "This link could not be opened",
+    "badEmpty": "This link has no app in it.",
+    "checkedHint": "This app passed Kalam's checks on this device."
+  },
+  "shelfMore": {
+    "join": "Join with a code",
+    "teams": "Teams",
+    "browseTemplates": "Browse templates",
+    "copy": "Make a copy…",
+    "archive": "Archive",
+    "unarchive": "Move back to shelf",
+    "allArchived": "Everything is in the archive. Open the archive to bring an app back."
+  },
+  "runMore": {
+    "people": "Share with people",
+    "exportEntry": "Export an entry",
+    "exportTitle": "Which entry?",
+    "exportNone": "This app has no entries yet.",
+    "exportMore": "Showing the latest {count} entries."
+  },
+  "history": {
+    "timeline": {
+      "title": "History",
+      "loading": "Loading history",
+      "empty": "No saved versions yet.",
+      "current": "Current",
+      "event": {
+        "created": "Created",
+        "edited": "Edited",
+        "restored": "Restored",
+        "imported": "Imported"
+      },
+      "origin": {
+        "user": "By you",
+        "ai": "By AI",
+        "import": "Imported file",
+        "marketplace": "Bazaar update"
+      },
+      "yesterday": "Yesterday",
+      "filterLabel": "Show versions that changed",
+      "filterAll": "Everything",
+      "noMatches": "No version changed this part of the app.",
+      "blocked": "Keep or discard the proposed change before restoring an older version.",
+      "seeChanges": "See what changed",
+      "seeChangesHint": "Lists in plain words what version {version} changed.",
+      "preview": "Preview",
+      "showing": "Showing",
+      "previewHint": "Shows version {version} in the preview without changing anything.",
+      "restore": "Restore",
+      "restoreHint": "Makes version {version} the current design. Your records are kept.",
+      "dataTouched": "Affects entries"
+    },
+    "changeList": {
+      "title": "Here is what will change",
+      "empty": "Nothing in the design changes.",
+      "count": {
+        "one": "{count} change",
+        "other": "{count} changes"
+      },
+      "onlyLook": "Only the look and the wording change. How the app works stays the same.",
+      "entriesNote": "Some of these changes affect how your entries are stored. Entries you already saved are not deleted, and values you already saved stay on this device.",
+      "affectsEntries": "Affects entries",
+      "before": "Before",
+      "after": "After"
+    },
+    "diff": {
+      "title": "Version {n}",
+      "changedHere": "What changed in this version",
+      "ifRestored": "If you restore this version",
+      "earliest": "This is the earliest version kept on this device, so there is nothing before it to compare with.",
+      "same": "Nothing differs from your current design.",
+      "unavailable": "This version can no longer be rebuilt from the history on this device, so it cannot be compared.",
+      "restoreNote": "Restoring adds a new version. Your history and your saved entries are kept.",
+      "dataNote": "Some of these changes affect how your entries are stored. Entries you already saved are not deleted. A field that is no longer in the design will not show, but values you already saved stay on this device.",
+      "restoreButton": "Restore this version",
+      "restoreButtonHint": "Makes version {n} the current design as a new version. Your records are kept.",
+      "close": "Close",
+      "currentNote": "This is your current design."
+    }
+  },
+  "recovery": {
+    "what": {
+      "offline": "Kalam could not reach the internet.",
+      "consent": "Cloud AI is turned off.",
+      "model": "AI is not ready on this device.",
+      "notSetUp": "AI is not set up in this build.",
+      "timeout": "The AI took too long to answer.",
+      "badOutput": "The result did not pass Kalam's checks.",
+      "service": "The AI service could not help right now.",
+      "input": "That input cannot be used here.",
+      "cancelled": "You stopped this.",
+      "formula": "A formula could not be used.",
+      "storageFull": "There is no room to keep this.",
+      "newer": "This was saved by a newer Kalam.",
+      "file": "That file could not be opened.",
+      "passphrase": "That passphrase is too short.",
+      "conflict": "Some of these apps are already on this device.",
+      "entry": "This entry could not be saved.",
+      "permission": "Camera or photo access is off.",
+      "device": "This device cannot do that here.",
+      "share": "The link could not be kept.",
+      "generic": "Something went wrong."
+    },
+    "kept": {
+      "input": "What you typed or added is still here.",
+      "app": "Your app is unchanged. Its last working version is kept.",
+      "file": "Your original file was not changed.",
+      "entries": "What you already saved is still on this device.",
+      "none": "Nothing was deleted."
+    },
+    "action": {
+      "retry": "Try again",
+      "retryWhenOnline": "Try again when online",
+      "retryLater": "Try again in a few minutes",
+      "turnOnCloud": "Open cloud AI settings",
+      "prepareOnDevice": "Prepare on-device AI",
+      "changeInput": "Change what I added",
+      "fixFormula": "Open the formula",
+      "reviewStorage": "Review storage",
+      "exportBackup": "Save a backup",
+      "chooseAnotherFile": "Choose another file",
+      "allowAccess": "Open device settings"
+    },
+    "card": {
+      "keptLabel": "What was kept",
+      "nextLabel": "What you can do",
+      "canRetry": "You can try this again.",
+      "cannotRetry": "Trying again will not help until something changes."
+    },
+    "log": {
+      "title": "Recovery log",
+      "description": "What went wrong, what Kalam kept, and how to try again. Kept on this device only, until Kalam closes.",
+      "empty": "Nothing has gone wrong in this session.",
+      "clear": "Clear log",
+      "retryLine": "How to try again: {actions}",
+      "noAction": "No action is needed.",
+      "outcome": {
+        "shown": "Shown",
+        "applied": "Action taken",
+        "dismissed": "Closed",
+        "failed": "Action did not work"
+      }
+    },
+    "evidence": {
+      "title": "AI run evidence",
+      "description": "A file that lists each AI run: the kind of task, the device kind, the model, where it ran, how long the model took and whether it finished. It holds no prompts, entries, photos, recordings or app names. Nothing is sent anywhere unless you share the file.",
+      "runs": "Runs recorded: {count}",
+      "local": "Time spent on this device is listed apart from model time.",
+      "save": "Save evidence file",
+      "copy": "Copy",
+      "saved": "Evidence file ready.",
+      "copied": "Evidence copied.",
+      "failed": "The evidence could not be saved or copied.",
+      "empty": "No AI runs are recorded yet."
+    }
+  },
+  "studio": {
+    "toolsLabel": "Drawing tools",
+    "colour": "Colour",
+    "customColour": "Custom colour",
+    "customColourError": "Use three or six letters or numbers after the #.",
+    "size": "Size",
+    "textSize": "Text size",
+    "stampHint": "Tap the page to place. Stamps tell Kalam exactly which component you mean.",
+    "stampGroup": "Component stamp",
+    "stampsHeading": "Component stamps",
+    "addToScreen": "Add to this screen",
+    "add": {
+      "box": "Box",
+      "circle": "Circle",
+      "arrow": "Arrow",
+      "label": "Label",
+      "photo": "Photo"
+    },
+    "eraserHint": "Drag across a pen stroke to rub out the part you touch. Shapes and text are erased whole. Undo brings it back.",
+    "undo": "Undo (Ctrl+Z)",
+    "redo": "Redo (Ctrl+Shift+Z)",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
+    "fitView": "Fit screen to view",
+    "zoom": "Zoom",
+    "drawingName": "Drawing name",
+    "sizeFine": "Fine",
+    "sizeMedium": "Medium",
+    "sizeBold": "Bold",
+    "sizeHeavy": "Heavy",
+    "recentColour": "Recent colour {colour}",
+    "save": {
+      "saved": "Saved",
+      "saving": "Saving…",
+      "unsaved": "Unsaved changes",
+      "error": "Not saved. Trying again",
+      "restoring": "Opening your drawing…"
+    },
+    "bg": {
+      "title": "Screen background",
+      "applies": "Applies to this screen only.",
+      "pattern": "Pattern",
+      "paper": "Paper colour",
+      "hexError": "Use six letters or numbers after the #, like #F4EBD9.",
+      "plain": "Plain",
+      "grid": "Grid",
+      "dots": "Dots"
+    },
+    "pages": {
+      "label": "Screens",
+      "add": "Add screen",
+      "name": "Screen name",
+      "earlier": "Move screen earlier",
+      "later": "Move screen later",
+      "duplicate": "Duplicate screen",
+      "exportPng": "Export screen as PNG",
+      "clear": "Clear screen",
+      "delete": "Delete screen",
+      "clearTitle": "Clear this screen?",
+      "untitled": "Screen {n}",
+      "deleteTitle": "Delete \"{title}\"?",
+      "deleteBody": {
+        "one": "It has {count} object. You can undo this right after.",
+        "other": "It has {count} objects. You can undo this right after."
+      },
+      "clearBody": {
+        "one": "This removes {count} object from \"{title}\". You can undo it right after.",
+        "other": "This removes all {count} objects from \"{title}\". You can undo it right after."
+      },
+      "tabLabel": "Screen {n} of {total}: {title}, {content}",
+      "emptyPage": "empty"
+    },
+    "objects": {
+      "one": "{count} object",
+      "other": "{count} objects"
+    },
+    "file": {
+      "saved": "Saved.",
+      "notSaved": "Not saved yet. Kalam will keep trying.",
+      "saveShortcut": "Save now (Ctrl+S)",
+      "save": "Save now",
+      "exportPage": "Export this screen as PNG",
+      "exportAll": "Export all screens as PNG",
+      "exportSvg": "Export as SVG",
+      "exportAllPdf": "Export all screens as PDF",
+      "exportPdf": "Export as PDF",
+      "openingSvg": "Opening SVG file",
+      "importSvg": "Bring in an SVG file",
+      "addingPhoto": "Adding photo",
+      "addPhoto": "Add photo",
+      "duplicate": "Duplicate this screen",
+      "clear": "Clear this screen",
+      "delete": "Delete this screen",
+      "menu": "File and export menu",
+      "menuTitle": "File and export",
+      "deleteTitle": "Delete this screen?",
+      "clearBody": {
+        "one": "This removes {count} object from the screen. You can undo it right after.",
+        "other": "This removes all {count} objects from the screen. You can undo it right after."
+      }
+    },
+    "sel": {
+      "group": {
+        "edit": "Edit",
+        "group": "Group",
+        "order": "Order",
+        "lock": "Lock and hide",
+        "move": "Move",
+        "size": "Size and turn"
+      },
+      "fill": "Fill",
+      "fillColour": "Fill colour",
+      "noFill": "No fill",
+      "corners": "Corners",
+      "cornerShape": "Corner shape",
+      "arrowHead": "Arrow head",
+      "arrowHeadSize": "Arrow head size",
+      "font": "Font",
+      "typeface": "Typeface",
+      "bold": "Bold",
+      "several": "Select several",
+      "severalHint": "Tap objects to add them or take them off.",
+      "paste": "Paste",
+      "duplicate": "Duplicate",
+      "copy": "Copy",
+      "cut": "Cut",
+      "deleteSelected": "Delete selected",
+      "groupBtn": "Group selected objects (Ctrl+G)",
+      "ungroupBtn": "Ungroup (Ctrl+Shift+G)",
+      "toFront": "Bring to front",
+      "forward": "Bring forward",
+      "backward": "Send backward",
+      "toBack": "Send to back",
+      "unlock": "Allow editing",
+      "lock": "Lock",
+      "hide": "Hide",
+      "left": "Move left",
+      "up": "Move up",
+      "down": "Move down",
+      "right": "Move right",
+      "smaller": "Make smaller",
+      "larger": "Make larger",
+      "turnLeft": "Turn left 15 degrees",
+      "turnRight": "Turn right 15 degrees",
+      "handwriting": "Turn handwriting into text",
+      "handwritingNote": "Kalam shows you the words first. Nothing changes until you say so.",
+      "whatItIs": "What it is",
+      "whatFor": "What this object is for",
+      "notSet": "Not set",
+      "usedWhenBuilding": "Kalam uses this when it builds your app.",
+      "labelHelper": "Shown on the component, e.g. the button's words or the field name.",
+      "text": "Text",
+      "describePhoto": "Describe this photo",
+      "describePhotoHelper": "Read aloud by screen readers and used by Kalam to understand the photo.",
+      "objectsLabel": "Objects on this screen",
+      "hint": "Tap an object to select it. Drag on empty space to select several. Drag a corner to resize it, or the round handle to turn it.",
+      "fillOf": "{name} fill",
+      "oneSelected": "{name} selected",
+      "groupSelected": {
+        "one": "Group of {count} object selected",
+        "other": "Group of {count} objects selected"
+      },
+      "manySelected": {
+        "one": "{count} object selected",
+        "other": "{count} objects selected"
+      },
+      "lockedSuffix": ", locked",
+      "hiddenSuffix": ", hidden",
+      "selectedSuffix": ", selected",
+      "objectsHeading": "Objects on this screen ({count} of {max})",
+      "showName": "Show {name}",
+      "hideName": "Hide {name}",
+      "unlockName": "Allow editing {name}",
+      "lockName": "Lock {name}",
+      "showingTop": "Showing the top {count}."
+    },
+    "tool": {
+      "select": "Select and move",
+      "pen": "Pen",
+      "marker": "Marker",
+      "highlighter": "Highlighter",
+      "eraser": "Eraser",
+      "rect": "Rectangle",
+      "ellipse": "Ellipse",
+      "line": "Line",
+      "arrow": "Arrow",
+      "text": "Text",
+      "stamp": "Component stamps"
+    },
+    "hint": {
+      "header": "Header",
+      "nav": "Navigation",
+      "total": "Total",
+      "list_item": "List item"
+    },
+    "font": {
+      "sans": "Sans",
+      "serif": "Serif",
+      "mono": "Mono"
+    },
+    "paper": {
+      "white": "White",
+      "paper": "Paper",
+      "haldi": "Haldi",
+      "ink": "Ink",
+      "green": "Green",
+      "sky": "Sky",
+      "rose": "Rose"
+    },
+    "radius": {
+      "square": "Square",
+      "small": "Small",
+      "medium": "Medium",
+      "large": "Large",
+      "pill": "Pill"
+    },
+    "head": {
+      "auto": "Auto",
+      "small": "Small",
+      "medium": "Medium",
+      "large": "Large"
+    },
+    "shortcuts": {
+      "button": "Keyboard shortcuts (?)",
+      "title": "Keyboard shortcuts",
+      "intro": "These work with a keyboard while the drawing is selected. On a Mac, press Cmd where it says Ctrl.",
+      "tools": "Tools",
+      "edit": "Edit",
+      "arrange": "Move and arrange",
+      "view": "View",
+      "or": "or",
+      "undo": "Undo",
+      "redo": "Redo",
+      "save": "Save now",
+      "copy": "Copy",
+      "cut": "Cut",
+      "paste": "Paste",
+      "duplicate": "Duplicate",
+      "selectAll": "Select everything",
+      "delete": "Delete the selected objects",
+      "deselect": "Let go of the selection",
+      "group": "Group",
+      "ungroup": "Ungroup",
+      "toFront": "Bring to front",
+      "toBack": "Send to back",
+      "forward": "Bring forward",
+      "backward": "Send backward",
+      "nudge": "Move the selection a little",
+      "nudgeBig": "Move the selection further",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "fit": "Fit the screen to the view",
+      "wheel": "Zoom with the mouse wheel",
+      "pan": "Move around the page",
+      "help": "Show this list"
+    },
+    "kalamFile": {
+      "save": "Save as Kalam drawing",
+      "open": "Open Kalam drawing",
+      "opening": "Opening drawing file",
+      "saved": "Saved {name}. Open it in Kalam on any device.",
+      "saveFailed": "The drawing file could not be saved. Try again.",
+      "opened": "Opened \"{title}\" as a new drawing.",
+      "openFailed": "That file could not be opened. Try another one.",
+      "tooLarge": "That file is too large to open.",
+      "problem": {
+        "too_large": "That file is too large to open.",
+        "not_json": "That is not a Kalam drawing file.",
+        "wrong_format": "That is not a Kalam drawing file.",
+        "empty": "That drawing file has nothing in it that Kalam can open."
+      },
+      "dropped": {
+        "one": "{count} damaged object was left out.",
+        "other": "{count} damaged objects were left out."
+      },
+      "photosMissing": {
+        "one": "{count} photo was not in the file.",
+        "other": "{count} photos were not in the file."
+      },
+      "newer": "It was made with a newer version of Kalam, so some parts may be missing."
+    },
+    "export": {
+      "title": "Export",
+      "fileType": "File type",
+      "thisScreen": "This screen",
+      "sharpness": "Sharpness",
+      "chooseWhere": "Choose where to save the file.",
+      "saveFailed": "The file could not be saved. Try again.",
+      "descPng": "Saves a picture of your screens to this device.",
+      "descSvg": "Saves your screens as shapes that other drawing programs can open. Photos are included.",
+      "descPdf": "Saves every screen in one PDF, in order. Each page is a picture, so its text cannot be selected.",
+      "savedOne": "Saved the {format} to your downloads.",
+      "savedMany": {
+        "one": "Saved {count} screen to your downloads as a zip file.",
+        "other": "Saved {count} screens to your downloads as a zip file."
+      },
+      "savePdf": "Save PDF",
+      "saveOne": "Save {format}",
+      "saveMany": {
+        "one": "Save {count} {format} file",
+        "other": "Save {count} {format} files"
+      },
+      "all": "All {count}",
+      "sizeSvg": {
+        "one": "{count} screen, drawn at {width} by {height}.",
+        "other": "{count} screens, drawn at {width} by {height}."
+      },
+      "sizePng": "{width} by {height} pixels per screen.",
+      "pagesInFile": {
+        "one": "{count} page in one file.",
+        "other": "{count} pages in one file."
+      },
+      "zipNote": "Several screens are saved together in one zip file.",
+      "blankNote": "Empty screens are saved as blank pages.",
+      "format": {
+        "png": "PNG picture",
+        "svg": "SVG shapes",
+        "pdf": "PDF document"
+      },
+      "scale": {
+        "1": "Standard",
+        "2": "Sharp",
+        "4": "Extra sharp"
+      }
+    },
+    "hw": {
+      "nothing": "No writing could be read. Type what it says instead.",
+      "failed": "Reading failed. Type what it says instead.",
+      "selectFirst": "Select some pen writing first.",
+      "noCloud": "The cloud could not be reached. Type what it says instead.",
+      "replaced": "Replaced your writing with text. Undo brings the writing back.",
+      "intro": "Kalam reads the writing you selected. You check the words before anything changes.",
+      "workingCloud": "Sending a picture of the writing to Gemini and reading it.",
+      "workingDevice": "Reading your writing on this device.",
+      "sendCloud": "Send the writing to Gemini",
+      "typeInstead": "Type it instead",
+      "typePrompt": "Type what the writing says.",
+      "digitsNote": "Letters such as O or I can look like digits. If this is not a number, read it with AI instead.",
+      "unsure": "Some words were hard to read. Check them before you continue.",
+      "shortened": "The writing was long, so only the first part is shown. Check it before you continue.",
+      "whatItSays": "What it says",
+      "replace": "Replace writing with text",
+      "readAi": "Read it with AI instead",
+      "keep": "Keep my writing"
+    }
+  },
+  "storage": {
+    "archive": {
+      "title": "Archived apps ({count})",
+      "empty": "No archived apps. Archive an app from its menu on the shelf to hide it without deleting it.",
+      "changed": "Changed {when}",
+      "restoreLabel": "Move {name} back to the shelf"
+    }
+  },
+  "reports": {
+    "button": "Reports",
+    "buttonHint": "See totals and charts worked out from this app's entries",
+    "sheetTitle": "Reports for {app}",
+    "sheetDescription": "Every number is worked out on this device from your entries. Nothing is sent online unless you ask.",
+    "noCollections": "This app does not save entries, so there is nothing to report on.",
+    "noCollectionsTitle": "No reports for this app",
+    "suggested": "Suggested reports",
+    "makeYourOwn": "Make your own",
+    "hideBuilder": "Hide the report maker",
+    "list": "List",
+    "measure": "What to work out",
+    "splitBy": "Split by",
+    "period": "Period",
+    "datesFrom": "Dates from",
+    "whenAdded": "When it was added",
+    "count": "Number of entries",
+    "total": "Total {field}",
+    "average": "Average {field}",
+    "nothing": "Nothing",
+    "unit": {
+      "day": "Day",
+      "week": "Week",
+      "month": "Month"
+    },
+    "periods": {
+      "last7": "Last 7 days",
+      "last4w": "Last 4 weeks",
+      "last6m": "Last 6 months",
+      "all": "All time"
+    },
+    "showReport": "Show report",
+    "working": "Working it out",
+    "overall": "Overall",
+    "entriesCounted": "{n} entries counted",
+    "explain": "Explain in words",
+    "explaining": "Writing an explanation",
+    "explanationTitle": "In words",
+    "explainedPlain": "Written on this device without AI",
+    "explainedDevice": "Written by Gemini Nano on this device",
+    "explainedCloud": "Written online by Gemini from the totals only",
+    "explainNote": "Written on this device from the totals above.",
+    "askOnline": "Ask Gemini online",
+    "askOnlineNote": "This device cannot write it. Gemini online can, using only the totals above. Your entries are not sent.",
+    "share": "Share summary",
+    "shared": "Summary shared",
+    "copied": "Summary copied",
+    "shareFailed": "The summary could not be shared or copied.",
+    "failed": "This report could not be worked out.",
+    "showTable": "Show as table",
+    "showChart": "Show as chart",
+    "tableLabel": "{title}, as a table",
+    "chartLabel": "Chart. {summary}",
+    "tapPoint": "Tap a point to see its value.",
+    "pointValue": "{label}: {value}",
+    "share_of": "{pct} of the total",
+    "empty": "No entries yet",
+    "noMatch": "No entries match",
+    "nothingInPeriod": "Nothing in this period",
+    "emptyHint": "Add a few entries and this chart fills in.",
+    "notEnough": "Not enough data yet"
+  },
+  "share": {
+    "ui": {
+      "button": "Share",
+      "buttonHint": "Share entries with another app on this device",
+      "sheetTitle": "Sharing for {appName}",
+      "sheetIntro": "A link lets two of your apps use each other's entries. You choose what is shared, and you can turn a link off at any time. Nothing leaves this device.",
+      "loading": "Looking for links",
+      "loadFailed": "The links could not be read from this device. Close this and try again.",
+      "empty": {
+        "title": "No links yet",
+        "description": "Link two of your apps to show one app's entries in the other, or to send entries from one to the other."
+      },
+      "newLink": "New link",
+      "listHeading": "Links for this app",
+      "card": {
+        "status": {
+          "on": "On",
+          "paused": "Paused",
+          "off": "Turned off"
+        },
+        "kind": {
+          "read": "Shows entries",
+          "write": "Sends entries"
+        },
+        "to": "{source} to {destination}",
+        "bazaar": "{name} is from the Bazaar",
+        "sentFromThere": "Entries are sent from {source}. Open that app to send them.",
+        "turnedOffOn": "Turned off on {date}.",
+        "turnedOffNote": "This link was turned off. Nothing is shared through it any more.",
+        "history": "History",
+        "send": "Send entries",
+        "turnOff": "Turn off",
+        "remove": "Remove",
+        "fields": "Shared fields: {fields}"
+      },
+      "confirmOff": {
+        "title": "Turn off this link?",
+        "message": "{destination} stops using entries from {source} straight away. Entries that were already sent stay where they are.",
+        "confirm": "Turn off"
+      },
+      "confirmRemove": {
+        "title": "Remove this link?",
+        "message": "The link and its history are deleted from this device.",
+        "confirm": "Remove"
+      },
+      "turnedOff": "The link is turned off.",
+      "removed": "The link is removed.",
+      "actionFailed": "That did not work. Nothing was changed.",
+      "cancel": "Cancel",
+      "close": "Done",
+      "history": {
+        "created": "Link made",
+        "revoked": "Turned off",
+        "blocked": "Stopped because the link was paused",
+        "someRejected": "some were not accepted",
+        "sentNew": "{count} sent",
+        "sentUpdated": "{count} updated",
+        "nothingNew": "Send finished, nothing new"
+      },
+      "intent": {
+        "view_from": {
+          "label": "Show entries from another app in this app",
+          "description": "This app displays entries that stay in the other app. Nothing is copied."
+        },
+        "let_view": {
+          "label": "Let another app show this app's entries",
+          "description": "The other app displays your entries here. It cannot change them."
+        },
+        "send_to": {
+          "label": "Send entries from this app to another app",
+          "description": "You choose the entries and confirm each time. The other app checks them."
+        },
+        "receive_from": {
+          "label": "Receive entries sent from another app",
+          "description": "You choose the entries in the other app. This app checks each one."
+        }
+      },
+      "form": {
+        "title": "New link",
+        "intentLabel": "What do you want to do?",
+        "appLabel": "Which app?",
+        "noOtherApp": "You need a second app on this device before you can share.",
+        "sourceList": "Entries to share (list in {appName})",
+        "destinationList": "Where they go (list in {appName})",
+        "noLists": "This app has no lists to share.",
+        "fieldsHeading": "Which fields?",
+        "fieldsHelp": "Choose where each field goes. Fields left as \"Not shared\" stay in their own app.",
+        "notShared": "Not shared",
+        "fieldGroup": "Where does \"{label}\" go?",
+        "noFields": "These two lists have no fields that fit each other.",
+        "previewHeading": "What this link allows",
+        "bazaarSwitch": "I trust {name} with this information",
+        "bazaarHelp": "{name} came from the Bazaar and was made by someone else.",
+        "allow": "Allow sharing",
+        "back": "Back",
+        "blockers": {
+          "pickApp": "Choose the other app.",
+          "pickLists": "Choose a list in each app.",
+          "pickFields": "Choose at least one field to share.",
+          "bazaar": "Confirm that you trust {name}."
+        }
+      },
+      "send": {
+        "title": "Send entries to {destination}",
+        "loading": "Looking for entries",
+        "empty": "There are no entries to send yet.",
+        "failed": "The entries could not be read. Go back and try again.",
+        "selectAll": "Choose all",
+        "clear": "Clear choice",
+        "sentBefore": "sent before",
+        "more": "Showing {shown} of {total} entries. Entries not sent yet come first.",
+        "listLabel": "Entries to send",
+        "update": "Update entries sent before",
+        "updateHelp": "Entries you sent earlier are changed to match this app.",
+        "action": {
+          "one": "Send {count} entry",
+          "other": "Send {count} entries"
+        },
+        "nothingToDo": "Everything you chose was sent before. Turn on \"Update entries sent before\" to change those, or choose other entries.",
+        "confirmTitle": "Send to {destination}?",
+        "confirm": "Send",
+        "back": "Back",
+        "limit": "You can choose up to {n} entries at a time.",
+        "helpOne": "Choose the entries to send. Only {fields} is sent.",
+        "helpMany": "Choose the entries to send. Only {fields} are sent.",
+        "noneChosen": "None chosen",
+        "chosenCount": "{n} chosen",
+        "planCreate": {
+          "one": "{count} new entry is sent.",
+          "other": "{count} new entries are sent."
+        },
+        "planChange": {
+          "one": "{count} sent before is already there and will be changed.",
+          "other": "{count} sent before are already there and will be changed."
+        },
+        "planLeftOut": {
+          "one": "{count} sent before is left as it is.",
+          "other": "{count} sent before are left as they are."
+        },
+        "onlyOne": "Only {fields} is sent. {destination} checks each entry before it keeps it.",
+        "onlyMany": "Only {fields} are sent. {destination} checks each entry before it keeps it."
+      }
+    }
+  },
+  "widgets": {
+    "ui": {
+      "button": "Widgets",
+      "buttonHint": "Put a number or a short list from this app on your home screen or shelf",
+      "sheetTitle": "Widgets for {appName}",
+      "sheetIntro": "A widget shows one number or a short list from this app, on your home screen or as a card on your shelf. You choose exactly what it shows. It is worked out on this device and nothing leaves it.",
+      "loading": "Looking for widgets",
+      "loadFailed": "The widgets could not be read from this device. Close this and try again.",
+      "empty": {
+        "title": "No widgets yet",
+        "description": "Make one to see a figure from this app without opening it."
+      },
+      "newWidget": "New widget",
+      "listHeading": "Widgets for this app",
+      "card": {
+        "notOnHomeScreen": "Not on your home screen yet",
+        "add": "Add to home screen",
+        "edit": "Edit",
+        "remove": "Remove",
+        "removeTitle": "Remove this widget?",
+        "removeMessage": "Widgets already on your home screen will ask you to pick again. Nothing in the app changes.",
+        "brokenFix": "Edit it to pick again",
+        "onHomeScreen": {
+          "one": "On {count} home screen spot",
+          "other": "On {count} home screen spots"
+        }
+      },
+      "form": {
+        "titleNew": "New widget",
+        "titleEdit": "Edit widget",
+        "showHeading": "What should it show?",
+        "showNone": "This app has nothing a widget can show yet.",
+        "showHint": "A figure or list this app already shows, or a count of its entries. For a list you choose which fields appear, and that can include fields the list does not show on its own screen.",
+        "kind": {
+          "stat": "Figure",
+          "list": "List",
+          "count": "Count"
+        },
+        "nameLabel": "Name on the widget",
+        "nameHelper": "Short, and no private details. Anyone who sees your home screen can read it.",
+        "nameRequired": "Give the widget a name.",
+        "rowsLabel": "How many rows",
+        "fieldsHeading": "Which fields may appear",
+        "fieldsHint": "Nothing else from an entry is ever put on the widget.",
+        "fieldsNone": "Pick at least one field.",
+        "fieldCheck": "{label} (shown as a tick)",
+        "sizeLabel": "Size",
+        "size": {
+          "small": "Small",
+          "medium": "Medium"
+        },
+        "refreshLabel": "When it updates",
+        "refresh": {
+          "live": "As things change",
+          "on_open": "When I open Kalam"
+        },
+        "lockLabel": "Hide it while the device is locked",
+        "lockHelp": {
+          "on": "On a locked device it shows only a lock notice.",
+          "off": "It stays visible on a locked device. Use this only for things you are happy for others to see."
+        },
+        "tapHeading": "When you tap it",
+        "tapOpenApp": "Open the app",
+        "tapOpenScreen": "Open {title}",
+        "previewHeading": "What it shows now",
+        "previewFailed": "This cannot be shown right now.",
+        "save": "Save widget",
+        "saveAndAdd": "Save and add to home screen",
+        "back": "Back"
+      },
+      "added": {
+        "saved": "Widget saved.",
+        "savedCard": "Widget saved. It shows as a card on your shelf.",
+        "removed": "Widget removed.",
+        "asked": "Your phone is asking where to put it. Choose a spot to finish.",
+        "declined": "Your phone did not add it. You can try again from the list."
+      },
+      "platform": {
+        "android": {
+          "cannotPin": "This launcher cannot add widgets from an app. Touch and hold the home screen, choose Widgets, pick Kalam, then tap the widget to choose which one it shows."
+        },
+        "ios": "iPhone does not let an app add a widget. Touch and hold the home screen, tap the plus button, choose Kalam, then edit the widget to pick one of these.",
+        "web": "Home screen widgets are for Android and iPhone. Here, the widgets you make show as cards on your shelf. You can also show pinned apps in the install menu, in widget settings.",
+        "unavailable": "Home screen widgets are not available in this copy of Kalam, but the widgets you make still show as cards on your shelf. {reason}"
+      },
+      "settings": {
+        "title": "Widget settings",
+        "intro": "Widgets show only what you pick, worked out on this device. Here you can see all of them, remove them, and set the rules for the web app.",
+        "allHeading": "All widgets on this device",
+        "none": "You have not made any widgets.",
+        "appGone": "App deleted",
+        "webShortcutsLabel": "Show pinned apps in the install menu",
+        "webShortcutsHelp": "When Kalam is installed from your browser, a long press or right click on its icon lists your pinned apps. Only their names are used. Off until you turn it on.",
+        "clearAll": "Remove all widgets",
+        "clearTitle": "Remove all widgets?",
+        "clearMessage": "This removes every widget and what they show on your home screen. Your apps and entries are not touched.",
+        "cleared": "All widgets removed.",
+        "open": "Widget settings",
+        "done": "Done"
+      },
+      "cards": {
+        "heading": "Your widgets",
+        "hint": "Opens the app"
+      },
+      "status": {
+        "saveFailed": "The widget could not be saved. Try again."
+      },
+      "preview": {
+        "done": "done",
+        "notDone": "not done"
+      }
+    }
+  },
+  "collab": {
+    "ui": {
+      "untitled": "Untitled",
+      "someone": "Someone",
+      "you": "You",
+      "errors": {
+        "sign_in": "Sign in to share apps with people.",
+        "guest_account": "This old sign-in cannot share apps. Sign in with email or Google first.",
+        "offline": "You are offline. Connect to the internet and try again.",
+        "no_consent": "Read what sharing does and agree to it first.",
+        "no_app": "This app is no longer on this device.",
+        "already_shared": "This app is already shared.",
+        "not_shared": "This app is not shared.",
+        "spec_too_big": "This app is too large to share. Remove a few screens or fields and try again.",
+        "spec_invalid": "The latest shared design did not pass the checks on this device, so the previous one is kept.",
+        "spec_newer": "This shared app needs a newer version of Kalam. Update Kalam to get the latest design.",
+        "denied": "You do not have permission to do that.",
+        "not_set_up": "Sharing is not set up in this build of Kalam.",
+        "unavailable": "Could not reach Kalam's cloud. Try again in a moment.",
+        "invalid_code": "That code does not look right. Paste the whole link or code you were sent.",
+        "invite_refused": "This invite does not work any more. Ask for a new one.",
+        "not_allowed": "Your role does not allow that.",
+        "owner_cannot_leave": "You own this. Stop sharing it instead of leaving.",
+        "gone": "This shared app or team no longer exists.",
+        "read_only": "You can view this shared app but not change it. Ask its owner for editor access.",
+        "structure_owner_only": "Only the owner of this shared app can change its design. Your entries still sync.",
+        "team_full": "This team already has 30 apps.",
+        "team_name": "Give the team a name.",
+        "cannot_apply": "Their version does not fit this app on this device (a full list, or a value the design does not allow), so nothing changed."
+      },
+      "summary": {
+        "designUpdate": "New design from the owner of this shared app",
+        "photosOptional": "Photo fields made optional, because photos stay on each device in a shared app",
+        "joined": "Joined the shared app \"{title}\""
+      },
+      "roles": {
+        "owner": {
+          "name": "Owner",
+          "description": "Changes the design, manages people, can stop sharing"
+        },
+        "admin": {
+          "name": "Admin",
+          "description": "Invites and manages editors and viewers, edits entries"
+        },
+        "editor": {
+          "name": "Editor",
+          "description": "Adds, changes and deletes entries"
+        },
+        "viewer": {
+          "name": "Viewer",
+          "description": "Sees entries but cannot change them"
+        }
+      },
+      "status": {
+        "upToDate": "Up to date",
+        "syncing": "Syncing",
+        "offline": "Offline. Changes send when you are back online",
+        "error": "Could not sync. Kalam will try again",
+        "problems": {
+          "spec_too_big": "Design too large to share",
+          "spec_invalid": "New design did not pass the checks",
+          "spec_newer": "Update Kalam to get the new design",
+          "denied": "Not allowed. Ask the owner",
+          "not_set_up": "Sharing is not set up"
+        },
+        "signedOut": "Sign in to sync this shared app",
+        "viewOnly": "View only",
+        "waiting": {
+          "one": "{count} change waiting to send",
+          "other": "{count} changes waiting to send"
+        },
+        "conflicts": {
+          "one": "{count} entry needs a decision",
+          "other": "{count} entries need a decision"
+        },
+        "skipped": {
+          "one": "{count} entry could not be added here",
+          "other": "{count} entries could not be added here"
+        },
+        "a11yRole": "Shared app, {role}. {state}",
+        "a11yNoRole": "Shared app. {state}"
+      },
+      "share": {
+        "title": "Share \"{app}\" with people",
+        "intro": "Invite people to use this app with you. Everyone sees the same entries, and changes reach each other when they are online.",
+        "whatHappens": "What sharing does",
+        "consent": "I understand. Store this app and its entries in the cloud for the people I invite.",
+        "signInFirst": "Sign in to share.",
+        "teamLabel": "Also give it to a team (optional)",
+        "noTeam": "No team",
+        "button": "Share this app",
+        "working": "Sharing",
+        "done": "Shared. Now invite people.",
+        "syncNow": "Sync now",
+        "synced": "Synced",
+        "teamFailed": "Shared, but it was not added to the team. {reason}",
+        "yourRole": "You are the {role} of this shared app.",
+        "syncedSkipped": {
+          "one": "Synced, but {count} entry from others could not be added on this device. Kalam fetches it again each time. A full list or an older version of Kalam can cause this.",
+          "other": "Synced, but {count} entries from others could not be added on this device. Kalam fetches them again each time. A full list or an older version of Kalam can cause this."
+        }
+      },
+      "invite": {
+        "heading": "Invite someone",
+        "roleLabel": "Invite as",
+        "create": "Create invite",
+        "codeLabel": "Invite code",
+        "copyLink": "Copy link",
+        "copyCode": "Copy code",
+        "send": "Send",
+        "copied": "Copied",
+        "message": "Join \"{title}\" on Kalam with this link:",
+        "openHeading": "Open invites",
+        "openLine": "{role}, used {uses} of {max}, until {expires}",
+        "cancel": "Cancel invite",
+        "cancelled": "Invite cancelled. Its code no longer works.",
+        "none": "No open invites.",
+        "created": "Send this link or code to the people you want to invite. It works for {days}, for up to {uses}."
+      },
+      "members": {
+        "heading": "People",
+        "you": "{name} (you)",
+        "unnamed": "Someone without a name",
+        "changeRole": "Change role for {name}",
+        "remove": "Remove {name}",
+        "removeTitle": "Remove {name}?",
+        "removeMessage": "They lose access straight away. The copy on their phone is deleted the next time it is online.",
+        "removed": "{name} was removed.",
+        "loadFailed": "Could not load the people in this app.",
+        "teamNote": "Members of the team this app belongs to also have access, with their team role.",
+        "roleChanged": "{name} is now {role}."
+      },
+      "conflicts": {
+        "heading": "Needs your decision",
+        "intro": "Someone else changed these entries while you did. Nothing was overwritten. Choose which version to keep.",
+        "entry": "Entry: {name}",
+        "unnamedEntry": "an entry without a name",
+        "yourVersion": "Your version",
+        "theirVersion": "Their version",
+        "forEntry": "For {name}",
+        "keepMine": "Keep mine",
+        "useTheirs": "Use theirs",
+        "keepDeleted": "Keep it deleted",
+        "restore": "Bring back their version",
+        "keepEntry": "Keep my entry",
+        "acceptDelete": "Delete it",
+        "resolved": "Saved your choice."
+      },
+      "history": {
+        "heading": "Recent changes",
+        "empty": "No changes yet."
+      },
+      "leave": {
+        "button": "Leave this shared app",
+        "title": "Leave \"{app}\"?",
+        "message": "The app and its entries are removed from this device. The owner can invite you again.",
+        "confirm": "Leave",
+        "done": "You left the shared app."
+      },
+      "stop": {
+        "button": "Stop sharing",
+        "title": "Stop sharing \"{app}\"?",
+        "message": "Everyone else loses access and the cloud copy is deleted. The app and all its entries stay on this device.",
+        "confirm": "Stop sharing",
+        "done": "Sharing stopped. The app is only on this device now."
+      },
+      "deleteShared": {
+        "owner": "This app is shared. Deleting it also deletes the cloud copy, and everyone you invited loses access.",
+        "member": "This app is shared with you. Deleting it removes you from it. The owner can invite you again."
+      },
+      "join": {
+        "title": "Join a shared app or team",
+        "intro": "Paste the invite link or code someone sent you.",
+        "noticeHeading": "What joining does",
+        "consent": "I understand. Sync my entries with the people in this shared app or team.",
+        "label": "Invite link or code",
+        "button": "Join",
+        "working": "Joining",
+        "joinedApp": "You joined. The app is on your shelf now.",
+        "joinedTeam": "You joined the team \"{name}\". Open Teams to get its apps.",
+        "signInFirst": "Sign in to join."
+      },
+      "teams": {
+        "title": "Teams",
+        "intro": "A team is a group of people with a set of shared apps. Everyone in the team can get the team's apps, with their team role.",
+        "privacy": "Kalam does not collect usage reports about team members. Admins see who is in the team, their roles, and which design version each person has of the apps they manage. Nothing else.",
+        "empty": "You are not in any team yet.",
+        "emptyHint": "Create one below, or join one with an invite code someone sent you.",
+        "newLabel": "New team name",
+        "create": "Create team",
+        "created": "Team \"{name}\" created. Invite people next.",
+        "open": "Open team {name}",
+        "back": "Back to teams",
+        "appsHeading": "Apps in this team",
+        "noApps": "No apps in this team yet.",
+        "getApp": "Get this app",
+        "getTitle": "Get \"{title}\"?",
+        "getMessage": "Its entries sync through Kalam's cloud, and everyone with access, including the team's admins, sees what you add or change. Kalam keeps a history of who changed what, without the values. Photos stay on this device. If you leave the team, the copy is deleted.",
+        "gotApp": "The app is on your shelf now.",
+        "onShelf": "On your shelf",
+        "addHeading": "Add one of your shared apps",
+        "add": "Add {title}",
+        "added": "Added to the team.",
+        "removeApp": "Take {title} out of the team",
+        "removedApp": "Taken out of the team.",
+        "leave": "Leave team",
+        "leaveTitle": "Leave the team \"{name}\"?",
+        "leaveMessage": "You lose access to the team's apps. Their copies leave this device the next time it syncs.",
+        "left": "You left the team.",
+        "delete": "Delete team",
+        "deleteTitle": "Delete the team \"{name}\"?",
+        "deleteMessage": "Everyone loses access through this team. The apps themselves stay shared with the people invited to them directly.",
+        "deleted": "Team deleted."
+      },
+      "deployment": {
+        "heading": "Design versions",
+        "intro": "Which version of the design each person has. Only the owner and admins see this.",
+        "latest": "The latest design is version {v}.",
+        "loadFailed": "Could not load the design versions."
+      },
+      "notices": {
+        "ended": "You no longer have access to \"{title}\". Its owner stopped sharing it or removed you, so its copy was removed from this device.",
+        "dismiss": "OK"
+      },
+      "loading": "Loading",
+      "close": "Close",
+      "cancel": "Cancel",
+      "tryAgain": "Try again",
+      "days": {
+        "one": "{count} day",
+        "other": "{count} days"
+      },
+      "people": {
+        "one": "{count} person",
+        "other": "{count} people"
+      }
+    }
   }
 }

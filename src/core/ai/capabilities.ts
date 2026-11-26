@@ -16,7 +16,7 @@
  * To record new evidence, change the row's status, evidence and `checkedOn` together.
  */
 
-export const CAPABILITY_PROVIDERS = ['firebase_cloud', 'nano_web', 'nano_android', 'claude', 'nebius'] as const;
+export const CAPABILITY_PROVIDERS = ['firebase_cloud', 'nano_web', 'nano_android', 'apple_fm', 'claude', 'nebius'] as const;
 export type CapabilityProviderId = (typeof CAPABILITY_PROVIDERS)[number];
 
 export const CAPABILITIES = [
@@ -47,6 +47,8 @@ const CLOUD_MODEL = 'gemini-3.8-flash';
 const CLOUD_RUN = 'Real call through Firebase AI Logic, Agent Platform backend, location global, thinking level LOW (scripts/verify-firebase-ai.mjs, scripts/verify-cloud-compile.mjs).';
 const NANO_RUN = 'Real Prompt API call in Chrome 157 through the Firebase AI Logic hybrid SDK, Gemini Nano downloaded (first run 2026-11-17, repeated 2026-11-18).';
 const NANO_ANDROID = 'The kalam-nano native module (modules/kalam-nano, used by on-device.native.ts) wires Firebase AI Logic\'s Android on-device SDK. Not yet run on a supported phone (emulators have no AICore), and on-device.native.ts still reports `unavailable` wherever the module or AICore is missing.';
+const APPLE_FM = 'The kalam-apple native module (modules/kalam-apple, used by on-device.ios.ts) wraps Apple\'s Foundation Models SystemLanguageModel (iOS 26 or later with Apple Intelligence on). The Swift was never compiled and nothing has run on an iPhone or iPad.';
+const APPLE_FM_TEXT_ONLY = 'The Firebase AI Logic hybrid documentation for Apple platforms lists text input only, and the iOS adapter in on-device.ios.ts accepts text only.';
 const NANO_ANDROID_TEXT_ONLY = 'The Android adapter in on-device.native.ts accepts text only: firebase/ai passes images as ImageBitmap, which React Native lacks.';
 const NOT_ASSUMED_NANO = 'docs/07 §14.6 says not to assume this for Gemini Nano. Not tried in Kalam.';
 const SPECIALIST_RUN = 'Ran through the Firebase Functions emulator with the server-side key. Specialists are off by default (EXPO_PUBLIC_SPECIALIST_ENABLED=false) and need user consent.';
@@ -54,10 +56,10 @@ const SPECIALIST_RUN = 'Ran through the Firebase Functions emulator with the ser
 const REGISTRY: readonly CapabilityRecord[] = Object.freeze([
   // Firebase AI Logic cloud (Gemini)
   row('firebase_cloud', 'text', 'verified', '2026-11-18', CLOUD_RUN, CLOUD_MODEL),
-  row('firebase_cloud', 'image_input', 'unverified', '2026-11-17',
-    'The Firebase AI Logic model table lists gemini-3.8-flash as image capable (checked 2026-11-17). Kalam sends image parts as inlineData, but no real image request has been recorded yet.', CLOUD_MODEL),
-  row('firebase_cloud', 'audio_input', 'unverified', '2026-11-18',
-    'Not exercised in Kalam yet. Verify the selected model before sending audio parts.'),
+  row('firebase_cloud', 'image_input', 'verified', '2026-11-26',
+    'Real requests: 25 synthetic photographs of the golden sketches went to the cloud compiler as inlineData image parts on 2026-11-25 (docs/evidence/live-eval-2026-11-25.json, sketch photo run: 18 of 25 apps built valid). Synthetic photographs, not hand-drawn ones.', CLOUD_MODEL),
+  row('firebase_cloud', 'audio_input', 'verified', '2026-11-26',
+    'Real request: a WAV of one invented spoken sentence went through the transcribe service as an inlineData audio part and came back as text in 3.9 s (scripts/verify-audio-transcribe.mjs, docs/evidence/audio-transcribe-2026-11-26.json). One short English recording; other languages and long files are not tried.', 'gemini-3.5-flash-lite'),
   row('firebase_cloud', 'video_input', 'unverified', '2026-11-18',
     'Not exercised in Kalam yet. Verify the selected model before sending video parts.'),
   row('firebase_cloud', 'structured_output', 'verified', '2026-11-18',
@@ -83,6 +85,15 @@ const REGISTRY: readonly CapabilityRecord[] = Object.freeze([
   row('nano_android', 'structured_output', 'unverified', '2026-11-18',
     `${NANO_ANDROID} On-device constrained decoding needs compile-time schemas, so the adapter puts the JSON Schema in the prompt and Zod checks the answer.`, 'gemini-nano'),
   row('nano_android', 'image_generation', 'not_assumed', '2026-11-18', NOT_ASSUMED_NANO),
+
+  // Apple Foundation Models on iOS (through the Prompt API adapter in on-device.ios.ts)
+  row('apple_fm', 'text', 'unverified', '2026-11-25', APPLE_FM),
+  row('apple_fm', 'image_input', 'unsupported', '2026-11-25', APPLE_FM_TEXT_ONLY),
+  row('apple_fm', 'audio_input', 'not_assumed', '2026-11-25', 'Not assumed for Apple Foundation Models. Not tried in Kalam.'),
+  row('apple_fm', 'video_input', 'not_assumed', '2026-11-25', 'Not assumed for Apple Foundation Models. Not tried in Kalam.'),
+  row('apple_fm', 'structured_output', 'unverified', '2026-11-25',
+    `${APPLE_FM} The adapter puts the JSON Schema in the prompt, and Zod checks the answer.`),
+  row('apple_fm', 'image_generation', 'not_assumed', '2026-11-25', 'Not assumed for Apple Foundation Models. Not tried in Kalam.'),
 
   // Claude (server side specialist)
   row('claude', 'text', 'verified', '2026-11-18', SPECIALIST_RUN),

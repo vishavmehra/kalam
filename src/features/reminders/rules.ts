@@ -51,7 +51,10 @@ export function listBooleanFields(collection: KalamCollection): Array<{ field: s
 /** First required text field, else first text field. Names the item in the notification. */
 export function defaultTitleField(collection: KalamCollection): string | undefined {
   const texts = Object.entries(collection.fields).filter(([, f]) => f.type === 'text');
-  return (texts.find(([, f]) => f.required) ?? texts[0])?.[0];
+  // Plain text first; a link (it names the linked entry) next; then a choice. Required before optional.
+  const plain = texts.filter(([, f]) => f.type === 'text' && !f.ref);
+  const pool = plain.length ? plain : texts.length ? texts : Object.entries(collection.fields).filter(([, f]) => f.type === 'enum');
+  return (pool.find(([, f]) => f.required) ?? pool[0])?.[0];
 }
 
 /** Tests a record's values against a rule condition. A missing yes/no value counts as "no". */

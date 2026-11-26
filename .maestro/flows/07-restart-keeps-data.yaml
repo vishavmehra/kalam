@@ -1,0 +1,20 @@
+# Kill the app process and start it again: the saved app and its record must still be there (docs/09 §23.6, docs/04 §14.5,
+# checklist D04-049, D15-042, D16-044). Runs after 03-use-the-app, which saved one expense of 250. Starts from a clean
+# process on purpose: stopApp ends the process the way the system does when it needs the memory.
+appId: com.kalam.app
+name: A restarted app keeps its data
+---
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Your shelf.*"
+    timeout: 120000
+- assertVisible: "Expenses.*"
+- takeScreenshot: 13-restart-shelf
+- tapOn: "Expenses.*"
+- extendedWaitUntil:
+    visible: "Entries: 1"
+    timeout: 30000
+- assertVisible: "Total spent: .*250.*"
+- takeScreenshot: 14-restart-record-kept
+- runFlow: ../common/pause.yaml

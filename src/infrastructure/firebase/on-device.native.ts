@@ -10,17 +10,59 @@
  * globalThis.LanguageModel, so firebase/ai's hybrid router picks the phone or the cloud and
  * response.inferenceSource says which one ran. iOS uses on-device.ios.ts instead of this file.
  */
-import type { OnDeviceStatus } from '@/core/contracts';
-import { loadKalamNano, type KalamNanoModule } from '../../../modules/kalam-nano';
+import type { OnDeviceReason, OnDeviceStatus } from '@/core/contracts';
+import { loadKalamNano, type KalamNanoModule, type NativeStatus } from '../../../modules/kalam-nano';
 import type { LanguageModelStatic } from './on-device.web';
-import { createPromptLanguageModel, errorMessage as message, promptError, type PromptLanguageModel } from './prompt-api.native';
+import {
+  createPromptLanguageModel, errorMessage as message, promptError, type NativePrompt, type PromptLanguageModel,
+} from './prompt-api.native';
 
 export { TEXT_IO, type LanguageModelStatic } from './on-device.web';
 
-/** Model name reported for answers from this phone (firebase-provider uses ON_DEVICE_MODEL today). */
+/** Model name reported for answers from this phone (firebase-provider reads it from './on-device'). */
 export const ON_DEVICE_MODEL_NAME = 'gemini-nano';
 
 const KNOWN = new Set<string>(['unavailable', 'downloadable', 'downloading', 'available']);
+
+/**
+ * Plain English for each reason KalamNanoModule.kt reports, shown in Settings and on the self-check. Advice from
+ * https://developers.google.com/ml-kit/genai/prompt/android/get-started ("Common setup issues", read 2026-11-25).
+ * Google publishes no download size for Gemini Nano, only that it is gigabytes, so the text says "a few GB".
+ */
+export const REASON_TEXT: Readonly<Record<OnDeviceReason, string>> = {
+  aicore_missing: 'This phone does not have Android AICore, the system app that runs Gemini Nano, or its copy is too old. Update Android AICore from Google Play if it is listed there.',
+  binding_failure: 'Kalam could not connect to Android AICore. This can happen right after a phone is set up, or after AICore was updated or removed. Update Android AICore from Google Play, then reinstall Kalam.',
+  aicore_not_ready: 'Android AICore has not finished setting up Gemini Nano on this phone. That usually takes a few minutes to a few hours while the phone is online, and restarting the phone can speed it up. Phones with an unlocked bootloader never get it.',
+  needs_system_update: 'Gemini Nano needs a newer version of Android on this phone. Install the latest system update, then try again.',
+  device_not_supported: 'Gemini Nano is not offered on this phone, or Android AICore has not received its setup for it yet.',
+  model_downloadable: 'Gemini Nano can be downloaded to this phone. It takes a few GB, so Wi-Fi is recommended.',
+  model_downloading: 'Gemini Nano is downloading to this phone.',
+  low_storage: 'There is not enough free storage on this phone for Gemini Nano. Free up a few GB, then try again.',
+  battery_or_network_conditions: 'Android is holding back on-device AI for now, to save battery or because the model download needs a working internet connection. Try again later.',
+  unknown: 'On-device AI is not available on this phone right now.',
+};
+
+/** The plain-English detail for a reason: its text, the error code, and for 'unknown' what Android said. */
+export function reasonText(reason: OnDeviceReason, code?: number | null, raw?: string | null): string {
+  const said = reason === 'unknown' && raw ? ` Android said: ${raw}` : '';
+  return `${REASON_TEXT[reason]}${code == null ? '' : ` (error code ${code})`}${said}`;
+}
+
+/** The native answer as Kalam's status. A reason this build does not know reads as 'unknown'. */
+function toStatus(s: NativeStatus): OnDeviceStatus {
+  const availability = KNOWN.has(s.availability) ? s.availability : 'unknown';
+  const ready = availability === 'available';
+  const reason = ready || !s.reason ? undefined
+    : Object.hasOwn(REASON_TEXT, s.reason) ? s.reason as OnDeviceReason : 'unknown';
+  return {
+    platform: 'android', apiExposed: true, availability,
+    progress: availability === 'downloading' ? progress : undefined,
+    detail: reason ? reasonText(reason, s.code, s.detail) : s.detail ?? (ready && s.model ? `Model on this phone: ${s.model}` : undefined),
+    ...(reason ? { reason, ...(s.code == null ? {} : { reasonCode: s.code }) } : {}),
+    ...(ready ? { warm } : {}),
+  };
+}
+
 /** Firebase and ML Kit have validated on-device output in English and Korean only (get-started, 2026-11-18). */
 const VALIDATED_LANGUAGES = new Set(['en', 'ko']);
 
@@ -51,21 +93,16 @@ export async function onDeviceStatus(): Promise<OnDeviceStatus> {
   const nano = loadKalamNano();
   if (!nano.module) return { platform: 'android', apiExposed: false, availability: 'unavailable', detail: nano.reason };
   try {
-    const s = await nano.module.availability();
-    const availability = KNOWN.has(s.availability) ? s.availability : 'unknown';
-    const ready = availability === 'available';
-    return {
-      platform: 'android', apiExposed: true, availability,
-      progress: availability === 'downloading' ? progress : undefined,
-      detail: s.detail ?? (ready && s.model ? `Model on this phone: ${s.model}` : undefined),
-      ...(ready ? { warm } : {}),
-    };
+    return toStatus(await nano.module.availability());
   } catch (e) {
     return { platform: 'android', apiExposed: true, availability: 'unknown', detail: message(e) };
   }
 }
 
-/** Downloads Gemini Nano through AICore when needed (a user action in Settings), then loads it. */
+/**
+ * Downloads Gemini Nano through AICore when needed, then loads it. Only after the person chose to (Settings, or the
+ * self-check's download step). A failed download comes back as the status with its reason, for example low_storage.
+ */
 export async function prepareOnDevice(onProgress?: (p: number) => void): Promise<OnDeviceStatus> {
   const nano = loadKalamNano();
   if (!nano.module) return onDeviceStatus();
@@ -75,13 +112,14 @@ export async function prepareOnDevice(onProgress?: (p: number) => void): Promise
     onProgress?.(progress);
   });
   try {
-    warm = (await nano.module.prepare()).availability === 'available';
+    const s = await nano.module.prepare();
+    warm = s.availability === 'available';
+    return toStatus(s);
   } catch (e) {
     return { ...(await onDeviceStatus()), detail: message(e) };
   } finally {
     sub.remove();
   }
-  return onDeviceStatus();
 }
 
 /** Loads an already downloaded model into memory. Never downloads. Concurrent calls share one load. */
@@ -108,7 +146,9 @@ function nanoEngine(native: KalamNanoModule) {
     // prepareOnDevice(). Languages: only the validated ones.
     ready: async (languages: string[]) => languages.every((l) => VALIDATED_LANGUAGES.has(l))
       && (await native.availability()).availability === 'available',
-    generate: (id: string, options: { prompt: string }) => native.generate(id, options),
+    // kalam-nano takes one prompt string, so the system instructions go first in it.
+    generate: (id: string, { prompt, instructions }: NativePrompt) =>
+      native.generate(id, { prompt: [instructions, prompt].filter(Boolean).join('\n\n') }),
     cancel: (id: string) => native.cancel(id),
     toPromptError,
   };

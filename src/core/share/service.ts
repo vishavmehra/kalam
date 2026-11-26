@@ -9,8 +9,9 @@
  */
 import type { KalamRecord, RecordRepository, StoredApp } from '../contracts';
 import type { KalamSpec } from '../spec/schema';
+import { listingIdFromBasedOn } from '../bazaar/model';
 import {
-  checkLink, collectionLabel, collectionOf, fieldLabel, fieldOf, isFromBazaar, unmappedRequired, type LinkHealth, type LinkProblem,
+  BAZAAR_TRAIL_HOPS, checkLink, collectionLabel, collectionOf, fieldLabel, fieldOf, isFromBazaar, unmappedRequired, type LinkHealth, type LinkProblem,
 } from './contract';
 import { describeLink, humanize, SHARE_COPY } from './copy';
 import {
@@ -103,8 +104,14 @@ export interface SendOutcome {
   reason?: SendRefusal;
   created: number;
   updated: number;
-  skipped: Array<{ recordId: string; reason: 'not_found' | 'already_sent' }>;
+  /** `link_off`: the link was turned off while the send was running, so the entry was not sent. */
+  skipped: Array<{ recordId: string; reason: 'not_found' | 'already_sent' | 'link_off' }>;
   failed: Array<{ recordId: string; reason: 'invalid' | 'full' | 'error' }>;
+  /**
+   * False when entries were sent but the link's history could not be saved. A second send could then add
+   * them again, so the message says so. True when nothing was sent or the history was saved.
+   */
+  recorded: boolean;
   message: string;
   problems?: LinkProblem[];
 }
@@ -140,7 +147,7 @@ export interface ShareService {
   readShared(readerAppId: string, collectionId: string): Promise<SharedRead>;
   /** The gate: reading `sourceCollection` of another app. Refused unless a link says yes. */
   readFrom(readerAppId: string, sourceAppId: string, sourceCollection: string): Promise<SharedRead>;
-  /** Entries a `write` link could send, newest first, with a short title each. */
+  /** Entries a `write` link could send: not sent yet first, newest first within each group, with a short title each. */
   sendable(linkId: string): Promise<SendableResult>;
   send(linkId: string, input: SendInput): Promise<SendOutcome>;
   /** The ordinary records plus shared entries, read only. Hand this to the runtime of the destination app. */
@@ -177,6 +184,48 @@ export function createShareService(deps: ShareDeps): ShareService {
       return cache.get(id)!.then((a) => a?.spec);
     };
   };
+
+  /** Made by someone else through the Bazaar, also when this app is a copy of one made on this device. */
+  async function bazaarMade(spec: KalamSpec | undefined, load: (id: string) => Promise<KalamSpec | undefined>): Promise<boolean> {
+    const known = new Map<string, KalamSpec>();
+    for (let s = spec, hop = 0; s && hop < BAZAAR_TRAIL_HOPS; hop++) {
+      const parent = s.meta.basedOn;
+      if (!parent || listingIdFromBasedOn(parent) || known.has(parent)) break;
+      s = await load(parent);
+      if (s) known.set(parent, s);
+    }
+    return isFromBazaar(spec, (id) => known.get(id));
+  }
+
+  /** One send per link at a time: a second press, or a second window, waits for the first. */
+  const queue = new Map<string, Promise<unknown>>();
+  const oneAtATime = <T>(key: string, task: () => Promise<T>): Promise<T> => {
+    const run = (queue.get(key) ?? Promise.resolve()).then(task);
+    const tail = run.catch(() => undefined);
+    queue.set(key, tail);
+    void tail.then(() => queue.get(key) === tail && queue.delete(key));
+    return run;
+  };
+
+  /**
+   * Changes the link as it is stored now, never a copy read earlier. A send takes a while; the person may turn
+   * the link off meanwhile, and that must survive. Returns false when the link is gone or could not be saved.
+   * A second try covers a turn off that lands between the read and the write: the store refuses the stale
+   * "on" copy, and the next read shows the link as off, so the history is saved onto the turned off link.
+   */
+  async function amend(linkId: string, change: (fresh: ShareLink) => ShareLink): Promise<boolean> {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const fresh = await store.get(linkId);
+        if (!fresh) return false;
+        await store.put(change(fresh));
+        return true;
+      } catch {
+        // Try once more with a fresh read; after that the caller says the history was not saved.
+      }
+    }
+    return false;
+  }
 
   async function readThrough(links: readonly ShareLink[], readerAppId: string): Promise<SharedRead> {
     const spec = specLoader();
@@ -218,6 +267,98 @@ export function createShareService(deps: ShareDeps): ShareService {
     const [source, destination] = [await spec(link.sourceAppId), await spec(link.destinationAppId)];
     const health = checkLink(link, source, destination);
     return { health, source, destination };
+  }
+
+  async function sendNow(linkId: string, input: SendInput): Promise<SendOutcome> {
+    const empty = { created: 0, updated: 0, skipped: [], failed: [], recorded: true };
+    const stop = (reason: SendRefusal, message: string, problems?: LinkProblem[]): SendOutcome => {
+      log({ event: 'send_refused', linkId, code: reason });
+      return { ok: false, reason, message, ...empty, ...(problems ? { problems } : {}) };
+    };
+    const gate = await sendGate(linkId);
+    if (!gate.ok) return stop(gate.reason, gate.message);
+    const { link } = gate;
+    if (!input.confirmed) return stop('not_confirmed', SHARE_COPY.send.not_confirmed);
+    const { health, destination } = await healthy(link);
+    if (!health.ok) {
+      const t = now();
+      await amend(linkId, (l) => ({ ...l, audit: appends(l.audit, { at: t, kind: 'blocked', reason: health.problems[0]?.code.slice(0, 40) }) }));
+      return stop('broken', SHARE_COPY.send.broken, health.problems);
+    }
+    const ids = [...new Set(input.recordIds)];
+    if (!ids.length) return stop('nothing_selected', SHARE_COPY.send.nothing_selected);
+    if (ids.length > SHARE_LIMITS.sendBatch) return stop('too_many', SHARE_COPY.send.too_many);
+
+    // Entries are looked up in the linked list only, so an id from anywhere else finds nothing.
+    const sourceRows = new Map((await deps.records.list(link.sourceAppId, link.sourceCollection)).map((r) => [r.id, r]));
+    const destIds = new Set((await deps.records.list(link.destinationAppId, link.destinationCollection)).map((r) => r.id));
+    const ledger = new Map(link.sent ?? []);
+    /** Copies made by this send, to add to the link as it is stored when the send ends. */
+    const made = new Map<string, string>();
+    const out: SendOutcome = { ok: true, ...empty, skipped: [], failed: [], message: '' };
+    let turnedOff = false;
+    for (const id of ids) {
+      // Turning a link off takes effect now: look again before every entry, not only before the first.
+      if (turnedOff || (await store.get(linkId))?.status !== 'active') {
+        turnedOff = true;
+        out.skipped.push({ recordId: id, reason: 'link_off' });
+        continue;
+      }
+      const row = sourceRows.get(id);
+      if (!row) {
+        out.skipped.push({ recordId: id, reason: 'not_found' });
+        continue;
+      }
+      const values = projectValues(link, row.values);
+      const copy = ledger.get(id);
+      try {
+        if (copy && destIds.has(copy)) {
+          if (!input.updateExisting) {
+            out.skipped.push({ recordId: id, reason: 'already_sent' });
+            continue;
+          }
+          await deps.records.update(link.destinationAppId, link.destinationCollection, copy, values);
+          out.updated++;
+        } else {
+          const inserted = await deps.records.insert(link.destinationAppId, link.destinationCollection, values);
+          made.set(id, inserted.id);
+          out.created++;
+        }
+      } catch (error) {
+        out.failed.push({ recordId: id, reason: failureOf(error) });
+      }
+    }
+    const name = destination?.name ?? 'the other app';
+    const leftOut = out.skipped.filter((s) => s.reason !== 'link_off').length;
+    const parts = [SHARE_COPY.send.sent(out.created, out.updated, name)];
+    if (leftOut) parts.push(SHARE_COPY.send.skipped(leftOut));
+    if (out.failed.length) parts.push(SHARE_COPY.send.failed(out.failed.length, name));
+    if (turnedOff) parts.push(SHARE_COPY.send.turnedOffMidway);
+    out.ok = out.failed.length === 0 && !turnedOff;
+    if (turnedOff) out.reason = 'revoked';
+    const t = now();
+    // The history goes onto the link as stored now, so a turn off made meanwhile stays, and so does another send's ledger.
+    out.recorded = await amend(linkId, (fresh) => {
+      const sent = new Map(fresh.sent ?? []);
+      for (const [from, to] of made) {
+        sent.delete(from);
+        sent.set(from, to);
+      }
+      return {
+        ...fresh,
+        sent: [...sent].slice(-SHARE_LIMITS.sentLedger),
+        audit: appends(fresh.audit, {
+          at: t, kind: 'sent', count: out.created, updated: out.updated, ...(out.failed.length ? { reason: 'some_rejected' } : {}),
+        }),
+      };
+    });
+    if (!out.recorded) {
+      parts.push(SHARE_COPY.send.notRecorded);
+      log({ event: 'send', linkId, code: 'audit_not_saved' });
+    }
+    out.message = parts.join(' ');
+    log({ event: 'send', linkId, count: out.created + out.updated });
+    return out;
   }
 
   const service: ShareService = {
@@ -271,10 +412,12 @@ export function createShareService(deps: ShareDeps): ShareService {
         createdAt: t,
         audit: [{ at: t, kind: 'created' }],
       };
-      const health = checkLink(link, source, destination);
-      if (!health.ok) return refuse('bad_fields', SHARE_COPY.create.bad_fields, health.problems);
+      const health = checkLink(link, source, destination, { creating: true });
+      // A required field nobody fills has its own, clearer refusal below.
+      const problems = health.ok ? [] : health.problems.filter((p) => p.code !== 'destination_required_missing');
+      if (problems.length) return refuse('bad_fields', SHARE_COPY.create.bad_fields, problems);
 
-      if (isFromBazaar(destination) && !input.acknowledgeBazaar) {
+      if ((await bazaarMade(destination, spec)) && !input.acknowledgeBazaar) {
         return refuse('needs_bazaar_ack', SHARE_COPY.create.needs_bazaar_ack(destination.name));
       }
       if (input.access === 'write') {
@@ -314,8 +457,8 @@ export function createShareService(deps: ShareDeps): ShareService {
           role: link.sourceAppId === appId ? 'source' : 'destination',
           sourceName, destinationName, sourceList, destinationList, fieldLabels,
           health: checkLink(link, source, destination),
-          sourceFromBazaar: isFromBazaar(source),
-          destinationFromBazaar: isFromBazaar(destination),
+          sourceFromBazaar: await bazaarMade(source, spec),
+          destinationFromBazaar: await bazaarMade(destination, spec),
           lines: describeLink({ access: link.access, source: sourceName, destination: destinationName, sourceList, destinationList, fields: fieldLabels }),
         });
       }
@@ -368,106 +511,46 @@ export function createShareService(deps: ShareDeps): ShareService {
       const { health } = await healthy(gate.link);
       if (!health.ok) return { ok: false, reason: 'broken', message: SHARE_COPY.send.broken, problems: health.problems };
       const { link } = gate;
-      const sourceRows = (await deps.records.list(link.sourceAppId, link.sourceCollection)).sort((a, b) => b.createdAt - a.createdAt);
+      const sourceRows = await deps.records.list(link.sourceAppId, link.sourceCollection);
       const destIds = new Set((await deps.records.list(link.destinationAppId, link.destinationCollection)).map((r) => r.id));
       const ledger = new Map(link.sent ?? []);
+      // Entries not sent yet come first, so the oldest ones stay reachable when there are more than the window shows.
+      const ranked = sourceRows
+        .map((r) => ({ r, sent: destIds.has(ledger.get(r.id) ?? '') }))
+        .sort((a, b) => Number(a.sent) - Number(b.sent) || b.r.createdAt - a.r.createdAt);
       return {
         ok: true,
         total: sourceRows.length,
-        items: sourceRows.slice(0, 200).map((r) => ({
-          id: r.id,
-          title: entryTitle(link, r.values),
-          alreadySent: destIds.has(ledger.get(r.id) ?? ''),
-        })),
+        items: ranked.slice(0, SHARE_LIMITS.sendWindow).map(({ r, sent }) => ({ id: r.id, title: entryTitle(link, r.values), alreadySent: sent })),
       };
     },
 
-    async send(linkId, input) {
-      const empty = { created: 0, updated: 0, skipped: [], failed: [] };
-      const stop = (reason: SendRefusal, message: string, problems?: LinkProblem[]): SendOutcome => {
-        log({ event: 'send_refused', linkId, code: reason });
-        return { ok: false, reason, message, ...empty, ...(problems ? { problems } : {}) };
-      };
-      const gate = await sendGate(linkId);
-      if (!gate.ok) return stop(gate.reason, gate.message);
-      const { link } = gate;
-      if (!input.confirmed) return stop('not_confirmed', SHARE_COPY.send.not_confirmed);
-      const { health, destination } = await healthy(link);
-      if (!health.ok) {
-        const t = now();
-        await store.put({ ...link, audit: appends(link.audit, { at: t, kind: 'blocked', reason: health.problems[0]?.code.slice(0, 40) }) }).catch(() => undefined);
-        return stop('broken', SHARE_COPY.send.broken, health.problems);
-      }
-      const ids = [...new Set(input.recordIds)];
-      if (!ids.length) return stop('nothing_selected', SHARE_COPY.send.nothing_selected);
-      if (ids.length > SHARE_LIMITS.sendBatch) return stop('too_many', SHARE_COPY.send.too_many);
-
-      // Entries are looked up in the linked list only, so an id from anywhere else finds nothing.
-      const sourceRows = new Map((await deps.records.list(link.sourceAppId, link.sourceCollection)).map((r) => [r.id, r]));
-      const destIds = new Set((await deps.records.list(link.destinationAppId, link.destinationCollection)).map((r) => r.id));
-      const ledger = new Map(link.sent ?? []);
-      const out: SendOutcome = { ok: true, ...empty, skipped: [], failed: [], message: '' };
-      for (const id of ids) {
-        const row = sourceRows.get(id);
-        if (!row) {
-          out.skipped.push({ recordId: id, reason: 'not_found' });
-          continue;
-        }
-        const values = projectValues(link, row.values);
-        const copy = ledger.get(id);
-        try {
-          if (copy && destIds.has(copy)) {
-            if (!input.updateExisting) {
-              out.skipped.push({ recordId: id, reason: 'already_sent' });
-              continue;
-            }
-            await deps.records.update(link.destinationAppId, link.destinationCollection, copy, values);
-            out.updated++;
-          } else {
-            const made = await deps.records.insert(link.destinationAppId, link.destinationCollection, values);
-            ledger.delete(id);
-            ledger.set(id, made.id);
-            out.created++;
-          }
-        } catch (error) {
-          out.failed.push({ recordId: id, reason: failureOf(error) });
-        }
-      }
-      const name = destination?.name ?? 'the other app';
-      const parts = [SHARE_COPY.send.sent(out.created, out.updated, name)];
-      if (out.skipped.length) parts.push(SHARE_COPY.send.skipped(out.skipped.length));
-      if (out.failed.length) parts.push(SHARE_COPY.send.failed(out.failed.length, name));
-      out.message = parts.join(' ');
-      out.ok = out.failed.length === 0;
-      const t = now();
-      await store
-        .put({
-          ...link,
-          sent: [...ledger].slice(-SHARE_LIMITS.sentLedger),
-          audit: appends(link.audit, {
-            at: t, kind: 'sent', count: out.created, updated: out.updated, ...(out.failed.length ? { reason: 'some_rejected' } : {}),
-          }),
-        })
-        .catch(() => log({ event: 'send', linkId, code: 'audit_not_saved' }));
-      log({ event: 'send', linkId, count: out.created + out.updated });
-      return out;
-    },
+    send: (linkId, input) => oneAtATime(linkId, () => sendNow(linkId, input)),
 
     sharedRecords(base) {
       const intoApp = async (appId: string) => (await store.forApp(appId)).filter(isReadInto(appId));
       return {
+        // A problem with sharing must never make an app's own entries unreachable (docs/09): fall back to them.
         async list(appId, collectionId) {
           const own = await base.list(appId, collectionId);
-          const shared = await service.readShared(appId, collectionId);
-          return shared.rows.length ? [...own, ...shared.rows] : own;
+          try {
+            const shared = await service.readShared(appId, collectionId);
+            return shared.rows.length ? [...own, ...shared.rows] : own;
+          } catch {
+            log({ event: 'read_refused', appId, code: 'read_failed' });
+            return own;
+          }
         },
         async listAll(appId) {
           const all = { ...(await base.listAll(appId)) };
-          const byCollection = new Map<string, ShareLink[]>();
-          for (const l of await intoApp(appId)) byCollection.set(l.destinationCollection, [...(byCollection.get(l.destinationCollection) ?? []), l]);
-          for (const [collectionId, links] of byCollection) {
-            const shared = await readThrough(links, appId);
-            if (shared.rows.length) all[collectionId] = [...(all[collectionId] ?? []), ...shared.rows];
+          try {
+            const byCollection = new Map<string, ShareLink[]>();
+            for (const l of await intoApp(appId)) byCollection.set(l.destinationCollection, [...(byCollection.get(l.destinationCollection) ?? []), l]);
+            const found: Array<[string, KalamRecord[]]> = [];
+            for (const [collectionId, links] of byCollection) found.push([collectionId, (await readThrough(links, appId)).rows]);
+            for (const [collectionId, rows] of found) if (rows.length) all[collectionId] = [...(all[collectionId] ?? []), ...rows];
+          } catch {
+            log({ event: 'read_refused', appId, code: 'read_failed' });
           }
           return all;
         },

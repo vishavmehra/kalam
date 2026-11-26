@@ -3,13 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { createFakeAI, type FakeReply } from '../../../tests/fixtures/compiler/fake-ai';
+import { TASK_POLICIES } from '../ai/routing';
 import type { KalamRecord, RecordRepository, RecordValue } from '../contracts';
 import type { KalamSpec } from '../spec/schema';
 import { validateSpec } from '../spec/validate';
 import {
-  barFractions, buildReport, chartComponentSchema, chartToReport, createReportService, donutArcs, explainReport,
-  lineGeometry, niceMax, type ReportDefinition, type ReportResult, type ReportRow, reportToText, runReport,
-  suggestReports, trendOf, validateChartComponent, validateReport,
+  aggregatesText, barFractions, buildReport, chartComponentSchema, chartToReport, createReportService, donutArcs, explainReport,
+  lineGeometry, MAX_BUCKETS, MAX_GROUPS, niceMax, type ReportDefinition, type ReportResult, type ReportRow, reportToText, runReport,
+  suggestReports, timeSplitFits, trendOf, validateChartComponent, validateReport,
 } from './index';
 
 const FIXTURES = new URL('../../../tests/fixtures/specs/valid/', import.meta.url);
@@ -232,7 +233,7 @@ describe('validation', () => {
 });
 
 describe('chart component (proposed v1.1)', () => {
-  const chart = { id: 'spend_chart', type: 'chart', label: 'Spend by category', chart: 'bar', source: 'expenses', metric: 'sum', field: 'amount', groupBy: 'category' } as const;
+  const chart = { id: 'spend_chart', type: 'chart', label: 'Spend by category', chart: 'bar', source: 'expenses', metric: 'sum', valueField: 'amount', groupBy: 'category' } as const;
   it('accepts a valid chart and rejects ambiguous ones', () => {
     expect(chartComponentSchema.safeParse(chart).success).toBe(true);
     expect(chartComponentSchema.safeParse({ ...chart, period: 'week' }).success).toBe(false);
@@ -315,7 +316,8 @@ describe('explanations', () => {
     expect(ai.events).toEqual([expect.objectContaining({ taskType: 'summarize', route: 'deterministic', escalationReason: 'reports: offline, plain sentence' })]);
   });
 
-  it('uses Gemini Nano first with the single cloud fallback mode', async () => {
+  it('asks Gemini Nano first, in the mode the orchestrator gives one cloud fallback', async () => {
+    expect(TASK_POLICIES.summarize).toMatchObject({ onDevice: true, cloudFallback: true });
     const { records } = repo();
     const ai = createFakeAI({ onDevice: 'available', respond: () => say('Spending rose over the last few months.') });
     const service = createReportService({ ai, records, now: () => NOW, timeZone: UTC });
@@ -369,5 +371,155 @@ describe('explanations', () => {
     expect((await explainReport(ai, r)).text).toBe('There are no entries in Expenses yet.');
     expect(ai.calls).toHaveLength(0);
     expect(ai.events[0]?.escalationReason).toBe('reports: nothing to explain, plain sentence');
+  });
+});
+
+// ─── Review fixes ────────────────────────────────────────────────────────────
+
+const daysBack = (n: number, end = '2026-11-18'): string => new Date(Date.parse(`${end}T00:00:00Z`) - n * DAY).toISOString().slice(0, 10);
+const countBy = (range: ReportDefinition['range'], unit: 'day' | 'week' | 'month'): ReportDefinition => ({
+  id: 'count', title: 'Count', sourceCollection: 'expenses', dateField: 'date', range, groupBy: { kind: 'time', unit }, metrics: [{ operation: 'count', label: 'Entries' }],
+});
+const opts18 = { now: at('2026-11-18'), timeZone: UTC, lang: 'en' };
+
+describe('ranges and buckets', () => {
+  it('moves the range start when old buckets are left out, so totals match the chart', () => {
+    const data = rows(Array.from({ length: 171 }, (_, i) => ({ amount: 1, date: daysBack(i) }))); // 1 Jun to 18 Nov
+    const r = ok(runReport(expenses, countBy({ last: 6, unit: 'month' }, 'day'), data, opts18));
+    expect(r.points).toHaveLength(MAX_BUCKETS);
+    expect(r.range).toMatchObject({ from: '2026-09-20', to: '2026-11-18', label: 'Sep 20, 2026 to Nov 18, 2026' });
+    expect(r.totals[0]).toBe(60);
+    expect(r.entries).toBe(r.points.reduce((s, p) => s + p.entries, 0));
+    expect(r.trimmed).toBe(true);
+    expect(r.details).toContain('Only the last 60 days fit in one chart, so earlier entries are left out.');
+  });
+
+  it('rejects a split longer than the period, and the builder never offers one', () => {
+    expect(validateReport(expenses, countBy({ last: 7, unit: 'day' }, 'month'))).toEqual(['A report over the last few days cannot be split by month. Split it by day.']);
+    expect(validateReport(expenses, countBy({ last: 6, unit: 'month' }, 'week'))).toEqual([]);
+    expect((['day', 'week', 'month'] as const).filter((u) => timeSplitFits({ last: 4, unit: 'week' }, u))).toEqual(['day', 'week']);
+    expect(timeSplitFits('all', 'month')).toBe(true);
+  });
+
+  it('leaves out entries dated after today instead of stretching the range to them', () => {
+    const data = rows([{ amount: 1, date: '2026-10-05' }, { amount: 1, date: '2026-11-03' }, { amount: 1, date: '2062-01-01' }]);
+    const r = ok(runReport(expenses, countBy('all', 'month'), data, opts18));
+    expect(r).toMatchObject({ status: 'ok', entries: 2, future: 1 });
+    expect(r.range).toMatchObject({ from: '2026-10-01', to: '2026-11-18' });
+    expect(r.points.map((p) => [p.key, p.values[0]])).toEqual([['2026-10-01', 1], ['2026-11-01', 1]]);
+    expect(r.details).toContain('1 entry is dated after today, so it is left out.');
+  });
+
+  it('stays fast with far-away dates', () => {
+    const started = Date.now();
+    const data = rows([{ amount: 1, date: '1900-01-01' }, { amount: 1, date: '2026-11-18' }, { amount: 1, date: '9999-12-31' }]);
+    const r = ok(runReport(expenses, countBy('all', 'day'), data, opts18));
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(r).toMatchObject({ future: 1, trimmed: true });
+    expect(r.points).toHaveLength(MAX_BUCKETS);
+    expect(r.range.from).toBe('2026-09-20');
+  });
+
+  it('leaves the period still running out of the trend', () => {
+    const month = (m: string, n: number, amount = 10) => Array.from({ length: n }, () => ({ amount, date: `2026-${m}-10` }));
+    const steady = rows([...['06', '07', '08', '09', '10'].flatMap((m) => month(m, 10)), { amount: 10, date: '2026-11-02' }]);
+    const r = ok(runReport(expenses, sumPerMonth(6), steady, opts18));
+    expect(r.points.map((p) => p.values[0])).toEqual([100, 100, 100, 100, 100, 10]);
+    expect(r.trend).toBe('flat');
+    expect(r.details).toEqual(expect.arrayContaining(['The trend is about level.', 'This month is not over yet, so the trend leaves it out.']));
+    expect(aggregatesText(r)).toContain('Trend over finished months: flat');
+    const rising = rows(['06', '07', '08', '09', '10'].flatMap((m, i) => month(m, i + 1)));
+    expect(ok(runReport(expenses, sumPerMonth(6), rising, opts18)).trend).toBe('up');
+  });
+
+  it('names where the dates come from', () => {
+    const r = ok(runReport(expenses, sumPerMonth(2), rows([{ amount: 1, date: '2026-11-01' }]), opts18));
+    expect(r.details).toContain('Dates come from the Date field.');
+    const added = ok(runReport(expenses, { ...sumPerMonth(2), dateField: undefined }, rows([{ amount: 1 }], () => Date.UTC(2026, 10, 2)), opts18));
+    expect(added.details).toContain('Dates are when each entry was added.');
+  });
+});
+
+describe('groups', () => {
+  const tags: ReportDefinition = { id: 'tags', title: 'Tags', sourceCollection: 'notes', range: 'all', groupBy: { kind: 'field', field: 'tag' }, metrics: [{ operation: 'count', label: 'Entries' }] };
+
+  it('counts a value outside the options under Other when the app has no Other option', () => {
+    const r = ok(runReport(notes, tags, rows([{ tag: 'Work' }, { tag: 'SENTINEL-typed-category' }, { tag: '' }]), opts18));
+    expect(r.points.map((p) => [p.key, p.label, p.values[0]])).toEqual([
+      ['opt:Personal', 'Personal', 0], ['opt:Work', 'Work', 1], ['opt:Ideas', 'Ideas', 0], ['~other', 'Other', 1], ['~unset', 'Not set', 1],
+    ]);
+  });
+
+  it('folds the smallest groups into Other past MAX_GROUPS', () => {
+    const options = Array.from({ length: 14 }, (_, i) => `o${i + 1}`);
+    const col = notes.collections.notes!;
+    const wide = { ...notes, collections: { notes: { ...col, fields: { ...col.fields, tag: { type: 'enum', label: 'Tag', options } } } } } as KalamSpec;
+    const data = rows(options.flatMap((o, i) => Array.from({ length: 14 - i }, () => ({ tag: o }))));
+    const r = ok(runReport(wide, tags, data, opts18));
+    expect(r.points).toHaveLength(MAX_GROUPS);
+    expect(r.points[0]).toMatchObject({ label: 'o1', values: [14] });
+    expect(r.points.at(-1)).toMatchObject({ key: '~other', values: [3 + 2 + 1] });
+  });
+
+  it('splits by yes or no and shows it as parts of a whole', () => {
+    const def: ReportDefinition = { id: 'present', title: 'Present', sourceCollection: 'attendance', range: 'all', groupBy: { kind: 'field', field: 'present' }, metrics: [{ operation: 'count', label: 'Entries' }] };
+    const r = ok(runReport(attendance, def, rows([{ present: true }, { present: 'false' }, { present: false }, {}]), opts18));
+    expect(r.points.map((p) => [p.label, p.values[0]])).toEqual([['Yes', 1], ['No', 2], ['Not set', 1]]);
+    expect(r.view).toBe('donut');
+  });
+
+  it('says when the filter matches nothing, not that the list is empty', () => {
+    const def: ReportDefinition = {
+      id: 'credit', title: 'Credit', sourceCollection: 'ledger', range: 'all',
+      filters: [{ field: 'kind', operator: 'equals', value: 'Credit' }], metrics: [{ operation: 'count', label: 'Entries' }],
+    };
+    const r = ok(runReport(ledger, def, rows([{ kind: 'Payment', amount: 5 }]), opts18));
+    expect(r.status).toBe('filtered_out');
+    expect(r.summary).toBe('No entries in Entries match this report\'s filter.');
+  });
+});
+
+describe('labels, ids and errors', () => {
+  it('keeps every suggestion runnable and unique with long ids and labels', () => {
+    const cid = 'a_very_long_collection_identifier_for_expenses';
+    const col = expenses.collections.expenses!;
+    const label = 'Amount paid to the supplier including every tax, fee and delivery charge we agreed on with them';
+    const long = { ...expenses, collections: { [cid]: { ...col, fields: { ...col.fields, amount: { ...col.fields.amount!, label } } } } } as KalamSpec;
+    const list = suggestReports(long);
+    expect(list).toHaveLength(5);
+    expect(new Set(list.map((d) => d.id)).size).toBe(list.length);
+    for (const d of list) ok(runReport(long, d, [], opts18));
+    const built = buildReport(long, { collection: cid, measure: { operation: 'sum', field: 'amount' }, split: { kind: 'field', field: 'category' }, period: 'all' });
+    ok(runReport(long, built, [], opts18));
+  });
+
+  it('renders any chart that validates, and turns schema problems into plain sentences', () => {
+    const chart = { id: 'c', type: 'chart', label: 'L'.repeat(80), chart: 'bar', source: 'expenses', metric: 'count', groupBy: 'category' } as const;
+    expect(validateChartComponent(expenses, chart)).toEqual([]);
+    expect(runReport(expenses, chartToReport(chart), [], opts18).ok).toBe(true);
+    expect(validateChartComponent(expenses, { ...chart, groupBy: undefined, period: 'month', range: { last: 7, unit: 'day' } })[0]).toContain('cannot be split by month');
+    const base: ReportDefinition = { id: 'r', title: 'R', sourceCollection: 'expenses', range: 'all', metrics: [{ operation: 'count', label: 'Entries' }] };
+    expect(runReport(expenses, { ...base, metrics: [] }, [], opts18)).toEqual({ ok: false, errors: ['This report is not set up correctly.'] });
+    expect(runReport(expenses, { ...base, metrics: [{ operation: 'count', field: 'amount', label: 'x' }] }, [], opts18))
+      .toEqual({ ok: false, errors: ['Count takes no field. Sum and average need a number field.'] });
+  });
+
+  it('builds with the date field the person picked, or when entries were added', () => {
+    const choice = { collection: 'expenses', measure: { operation: 'count' as const }, split: { kind: 'none' as const }, period: { last: 4, unit: 'week' as const } };
+    expect(buildReport(expenses, choice).dateField).toBe('date');
+    expect(buildReport(expenses, { ...choice, dateField: null }).dateField).toBeUndefined();
+  });
+});
+
+describe('cloud consent for explanations', () => {
+  it('stays on this device until asked, then offers Gemini online only when it can be reached', async () => {
+    const r = ok(runReport(expenses, sumPerMonth(6), rows([{ amount: 5, date: '2026-10-03' }, { amount: 9, date: '2026-11-03' }]), opts18));
+    const online = createFakeAI({ onDevice: 'unavailable', respond: () => say('Should not run') });
+    expect(await explainReport(online, r, { onDeviceOnly: true })).toMatchObject({ plain: true, cloudOffer: true });
+    expect(online.calls).toHaveLength(0);
+    const offline = createFakeAI({ online: false, onDevice: 'unavailable' });
+    expect((await explainReport(offline, r, { onDeviceOnly: true })).cloudOffer).toBeUndefined();
+    const asked = createFakeAI({ onDevice: 'unavailable', respond: () => say('Spending went up.') });
+    expect(await explainReport(asked, r)).toMatchObject({ source: 'cloud', plain: false });
   });
 });

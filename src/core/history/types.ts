@@ -33,8 +33,10 @@ export interface ChangeEntry {
   kind: ChangeKind;
   category: ChangeCategory;
   impact: ChangeImpact;
-  /** One sentence, no trailing full stop, no em dash. */
+  /** One short sentence, no trailing full stop, no em dash. Safe to use alone in a one-line summary. */
   text: string;
+  /** Optional second sentence that explains a consequence (what happens to saved entries). Shown under `text`. */
+  note?: string;
   /** Stable ids involved, outermost first: screen, component, collection, field, action, AI step. */
   ids: string[];
   details?: ChangeDetail[];

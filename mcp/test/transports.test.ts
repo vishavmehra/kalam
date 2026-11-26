@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs';
 import type { Server } from 'node:http';
+import { connect } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -50,11 +50,28 @@ describe('Streamable HTTP', () => {
     });
     expect(rebinding).toBe(403);
   });
+
+  it('survives request targets that are not URLs, sent with no Origin', async () => {
+    // `new URL('//', base)` throws. A local program, or a page with <img src="http://127.0.0.1:port//">, can send it.
+    const raw = (target: string) => new Promise<string>((resolve, reject) => {
+      let out = '';
+      const s = connect(port, '127.0.0.1', () => s.write(`GET ${target} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`));
+      s.on('data', (d) => (out += String(d)));
+      s.on('end', () => resolve(out));
+      s.on('error', reject);
+    });
+    for (const target of ['//', '/\\', '//mcp', '/mcp/..', '*']) {
+      expect(await raw(target), target).toMatch(/^HTTP\/1\.1 4\d\d /);
+    }
+    // Still up and answering. (A raw socket: fetch could reuse a keep-alive socket the server already closed.)
+    expect(await raw('/mcp')).toMatch(/^HTTP\/1\.1 405 /);
+  }, 20_000);
 });
 
 const dist = fileURLToPath(new URL('../dist/server.js', import.meta.url));
 
-describe.skipIf(!existsSync(dist))('stdio, built bundle', () => {
+// test/global-setup.ts builds the bundle first, so this never skips and never tests a stale file.
+describe('stdio, built bundle', () => {
   it('keeps stdout for the protocol and answers a client', async () => {
     const client = new Client({ name: 'kalam-test', version: '1.0.0' });
     await client.connect(new StdioClientTransport({ command: process.execPath, args: [dist], stderr: 'ignore' }));

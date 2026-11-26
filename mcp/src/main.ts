@@ -12,6 +12,9 @@ const log = (msg: string) => process.stderr.write(`[kalam-mcp] ${msg}\n`);
 console.log = console.error;
 console.info = console.error;
 console.debug = console.error;
+// A backstop: one bad request must not stop the server. Only the error kind is logged, never its text,
+// which could quote a request.
+process.on('unhandledRejection', (e: unknown) => log(`A request failed: ${e instanceof Error ? e.name : typeof e}.`));
 
 async function main(): Promise<void> {
   let options: Options;

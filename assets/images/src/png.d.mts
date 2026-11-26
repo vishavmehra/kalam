@@ -11,5 +11,4 @@ export interface DecodedPng {
 }
 
 export function encodePng(image: { width: number; height: number; rgba: Uint8Array; alpha: boolean }): Buffer;
-export function pngSize(data: Uint8Array): { width: number; height: number };
 export function decodePng(data: Uint8Array): DecodedPng;

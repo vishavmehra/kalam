@@ -32,46 +32,50 @@ export const PAGE_BACKGROUNDS: ReadonlyArray<{ id: PageBackground; label: string
   { id: 'dots', label: 'Dots' },
 ];
 
-/** Paper tints offered for a page. The first is the default. */
+/** Paper tints offered for a page ("Khata and Kalam" washes). The first is the default. */
 export const PAGE_COLORS: ReadonlyArray<{ value: string; name: string }> = [
   { value: palette.neutral[0], name: 'White' },
-  { value: palette.brand.paper, name: 'Paper' },
-  { value: palette.brand.marigoldSoft, name: 'Marigold' },
-  { value: palette.brand.inkSoft, name: 'Ink' },
-  { value: palette.semantic.successSoft, name: 'Green' },
-  { value: palette.semantic.infoSoft, name: 'Sky' },
-  { value: palette.semantic.dangerSoft, name: 'Rose' },
+  { value: palette.paper.canvas, name: 'Paper' },
+  { value: palette.paper.haldiWash, name: 'Haldi' },
+  { value: palette.paper.royalWash, name: 'Ink' },
+  { value: palette.paper.leafWash, name: 'Green' },
+  { value: palette.paper.skyWash, name: 'Sky' },
+  { value: palette.paper.sindoorWash, name: 'Rose' },
 ];
 export const DEFAULT_PAGE_COLOR = palette.neutral[0];
 
-/** Pen and shape colours. Same ink-on-paper look in light and dark shells (the page is always paper). */
+/**
+ * Pen and shape colours: the pens on a tailor's table. Same ink-on-paper look in light and dark shells
+ * (the page is always paper). Strokes already saved keep their own colour; one that is not listed here
+ * shows in the recent colours.
+ */
 export const INK_COLORS: ReadonlyArray<{ value: string; name: string }> = [
-  { value: palette.brand.inkText, name: 'Ink' },
-  { value: palette.brand.ink, name: 'Blue ink' },
-  { value: palette.semantic.info, name: 'Sky' },
-  { value: palette.semantic.success, name: 'Green' },
-  { value: palette.semantic.danger, name: 'Red' },
-  { value: palette.brand.marigold, name: 'Marigold' },
-  { value: palette.neutral[500], name: 'Grey' },
+  { value: palette.paper.ink, name: 'Ink' },
+  { value: palette.paper.royal, name: 'Blue ink' },
+  { value: palette.paper.sky, name: 'Sky' },
+  { value: palette.paper.leaf, name: 'Green' },
+  { value: palette.paper.sindoor, name: 'Red pen' },
+  { value: palette.paper.haldi, name: 'Haldi' },
+  { value: palette.paper.graphite, name: 'Grey' },
 ];
 
 /** Stamp wireframes are always ink on paper so exports read well for people and vision models. */
 export const STAMP_COLORS = {
-  ink: palette.brand.inkText,
-  soft: palette.brand.inkSoft,
-  muted: palette.neutral[500],
-  primary: palette.brand.ink,
+  ink: palette.paper.ink,
+  soft: palette.paper.royalWash,
+  muted: palette.paper.graphite,
+  primary: palette.paper.royal,
   onPrimary: palette.neutral[0],
   field: palette.neutral[0],
-  placeholder: palette.neutral[100],
+  placeholder: palette.paper.sunk,
 } as const;
 
-/** Selection chrome on the canvas. */
+/** Selection chrome on the canvas: royal ink, the colour of selection everywhere in Kalam. */
 export const SELECTION_COLORS = {
-  line: palette.brand.ink,
-  locked: palette.neutral[500],
+  line: palette.paper.royal,
+  locked: palette.paper.graphite,
   handleFill: palette.neutral[0],
-  marqueeFill: withAlpha(palette.brand.ink, 0.12),
+  marqueeFill: withAlpha(palette.paper.royal, 0.12),
 } as const;
 
 export const GRID_STEP = 20;

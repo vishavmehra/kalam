@@ -1,9 +1,11 @@
 import { useLocalSearchParams } from 'expo-router';
 
-import { ListingScreen } from '@/features/bazaar/ListingScreen';
+import { lazyRoute } from '@/features/bazaar/lazy-route';
+
+const Screen = lazyRoute(() => import('@/features/bazaar/ListingScreen').then((m) => ({ default: m.ListingScreen })));
 
 /** `/bazaar/[id]` */
 export default function ListingRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  return <ListingScreen id={String(id)} />;
+  return <Screen id={String(id)} />;
 }

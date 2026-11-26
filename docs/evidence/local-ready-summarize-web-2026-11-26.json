@@ -1,0 +1,124 @@
+{
+  "kind": "local-ready",
+  "record": {
+    "task": "summarize",
+    "platform": "web",
+    "model": "gemini-nano, Chrome/158.0.0.0",
+    "date": "2026-11-26",
+    "cases": 20,
+    "schemaValid": 20,
+    "correct": 12,
+    "hallucinated": 0,
+    "p95LatencyMs": 5362,
+    "offlineOk": true,
+    "evidence": "docs/evidence/local-ready-summarize-web-2026-11-26.json"
+  },
+  "verdict": {
+    "status": "failed",
+    "reasons": [
+      "correct 60%, needs 80%"
+    ]
+  },
+  "outcomes": [
+    {
+      "id": "s01",
+      "outcome": "right",
+      "ms": 23911
+    },
+    {
+      "id": "s02",
+      "outcome": "right",
+      "ms": 2567
+    },
+    {
+      "id": "s03",
+      "outcome": "wrong",
+      "ms": 2558
+    },
+    {
+      "id": "s04",
+      "outcome": "right",
+      "ms": 1839
+    },
+    {
+      "id": "s05",
+      "outcome": "right",
+      "ms": 2179
+    },
+    {
+      "id": "s06",
+      "outcome": "right",
+      "ms": 1771
+    },
+    {
+      "id": "s07",
+      "outcome": "wrong",
+      "ms": 2008
+    },
+    {
+      "id": "s08",
+      "outcome": "wrong",
+      "ms": 2419
+    },
+    {
+      "id": "s09",
+      "outcome": "right",
+      "ms": 2437
+    },
+    {
+      "id": "s10",
+      "outcome": "wrong",
+      "ms": 2553
+    },
+    {
+      "id": "s11",
+      "outcome": "right",
+      "ms": 1879
+    },
+    {
+      "id": "s12",
+      "outcome": "right",
+      "ms": 3535
+    },
+    {
+      "id": "s13",
+      "outcome": "wrong",
+      "ms": 2282
+    },
+    {
+      "id": "s14",
+      "outcome": "wrong",
+      "ms": 5362
+    },
+    {
+      "id": "s15",
+      "outcome": "right",
+      "ms": 4449
+    },
+    {
+      "id": "s16",
+      "outcome": "wrong",
+      "ms": 2829
+    },
+    {
+      "id": "s17",
+      "outcome": "right",
+      "ms": 2365
+    },
+    {
+      "id": "s18",
+      "outcome": "right",
+      "ms": 2168
+    },
+    {
+      "id": "s19",
+      "outcome": "wrong",
+      "ms": 2411
+    },
+    {
+      "id": "s20",
+      "outcome": "right",
+      "ms": 2696
+    }
+  ]
+}

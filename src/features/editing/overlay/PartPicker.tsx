@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { Button, Chip, Sheet, Text, useKalamTheme } from '@/design';
+import { useT } from '@/i18n/react';
 
 export function PartPicker({ visible, parts, initial, onClose, onPick }: {
   visible: boolean;
@@ -13,7 +14,8 @@ export function PartPicker({ visible, parts, initial, onClose, onPick }: {
   onClose(): void;
   onPick(ids: string[]): void;
 }) {
-  const { space } = useKalamTheme();
+  const { space, uiLanguage } = useKalamTheme();
+  const t = useT(uiLanguage);
   const [chosen, setChosen] = useState<string[]>([...initial]);
   const initialRef = useRef(initial);
   initialRef.current = initial;
@@ -26,12 +28,12 @@ export function PartPicker({ visible, parts, initial, onClose, onPick }: {
     <Sheet
       visible={visible}
       onClose={onClose}
-      title="Pick parts of this screen"
-      description="Choose what to change. You can pick more than one."
+      title={t('edit.draw.picker.title')}
+      description={t('edit.draw.picker.description')}
       footer={
         <>
-          <Button label="Cancel" variant="ghost" onPress={onClose} />
-          <Button label="Pick" disabled={!chosen.length} onPress={() => onPick(parts.filter((p) => chosen.includes(p.id)).map((p) => p.id))} />
+          <Button label={t('common.cancel')} variant="ghost" onPress={onClose} />
+          <Button label={t('edit.draw.picker.pick')} disabled={!chosen.length} onPress={() => onPick(parts.filter((p) => chosen.includes(p.id)).map((p) => p.id))} />
         </>
       }
     >
@@ -40,7 +42,7 @@ export function PartPicker({ visible, parts, initial, onClose, onPick }: {
           {parts.map((p) => <Chip key={p.id} label={p.label} role="checkbox" selected={chosen.includes(p.id)} onPress={() => toggle(p.id)} />)}
         </View>
       ) : (
-        <Text tone="secondary">Nothing on this screen can be picked yet.</Text>
+        <Text tone="secondary">{t('edit.draw.picker.none')}</Text>
       )}
     </Sheet>
   );

@@ -8,6 +8,7 @@ import { Platform } from 'react-native';
 import { DEFAULT_SPEECH, type AccessModes, type RuntimeServices, type VoiceService } from '@/core/contracts';
 import type { KalamSpec } from '@/core/spec/schema';
 import { getSpeechCapability, installOnDeviceSpeech, startDictation } from '@/infrastructure/platform/speech';
+import { speechServiceName } from '@/infrastructure/platform/speech.shared';
 import { getSpeaker } from '@/infrastructure/platform/tts';
 import { getServices } from '@/services';
 import { useSettingsStore } from '@/state/settings-store';
@@ -52,7 +53,7 @@ export interface VoiceAgent {
   dismiss: VoiceController['dismiss'];
 }
 
-const SERVICE_NAME = Platform.OS === 'web' ? "your browser's speech service" : "Android's speech service";
+const SERVICE_NAME = speechServiceName(Platform.OS);
 
 export function useVoiceAgent(args: UseVoiceAgentArgs): VoiceAgent {
   const settings = useSettingsStore((s) => s.settings);
@@ -89,7 +90,9 @@ export function useVoiceAgent(args: UseVoiceAgentArgs): VoiceAgent {
     () => false,
   );
 
-  // What this device can recognise, checked again when the speech language changes. No microphone use.
+  // What this device can recognise, checked again when the speech language changes. No microphone use. The
+  // microphone button hides itself from this result (VoiceControl), so it must be known up front. Automated
+  // browsers are protected inside the web probe (speech.web.ts), not here.
   useEffect(() => {
     void controller.prepare();
   }, [controller, speech.sttLanguage]);

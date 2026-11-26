@@ -8,8 +8,10 @@
  * `validateSpec` before it is used.
  */
 import { z } from 'zod';
+import { CHART_KINDS, METRIC_OPERATIONS, TIME_UNITS } from '../reports/chart-component';
 import {
-  ACTION_TYPES, AI_BLOCK_KINDS, COMPONENT_TYPES, FIELD_TYPES, ICON_GLYPHS, LIMITS, THEME_PRESETS,
+  ACTION_TYPES, AI_BLOCK_KINDS, COMPONENT_TYPES, FIELD_TYPES, ICON_GLYPHS, LAYOUT_TYPES, LIMITS, ON_DELETE_RULES,
+  STYLE_ALIGN, STYLE_EMPHASIS, STYLE_SIZES, STYLE_TONES, SUGGESTED_MODES, THEME_PRESETS,
 } from '../spec/schema';
 
 const idLike = z.string().min(1).max(80);
@@ -28,6 +30,10 @@ export const irFieldSchema = z.object({
   multiline: z.boolean().optional(),
   /** Always a string on the wire; coerced to the field type by the converter. */
   defaultValue: text(500).optional(),
+  // v1.1 relation: a text field that stores one record of refCollection.
+  refCollection: idLike.optional(),
+  refDisplay: idLike.optional(),
+  onDelete: z.enum(ON_DELETE_RULES).optional(),
 });
 
 export const irCollectionSchema = z.object({
@@ -67,6 +73,40 @@ export const irComponentSchema = z.object({
   prefix: text(8).optional(),
   suffix: text(12).optional(),
   aiBlock: idLike.optional(),
+  // v1.1 style (flat on the wire; `tone` above stays the button tone).
+  size: z.enum(STYLE_SIZES).optional(),
+  emphasis: z.enum(STYLE_EMPHASIS).optional(),
+  colorTone: z.enum(STYLE_TONES).optional(),
+  align: z.enum(STYLE_ALIGN).optional(),
+  fullWidth: z.boolean().optional(),
+  // v1.1 chart (source is shared with list).
+  chart: z.enum(CHART_KINDS).optional(),
+  metric: z.enum(METRIC_OPERATIONS).optional(),
+  valueField: idLike.optional(),
+  groupBy: idLike.optional(),
+  period: z.enum(TIME_UNITS).optional(),
+  dateField: idLike.optional(),
+  rangeLast: z.number().int().optional(),
+  rangeUnit: z.enum(TIME_UNITS).optional(),
+  // v1.1 timer (field is shared with inputs).
+  mode: z.enum(['countdown', 'stopwatch']).optional(),
+  durationSec: z.number().int().optional(),
+  unit: z.enum(['seconds', 'minutes']).optional(),
+  // v1.1 reminder (source and dateField are shared).
+  leadDays: z.number().int().optional(),
+  time: text(5).optional(),
+  doneField: idLike.optional(),
+  titleField: idLike.optional(),
+  message: text(120).optional(),
+});
+
+/** Flat layout group: `items` name component ids or other group ids (no recursion on the wire). */
+export const irGroupSchema = z.object({
+  id: idLike,
+  type: z.enum(LAYOUT_TYPES),
+  title: text(LIMITS.labelLength).optional(),
+  columns: z.number().int().optional(),
+  items: z.array(idLike).max(LIMITS.layoutChildren),
 });
 
 export const irScreenSchema = z.object({
@@ -76,6 +116,7 @@ export const irScreenSchema = z.object({
   /** Collection whose fields the inputs on this screen edit. Omit for transient forms. */
   form: idLike.optional(),
   components: z.array(irComponentSchema).max(LIMITS.componentsPerScreen),
+  groups: z.array(irGroupSchema).max(LIMITS.layoutNodesPerScreen).optional(),
 });
 
 export const irActionSchema = z.object({
@@ -93,6 +134,8 @@ export const irActionSchema = z.object({
   thenSpeak: text(200).optional(),
   thenNavigate: idLike.optional(),
   thenFeedback: text(120).optional(),
+  /** update only: fixed values it writes ("Mark done" sets status to Done). Values are strings on the wire. */
+  set: z.array(z.object({ field: idLike, value: text(500) })).max(LIMITS.fieldsPerCollection).optional(),
 });
 
 export const irAIBlockSchema = z.object({
@@ -125,6 +168,19 @@ export const compilerIRSchema = z.object({
   actions: z.array(irActionSchema).max(LIMITS.actions).optional(),
   aiBlocks: z.array(irAIBlockSchema).max(LIMITS.aiBlocks).optional(),
   intents: z.array(irIntentSchema).max(LIMITS.actions).optional(),
+  // v1.1 sections. Permissions are not on the wire: the converter derives them from the components.
+  settings: z.object({ currency: text(3).optional(), timeFormat: z.enum(['12h', '24h']).optional() }).optional(),
+  accessibility: z
+    .object({ summary: text(300).optional(), suggestedModes: z.array(z.enum(SUGGESTED_MODES)).max(SUGGESTED_MODES.length).optional() })
+    .optional(),
+  terminology: z
+    .array(z.object({
+      term: text(60),
+      keep: z.boolean().optional(),
+      translations: z.array(z.object({ lang: text(16), text: text(60) })).max(12).optional(),
+    }))
+    .max(LIMITS.terminology)
+    .optional(),
   /** Assumptions the model made, shown in the Understanding Review. */
   assumptions: z.array(text(200)).max(10).optional(),
   /** Questions when the request is too ambiguous to build (screens may then be empty). */
@@ -144,6 +200,7 @@ export type IRField = z.infer<typeof irFieldSchema>;
 export type IRCollection = z.infer<typeof irCollectionSchema>;
 export type IRComponent = z.infer<typeof irComponentSchema>;
 export type IRScreen = z.infer<typeof irScreenSchema>;
+export type IRGroup = z.infer<typeof irGroupSchema>;
 export type IRAction = z.infer<typeof irActionSchema>;
 export type IRAIBlock = z.infer<typeof irAIBlockSchema>;
 export type AppPlan = z.infer<typeof appPlanSchema>;

@@ -1,0 +1,35 @@
+# A request that only the cloud can build, in a build with no cloud configured (the CI build): Kalam must say so in
+# words and keep what was typed. Nothing is built or saved (docs/07 §14, checklist D15-046). The real cloud build, an
+# app built by Gemini on a phone, is .maestro/live/ai-built-app.yaml and needs a build with Firebase configured.
+appId: com.kalam.app
+name: Cloud-only request without a cloud
+---
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Your shelf.*"
+    timeout: 120000
+- tapOn: "(Create|Make)"
+- extendedWaitUntil:
+    visible: "Describe the app you want to create.*"
+    timeout: 30000
+- tapOn: "Describe the app you want to create.*"
+- inputText: "multi-role CRM with approvals and dashboards"
+- hideKeyboard
+- tapOn:
+    id: create-app
+# Either the first-time question about sending to Gemini, or (already answered) the failure itself.
+- extendedWaitUntil:
+    visible: ".*(needs Gemini in the cloud|needs the cloud to build).*"
+    timeout: 60000
+- takeScreenshot: 22-cloud-needed
+- runFlow:
+    when:
+      visible: ".*needs Gemini in the cloud.*"
+    commands:
+      - tapOn: "Send and build.*"
+      - extendedWaitUntil:
+          visible: ".*(cloud|set up|offline|available).*"
+          timeout: 60000
+- assertNotVisible: ".*Kalam understood.*"
+- runFlow: ../common/pause.yaml

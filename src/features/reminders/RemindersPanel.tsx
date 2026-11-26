@@ -26,12 +26,13 @@ const UPCOMING_SHOWN = 5;
  */
 export function RemindersPanel({ spec, appId }: { spec: SpecView; appId: string }) {
   const theme = useKalamTheme();
-  const { config, records, loaded, save } = useReminderData(appId);
+  const { config, stored, records, loaded, save } = useReminderData(appId);
   const { capability, request, openSettings } = useNotificationCapability();
   const now = useNow();
   const [error, setError] = useState<string | undefined>();
 
-  const rules = config?.rules ?? [];
+  // The editor lists only the person's own rules; the app's Reminder components are switched in the app itself.
+  const rules = stored?.rules ?? [];
   const hasDates = useMemo(() => listDateFields(spec).length > 0, [spec]);
   const due = useMemo(() => computeDue({ spec, records, config, now }), [spec, records, config, now]);
   const upcoming = useMemo(

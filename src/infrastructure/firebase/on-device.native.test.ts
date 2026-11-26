@@ -121,6 +121,61 @@ describe('Android bridge: capability detection (FAI-07)', () => {
   });
 });
 
+describe('Android bridge: why Gemini Nano cannot run (Firebase Test Lab, 2026-11-25)', () => {
+  const pixel10 = '[ErrorCode 601] AICore failed with error type 4-CONNECTION_ERROR and error code 601-BINDING_FAILURE: AiCore service failed to bind to primary or fallback.';
+
+  it('passes the reason and AICore code on, with plain English instead of the raw AICore text', async () => {
+    const mod = await load(fakeNano({ availability: 'unavailable', reason: 'binding_failure', code: 601, detail: pixel10 }).native);
+    const s = await mod.onDeviceStatus();
+    expect(s).toEqual({
+      platform: 'android', apiExposed: true, availability: 'unavailable', progress: undefined,
+      reason: 'binding_failure', reasonCode: 601, detail: `${mod.REASON_TEXT.binding_failure} (error code 601)`,
+    });
+    expect(s.detail).toMatch(/could not connect to Android AICore.*reinstall Kalam/);
+    expect(s.detail).not.toContain('CONNECTION_ERROR');
+  });
+
+  it.each([
+    ['aicore_missing', /does not have Android AICore/],
+    ['aicore_not_ready', /not finished setting up.*unlocked bootloader/],
+    ['device_not_supported', /not offered on this phone/],
+    ['needs_system_update', /newer version of Android/],
+    ['low_storage', /not enough free storage/],
+    ['battery_or_network_conditions', /battery.*internet connection/],
+  ] as const)('explains %s in plain English', async (reason, text) => {
+    const mod = await load(fakeNano({ availability: 'unavailable', reason }).native);
+    const s = await mod.onDeviceStatus();
+    expect(s).toMatchObject({ availability: 'unavailable', reason, detail: expect.stringMatching(text) });
+    expect(s).not.toHaveProperty('reasonCode');
+  });
+
+  it('explains a downloadable model with its size and the Wi-Fi advice', async () => {
+    const mod = await load(fakeNano({ availability: 'downloadable', reason: 'model_downloadable' }).native);
+    expect(await mod.onDeviceStatus()).toMatchObject({ reason: 'model_downloadable', detail: expect.stringMatching(/a few GB.*Wi-Fi/) });
+  });
+
+  it('reads a reason this build does not know as unknown, and keeps what Android said', async () => {
+    const mod = await load(fakeNano({ availability: 'unavailable', reason: 'brand_new_reason', code: 42, detail: 'AICore said no' }).native);
+    expect(await mod.onDeviceStatus()).toMatchObject({
+      reason: 'unknown', reasonCode: 42, detail: `${mod.REASON_TEXT.unknown} (error code 42) Android said: AICore said no`,
+    });
+  });
+
+  it('gives no reason once the model is available', async () => {
+    const mod = await load(fakeNano({ availability: 'available', model: 'nano-v4-full', reason: 'unknown' }).native);
+    const s = await mod.onDeviceStatus();
+    expect(s).toMatchObject({ availability: 'available', detail: 'Model on this phone: nano-v4-full' });
+    expect(s).not.toHaveProperty('reason');
+  });
+
+  it('a failed download comes back with its reason', async () => {
+    const { native } = fakeNano({ availability: 'downloadable', reason: 'model_downloadable' });
+    native.prepare.mockResolvedValue({ availability: 'downloadable', reason: 'low_storage', code: 501, detail: 'Not enough storage' });
+    const mod = await load(native);
+    expect(await mod.prepareOnDevice()).toMatchObject({ availability: 'downloadable', reason: 'low_storage', reasonCode: 501 });
+  });
+});
+
 describe('Android bridge: preparing the model (docs/07 §6.6)', () => {
   it('passes download progress as a fraction, removes its listener, then reports ready and warm', async () => {
     const { native, listeners, emit } = fakeNano();

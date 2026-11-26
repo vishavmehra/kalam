@@ -58,7 +58,10 @@ export function rebuildHistory(
   const versions: AppVersion[] = [];
   let prev: { version: number; spec: KalamSpec } | undefined;
   for (const { row, spec } of kept) {
-    const base = { appId, version: row.version, createdAt: row.createdAt || fallbackTime, summary: row.summary, source: row.source };
+    const base = {
+      appId, version: row.version, createdAt: row.createdAt || fallbackTime, summary: row.summary, source: row.source,
+      ...(row.origin ? { origin: row.origin } : {}),
+    };
     const chained = prev !== undefined && prev.version === row.version - 1 && (row.version - 1) % SNAPSHOT_INTERVAL !== 0;
     versions.push(
       chained && prev

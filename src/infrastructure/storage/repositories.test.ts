@@ -109,6 +109,26 @@ describe('AI cache (LRU)', () => {
   });
 });
 
+describe('AI cache and app deletion', () => {
+  it('removes one answer, and every answer of an app when the app is deleted, and no other', async () => {
+    const db = fresh();
+    await db.apps.save(fixtureApp(fixtureSpec()), create);
+    const meta = { taskType: 'classify' as const, source: 'on_device' as const };
+    await db.aiCache.set('mine-1', 1, { ...meta, appId: 'app_expenses' });
+    await db.aiCache.set('mine-2', 2, { ...meta, appId: 'app_expenses' });
+    await db.aiCache.set('theirs', 3, { ...meta, appId: 'app_other' });
+    await db.aiCache.set('nobody', 4, meta);
+    await db.aiCache.remove?.('mine-1');
+    expect(await db.aiCache.get('mine-1')).toBeUndefined();
+    await db.aiCache.removeForApp?.('app_other');
+    expect(await db.aiCache.get('theirs')).toBeUndefined();
+    expect(await db.aiCache.get('mine-2')).toBe(2);
+    await db.apps.remove('app_expenses');
+    expect(await db.aiCache.get('mine-2')).toBeUndefined();
+    expect(await db.aiCache.get('nobody')).toBe(4); // an answer with no owner is left alone
+  });
+});
+
 describe('sessions', () => {
   it('saves, returns the latest, keeps draft details, and prunes old or expired drafts with their files', async () => {
     let clock = 10 * SESSION_TTL_MS;
@@ -149,6 +169,29 @@ describe('records cap', () => {
     });
     expect(summary.records).toBe(2);
     expect(summary.skippedRecords).toBe(1);
+  });
+});
+
+describe('app flags and version origin', () => {
+  it('keeps archived across a metadata-only save without adding a version', async () => {
+    const db = fresh();
+    const app = await db.apps.save(fixtureApp(fixtureSpec()), create);
+    const archived = await db.apps.save({ ...app, archived: true }, { summary: 'Archived', source: 'edit' });
+    expect(archived.archived).toBe(true);
+    expect((await db.apps.get('app_expenses'))?.archived).toBe(true);
+    expect(await db.versions.list('app_expenses')).toHaveLength(1);
+    await db.apps.save({ ...archived, archived: false }, { summary: 'Restored to the shelf', source: 'edit' });
+    expect((await db.apps.get('app_expenses'))?.archived).toBe(false);
+  });
+
+  it('records who made a change on the version it creates', async () => {
+    const db = fresh();
+    const app = await db.apps.save(fixtureApp(fixtureSpec()), create);
+    await db.apps.save({ ...app, spec: { ...app.spec, name: 'Expenses by AI' } }, { summary: 'Renamed', source: 'edit', origin: 'ai' });
+    const versions = await db.versions.list('app_expenses');
+    const edit = versions.find((v) => v.version === 2);
+    expect(edit?.origin).toBe('ai');
+    expect(versions.find((v) => v.version === 1)?.origin).toBeUndefined();
   });
 });
 

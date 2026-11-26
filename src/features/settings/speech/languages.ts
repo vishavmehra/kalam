@@ -3,7 +3,10 @@
  * speech output are separate choices: a device can hear Gujarati and still have no Gujarati voice.
  * Pure TypeScript.
  */
+import { speechServiceName } from '@/infrastructure/platform/speech.shared';
 import { clampRate } from '@/infrastructure/platform/tts.shared';
+
+export { speechServiceName };
 
 export interface SpeechLanguage {
   /** BCP-47 tag handed to the speech platform. */
@@ -26,7 +29,7 @@ export const SPEECH_LANGUAGES: readonly SpeechLanguage[] = [
   { tag: 'ta-IN', native: 'தமிழ்', english: 'Tamil', sample: 'Kalam குரல் இப்படி ஒலிக்கும்.' },
   { tag: 'te-IN', native: 'తెలుగు', english: 'Telugu', sample: 'Kalam గొంతు ఇలా వినిపిస్తుంది.' },
   { tag: 'kn-IN', native: 'ಕನ್ನಡ', english: 'Kannada', sample: 'Kalam ಧ್ವನಿ ಹೀಗೆ ಕೇಳಿಸುತ್ತದೆ.' },
-  { tag: 'ml-IN', native: 'മലയാളം', english: 'Malayalam', sample: 'Kalam ശബ്ദം ഇങ്ങനെ കേൾക്കും.' },
+  { tag: 'ml-IN', native: 'മലയാളം', english: 'Malayalam', sample: 'Kalam-ന്റെ ശബ്ദം ഇങ്ങനെയായിരിക്കും.' },
   { tag: 'pa-IN', native: 'ਪੰਜਾਬੀ', english: 'Punjabi', sample: 'Kalam ਦੀ ਆਵਾਜ਼ ਇਸ ਤਰ੍ਹਾਂ ਸੁਣਾਈ ਦੇਵੇਗੀ।' },
 ];
 

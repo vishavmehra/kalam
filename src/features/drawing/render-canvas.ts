@@ -1,9 +1,22 @@
 /** Canvas 2D renderer for the drawing display list (web canvas, page thumbnails and web PNG export). */
 import { palette } from '@/design/tokens';
 import { images } from './image-cache.web';
-import type { Primitive } from './model';
+import { canvasFontStack, needsScriptFont, type Primitive } from './model';
+import { ensureTextFonts } from './text-fonts';
 
 const FONT = 'Inter, system-ui, -apple-system, "Segoe UI", sans-serif';
+const FONTS = { sans: FONT, serif: 'Fraunces, Georgia, "Times New Roman", serif', mono: 'ui-monospace, Menlo, Consolas, monospace' } as const;
+
+/** Latin text keeps the normal stack. Indic text gets the Noto font for its script first, then the browser shapes it. */
+function textFont(p: Extract<Primitive, { t: 'text' }>): string {
+  const weight = p.bold ? 600 : 400;
+  if (needsScriptFont(p.text)) {
+    void ensureTextFonts(p.text);
+    const stack = canvasFontStack(p.text, p.bold ? 'semibold' : 'regular', 'Inter');
+    if (stack) return `${weight} ${p.size}px ${stack}`;
+  }
+  return `${weight} ${p.size}px ${FONTS[p.font ?? 'sans']}`;
+}
 const pathCache = new Map<string, Path2D>();
 
 function path2d(d: string): Path2D {
@@ -75,7 +88,7 @@ export function drawPrimitives(ctx: CanvasRenderingContext2D, prims: readonly Pr
         ctx.strokeStyle = p.stroke; ctx.lineWidth = p.width; ctx.stroke();
         break;
       case 'text':
-        ctx.font = `${p.bold ? 600 : 400} ${p.size}px ${FONT}`;
+        ctx.font = textFont(p);
         ctx.textBaseline = 'top';
         ctx.textAlign = p.align ?? 'left';
         ctx.fillStyle = p.color;

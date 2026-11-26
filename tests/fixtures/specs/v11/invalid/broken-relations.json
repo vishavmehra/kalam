@@ -1,0 +1,42 @@
+{
+  "id": "broken_relations",
+  "schemaVersion": "1.1.0",
+  "version": 1,
+  "name": "Broken links",
+  "lang": "en",
+  "theme": { "primary": "#315C4C", "radius": 12, "fontScale": 1 },
+  "collections": {
+    "customers": { "fields": { "name": { "type": "text", "label": "Name" }, "vip": { "type": "boolean", "label": "VIP" } } },
+    "orders": {
+      "fields": {
+        "customer": { "type": "text", "label": "Customer", "required": true, "ref": { "collection": "customers", "display": "vip", "onDelete": "clear" } },
+        "supplier": { "type": "text", "label": "Supplier", "ref": { "collection": "suppliers" } },
+        "agent": { "type": "text", "label": "Agent", "ref": { "collection": "customers", "display": "nickname" } },
+        "broker": { "type": "text", "label": "Broker", "maxLength": 10, "defaultValue": "Raju", "multiline": true, "placeholder": "Pick one", "ref": { "collection": "customers" } },
+        "due": { "type": "date", "label": "Due" }
+      }
+    }
+  },
+  "screens": [
+    {
+      "id": "home",
+      "title": "Orders",
+      "form": "orders",
+      "children": [
+        { "id": "customer_input", "type": "textInput", "label": "Customer", "field": "customer" },
+        { "id": "sign", "type": "signature", "label": "Sign", "field": "customer" },
+        { "id": "list", "type": "list", "source": "customers", "primary": "name" },
+        { "id": "remind", "type": "reminder", "label": "Remind", "source": "orders", "dateField": "due", "titleField": "customer" },
+        { "id": "by_customer", "type": "list", "source": "orders", "primary": "due", "sort": { "field": "customer", "direction": "asc" } }
+      ]
+    }
+  ],
+  "initialScreen": "home",
+  "actions": {},
+  "aiBlocks": {
+    "read_order": { "kind": "extractFromPhoto", "prompt": "Read the order.", "verified": "unverified", "target": "orders", "fields": ["customer", "due"] },
+    "sum_name": { "kind": "summarise", "prompt": "Shorten the name.", "verified": "unverified", "inputField": "name", "outputField": "customer", "maxWords": 20 }
+  },
+  "intents": {},
+  "meta": { "createdAt": 1763500000000 }
+}

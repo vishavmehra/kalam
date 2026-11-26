@@ -1,12 +1,14 @@
 import { CircleAlert, CircleCheck, Info, type LucideIcon } from 'lucide-react-native';
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeInUp, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useT } from '@/i18n/react';
 
 import { Text } from './Text';
 import { useBreakpoint, useKalamTheme } from './theme';
-import type { KalamColors } from './tokens';
+import { type KalamColors, palette } from './tokens';
 
 export type ToastTone = 'neutral' | 'success' | 'danger' | 'info';
 
@@ -53,6 +55,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, [dismiss]);
   const api = useMemo(() => ({ show }), [show]);
   const reduced = theme.reducedMotion;
+  const tr = useT(theme.uiLanguage);
 
   return (
     <ToastContext.Provider value={api}>
@@ -62,11 +65,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         aria-live="polite"
         accessibilityLiveRegion="polite"
         style={{
-          position: 'absolute', left: 16, right: 16,
-          // Clear the phone tab bar (64) + safe area.
-          bottom: hasRail ? 24 : insets.bottom + 80,
+          position: 'absolute', start: 16, end: 16,
+          // DIRECTION §7: the top chrome slot on phones (clear of the tab bar and the thumb), bottom-left on wide screens.
+          ...(hasRail ? { bottom: 24 } : { top: insets.top + 8 }),
           alignItems: hasRail ? 'flex-start' : 'center',
-          paddingLeft: hasRail ? 96 : 0,
+          // Bottom-left on wide screens, clear of the rail; a left-handed shell has its rail on the right.
+          paddingStart: hasRail && !theme.accessModes.leftHanded ? 84 : 0,
           gap: 8,
         }}
       >
@@ -76,27 +80,31 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           return (
             <Animated.View
               key={t.id}
-              entering={reduced ? FadeIn.duration(120) : FadeInDown.duration(220)}
+              entering={reduced ? FadeIn.duration(120) : (hasRail ? FadeInUp : FadeInDown).duration(220)}
               exiting={FadeOut.duration(140)}
               role="status"
               style={[
                 {
                   flexDirection: 'row', alignItems: 'center', gap: 10,
                   maxWidth: 440, minHeight: 48,
-                  paddingLeft: 16, paddingRight: t.action ? 6 : 16, paddingVertical: 8,
+                  paddingStart: 16, paddingEnd: t.action ? 4 : 16, paddingVertical: t.action ? 0 : 8,
                   backgroundColor: theme.scheme === 'dark' ? theme.colors.surfaceElevated : theme.colors.text,
-                  borderRadius: theme.radius.md,
+                  borderRadius: theme.radius.press,
+                  borderWidth: theme.scheme === 'dark' ? 1 : 0, borderColor: theme.colors.borderStrong,
                 },
                 theme.scheme === 'light' ? theme.elevation[2] : null,
               ]}
             >
-              {Icon ? <Icon size={18} color={theme.scheme === 'dark' ? theme.colors[tone.color] : theme.colors.background} /> : null}
-              <Text style={{ flexShrink: 1, color: theme.scheme === 'dark' ? theme.colors.text : theme.colors.background }}>{t.message}</Text>
+              {Icon ? <Icon size={18} color={theme.scheme === 'dark' ? theme.colors[tone.color] : t.tone === 'success' ? palette.ink.leaf : theme.colors.background} /> : null}
+              {/* Tapping the message dismisses the toast (DIRECTION §7); the action, when there is one, stays separate. */}
+              <Pressable role="button" onPress={() => dismiss(t.id)} accessibilityHint={tr('shell.toastDismiss')} style={{ flexShrink: 1, minHeight: 32, justifyContent: 'center' }}>
+                <Text style={{ color: theme.scheme === 'dark' ? theme.colors.text : theme.colors.background }}>{t.message}</Text>
+              </Pressable>
               {t.action ? (
                 <Pressable
                   role="button"
                   onPress={() => { t.action?.onPress(); dismiss(t.id); }}
-                  style={{ minHeight: 40, paddingHorizontal: 12, justifyContent: 'center', borderRadius: theme.radius.sm }}
+                  style={{ minHeight: theme.touchTarget, paddingHorizontal: 12, justifyContent: 'center', borderRadius: theme.radius.sm }}
                 >
                   <Text weight="semibold" style={{ color: theme.scheme === 'dark' ? theme.colors.primary : theme.colors.accent }}>{t.action.label}</Text>
                 </Pressable>

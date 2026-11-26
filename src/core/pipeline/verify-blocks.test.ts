@@ -1,14 +1,21 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createFakeAI, type FakeAI, type FakeReply } from '../../../tests/fixtures/compiler/fake-ai';
+import { AI_COPY } from '../ai/copy';
 import { irToSpec } from '../compiler/convert';
 import { compilerIRSchema } from '../compiler/ir';
 import type { CreationStage, NormalizedInput, StoredApp, StructuredRequest } from '../contracts';
+import { applyRemoteConfig, resetRemoteConfig } from '../ai/remote-config';
+import { describeSpec } from '../spec/describe';
 import type { KalamSpec } from '../spec/schema';
 import { validateSpec } from '../spec/validate';
-import { createAIBlockService, VERIFY_PROMPT_VERSION } from '../tasks/ai-block-service';
+import { createAIBlockService, verifyPromptVersion } from '../tasks/ai-block-service';
+import { VERIFY_COPY } from './copy';
 import { createApplicationPipeline } from './create-application';
-import { pendingChecks, recheckPending, reportsByBlock, verifyAIBlocks, type VerifyStageDeps } from './verify-blocks';
+import {
+  applyChecks, finishPendingChecks, pendingChecks, recheckPending, reportsByBlock, verifyAIBlocks, withCheckMessages,
+  type VerifyStageDeps,
+} from './verify-blocks';
 
 const tailorIR = JSON.parse(readFileSync(new URL('../../../tests/fixtures/compiler/tailor-shop.ir.json', import.meta.url), 'utf8'));
 const tailor = irToSpec(compilerIRSchema.parse(tailorIR), { appId: 'app_tailor01', now: 1 });
@@ -52,6 +59,21 @@ const deps = (ai: FakeAI, extra: Partial<VerifyStageDeps> = {}): VerifyStageDeps
 const byId = <T extends { blockId: string }>(reports: readonly T[]): Record<string, T | undefined> =>
   Object.fromEntries(reports.map((r) => [r.blockId, r]));
 
+describe('verifying stage: remote switch', () => {
+  it('makes no model call and leaves every step unverified while feature_ai_block_verification is off', async () => {
+    applyRemoteConfig({ feature_ai_block_verification: 'false' });
+    try {
+      const ai = createFakeAI({ onDevice: 'available', respond: responder });
+      const out = await verifyAIBlocks(spec, deps(ai, { cloudConsent: () => true }));
+      expect(out).toMatchObject({ reports: [], skipped: [], attempted: [] });
+      expect(out.spec).toBe(spec);
+      expect(ai.calls).toHaveLength(0);
+    } finally {
+      resetRemoteConfig();
+    }
+  });
+});
+
 describe('verifying stage: online with cloud help on', () => {
   it('tests every text step on device, records the result in the spec and keeps the cases', async () => {
     expect(validateSpec(spec).ok).toBe(true);
@@ -62,7 +84,7 @@ describe('verifying stage: online with cloud help on', () => {
     expect(out.spec.aiBlocks.note_summary?.verified).toBe('onDevice');
     expect(out.spec.aiBlocks.note_hindi?.verified).toBe('onDevice');
     const r = byId(out.reports);
-    expect(r.note_kind).toMatchObject({ status: 'onDevice', testCount: 5, passCount: 4, judgeUsed: false, appVersion: 1, promptVersion: VERIFY_PROMPT_VERSION });
+    expect(r.note_kind).toMatchObject({ status: 'onDevice', testCount: 5, passCount: 4, judgeUsed: false, appVersion: 1, promptVersion: verifyPromptVersion() });
     expect(r.note_kind?.blockHash).toMatch(/^[0-9a-f]{8}$/);
     // The capability context the check ran in is kept with it (docs/15 §9.5).
     expect(r.note_kind?.device).toEqual({ platform: 'web', availability: 'available' });
@@ -105,14 +127,14 @@ describe('verifying stage: online with cloud help on', () => {
 describe('verifying stage: honest "not checked yet" without spending calls', () => {
   const textSteps = ['note_kind', 'note_summary', 'note_hindi'];
 
-  it('offline: nothing is called, every text step says it will be checked when online', async () => {
+  it('offline: nothing is called, every text step says it can be checked from Edit once online', async () => {
     const ai = createFakeAI({ onDevice: 'available', online: false, respond: responder });
     const out = await verifyAIBlocks(spec, deps(ai));
     expect(ai.calls).toHaveLength(0);
     expect(out.spec).toBe(spec);
     for (const id of textSteps) {
       expect(byId(out.reports)[id]).toMatchObject({ status: 'unverified', reason: 'offline', testCount: 0, cases: [] });
-      expect(byId(out.reports)[id]?.message).toBe('Not checked yet. Kalam will check it when you are online.');
+      expect(byId(out.reports)[id]?.message).toBe(VERIFY_COPY.notChecked.offline);
     }
   });
 
@@ -122,6 +144,18 @@ describe('verifying stage: honest "not checked yet" without spending calls', () 
     expect(ai.calls).toHaveLength(0);
     expect(out.reports.filter((r) => r.reason === 'cloud_off').map((r) => r.blockId)).toEqual(textSteps);
     expect(out.spec.aiBlocks.note_kind?.verified).toBe('unverified');
+  });
+
+  it('a cloud notice that was not accepted is reported as needing the OK, stops the rest, and is not re-asked on open', async () => {
+    const ai = createFakeAI({ onDevice: 'available', respond: () => ({ error: 'consent_denied', message: AI_COPY.needsCloudOk }) });
+    const out = await verifyAIBlocks(spec, deps(ai, { cloudConsent: () => true }));
+    expect(ai.calls).toHaveLength(1);
+    const held = out.reports.filter((r) => r.reason === 'needs_cloud_ok');
+    expect(held.map((r) => r.blockId)).toEqual(textSteps);
+    for (const r of held) expect(r.message).toBe(VERIFY_COPY.notChecked.needs_cloud_ok);
+    expect(VERIFY_COPY.notChecked.needs_cloud_ok).not.toMatch(/Settings/);
+    const app: StoredApp = { id: spec.id, spec, createdAt: 1, updatedAt: 1, origin: { route: 'cloud' }, aiVerification: reportsByBlock(spec, out.reports) };
+    expect(pendingChecks(app)).toEqual([]);
   });
 
   it('treats unreadable settings as no consent', async () => {
@@ -136,6 +170,13 @@ describe('verifying stage: honest "not checked yet" without spending calls', () 
     expect(byId(none.reports).note_kind).toMatchObject({ reason: 'device_unsupported' });
     const later = await verifyAIBlocks(spec, deps(createFakeAI({ onDevice: 'downloadable', respond: responder })));
     expect(byId(later.reports).note_kind).toMatchObject({ reason: 'device_not_ready' });
+  });
+
+  it('a step set to run only on this device never promises the cloud', async () => {
+    const strict: KalamSpec = { ...spec, aiBlocks: { ...spec.aiBlocks, note_kind: { ...spec.aiBlocks.note_kind!, fallback: 'none' } as KalamSpec['aiBlocks'][string] } };
+    const out = await verifyAIBlocks(strict, deps(createFakeAI({ onDevice: 'unavailable', respond: responder })));
+    expect(byId(out.reports).note_kind?.message).toBe(VERIFY_COPY.notCheckedDeviceOnly.device_unsupported);
+    expect(byId(out.reports).note_summary?.message).toBe(VERIFY_COPY.notChecked.device_unsupported);
   });
 
   it('skips a cold model and warms it for next time', async () => {
@@ -159,7 +200,7 @@ describe('verifying stage: honest "not checked yet" without spending calls', () 
     });
     const r = byId(out.reports);
     expect(r.note_kind?.status).toBe('onDevice');
-    expect(r.note_summary).toMatchObject({ reason: 'offline', testCount: 0, message: 'Not checked yet. Kalam will check it when you are online.' });
+    expect(r.note_summary).toMatchObject({ reason: 'offline', testCount: 0, message: VERIFY_COPY.notChecked.offline });
     expect(r.note_hindi?.reason).toBe('offline');
     expect(ai.calls.filter((c) => isCaseGen(c.req))).toHaveLength(2); // the third step was never started
   });
@@ -180,6 +221,15 @@ describe('verifying stage: bounded deadline', () => {
     expect(ai.calls.filter((c) => isCaseGen(c.req))).toHaveLength(1);
   });
 
+  it('a check that breaks is reported as failed, not as too slow', async () => {
+    const ai = createFakeAI({ onDevice: 'available', respond: responder });
+    const out = await verifyAIBlocks(spec, {
+      ai, now: Date.now, aiBlocks: { verify: async () => { throw new Error('boom'); } },
+    });
+    for (const id of ['note_kind', 'note_summary', 'note_hindi']) expect(byId(out.reports)[id]?.reason).toBe('failed');
+    expect(out.attempted).toEqual(['note_kind', 'note_summary', 'note_hindi']);
+  });
+
   it('a user cancel stops the stage and marks the rest cancelled', async () => {
     const ctl = new AbortController();
     ctl.abort();
@@ -187,6 +237,21 @@ describe('verifying stage: bounded deadline', () => {
     const out = await verifyAIBlocks(spec, deps(ai), { signal: ctl.signal });
     expect(ai.calls).toHaveLength(0);
     expect(byId(out.reports).note_kind?.reason).toBe('cancelled');
+  });
+});
+
+describe('withCheckMessages', () => {
+  it('shows the check words for unchecked steps and for device-only steps that did not pass', () => {
+    const kind = spec.aiBlocks.note_kind!;
+    const strict: KalamSpec = { ...spec, aiBlocks: { ...spec.aiBlocks, note_kind: { ...kind, fallback: 'none', verified: 'cloudPreferred' } as typeof kind } };
+    const report = {
+      blockId: 'note_kind', appVersion: 1, blockHash: 'x', promptVersion: verifyPromptVersion(), status: 'cloudPreferred' as const,
+      testCount: 5, passCount: 3, judgeUsed: false, cases: [], checkedAt: 1,
+      message: 'Passed 3 of 5 tests on this device. This step is set to run only on this device, so its answers may be wrong.',
+    };
+    const words = (s: KalamSpec) => withCheckMessages(describeSpec(s), [report], s).aiFeatures.find((f) => f.id === 'note_kind')?.verified;
+    expect(words(strict)).toBe(report.message);
+    expect(words({ ...strict, aiBlocks: { ...strict.aiBlocks, note_kind: { ...kind, verified: 'cloudPreferred' } as typeof kind } })).toBe('Works best when online');
   });
 });
 
@@ -220,13 +285,79 @@ describe('checks that waited for the network (pendingChecks, recheckPending)', (
     expect(still.calls).toHaveLength(0);
 
     const back = createFakeAI({ onDevice: 'available', respond: responder });
-    const next = await recheckPending(app, deps(back, { cloudConsent: () => true }));
+    const reports = await recheckPending(app, deps(back, { cloudConsent: () => true }));
+    expect(reports?.map((r) => r.blockId)).toEqual(['note_kind', 'note_summary', 'note_hindi']);
+    const next = applyChecks(app, reports ?? []);
     expect(validateSpec(next?.spec).ok).toBe(true);
     expect(next?.spec.aiBlocks.note_kind?.verified).toBe('onDevice');
-    expect(next?.aiVerification?.note_kind).toMatchObject({ status: 'onDevice', testCount: 5, promptVersion: VERIFY_PROMPT_VERSION });
+    expect(next?.aiVerification?.note_kind).toMatchObject({ status: 'onDevice', testCount: 5, promptVersion: verifyPromptVersion() });
     expect(next?.aiVerification?.slip_to_order?.reason).toBe('needs_samples');
+    expect(pendingChecks(next!)).toEqual([]);
     expect(back.calls.some((c) => c.req.images?.length)).toBe(false);
     expect(app.spec.aiBlocks.note_kind?.verified).toBe('unverified'); // input never mutated
+  });
+
+  it('merges into the app as it is now and never overwrites a newer change', async () => {
+    const app = saved((await verifyAIBlocks(spec, deps(createFakeAI({ onDevice: 'available', online: false })))).reports);
+    const reports = await recheckPending(app, deps(createFakeAI({ onDevice: 'available', respond: responder })));
+    // Meanwhile the person renamed the app and rewrote one step.
+    const kind = spec.aiBlocks.note_kind!;
+    const now: StoredApp = {
+      ...app, updatedAt: 2,
+      spec: { ...spec, name: 'Raju Tailors', aiBlocks: { ...spec.aiBlocks, note_kind: { ...kind, prompt: 'Is it urgent?' } as typeof kind } },
+    };
+    const merged = applyChecks(now, reports ?? []);
+    expect(merged?.spec.name).toBe('Raju Tailors');
+    expect(merged?.spec.aiBlocks.note_kind).toMatchObject({ prompt: 'Is it urgent?', verified: 'unverified' });
+    expect(merged?.aiVerification?.note_kind?.reason).toBe('offline'); // the old report stays: the step changed
+    expect(merged?.spec.aiBlocks.note_hindi?.verified).toBe('onDevice');
+    expect(applyChecks({ ...now, spec: { ...now.spec, aiBlocks: {} } }, reports ?? [])).toBeUndefined();
+  });
+
+  it('a judge that was offline is checked again later', async () => {
+    let judgeOnline = false;
+    const ai = createFakeAI({ onDevice: 'available', respond: (r) => (isJudge(r) && !judgeOnline ? { error: 'offline' } : responder(r)) });
+    const first = await verifyAIBlocks(spec, deps(ai), { only: ['note_summary'] });
+    expect(byId(first.reports).note_summary).toMatchObject({ status: 'unverified', reason: 'offline', testCount: 0 });
+    expect(first.spec.aiBlocks.note_summary?.verification).toBeUndefined();
+    const app = saved(first.reports);
+    expect(pendingChecks(app)).toEqual(['note_summary']);
+    judgeOnline = true;
+    const next = applyChecks(app, (await recheckPending(app, deps(ai))) ?? []);
+    expect(next?.spec.aiBlocks.note_summary?.verified).toBe('onDevice');
+  });
+
+  it('retries a step that took too long once, then stops trying by itself', async () => {
+    const slow = { verify: () => new Promise<never>(() => {}) };
+    const ai = createFakeAI({ onDevice: 'available', respond: responder });
+    const first = await verifyAIBlocks(spec, { ai, aiBlocks: slow, now: Date.now, budgetMs: 20 }, { only: ['note_kind'] });
+    const app = saved(first.reports);
+    expect(pendingChecks(app)).toEqual(['note_kind']);
+    const again = await recheckPending(app, { ai, aiBlocks: slow, now: Date.now, budgetMs: 20 });
+    expect(again?.[0]).toMatchObject({ reason: 'failed', message: VERIFY_COPY.tooSlowAgain });
+    expect(pendingChecks(applyChecks(app, again ?? [])!)).toEqual([]);
+  });
+
+  it('on app open, saves the finished checks into the app as it is by then', async () => {
+    let stored = saved((await verifyAIBlocks(spec, deps(createFakeAI({ onDevice: 'available', online: false })))).reports);
+    const summaries: string[] = [];
+    const apps = {
+      get: async () => stored,
+      save: async (a: StoredApp, change: { summary: string }) => { summaries.push(change.summary); stored = a; return a; },
+    };
+    const ai = createFakeAI({ onDevice: 'available', respond: responder });
+    const service = createAIBlockService({ ai });
+    // The person renames the app while the check runs.
+    const out = await finishPendingChecks(spec.id, {
+      ...deps(ai), apps,
+      aiBlocks: { verify: async (s, id, o) => { stored = { ...stored, spec: { ...stored.spec, name: 'Raju Tailors' } }; return service.verify(s, id, o); } },
+    });
+    expect(out?.spec.name).toBe('Raju Tailors');
+    expect(out?.spec.aiBlocks.note_kind?.verified).toBe('onDevice');
+    expect(summaries).toEqual([VERIFY_COPY.savedSummary]);
+    // Nothing is waiting any more, so a second open does nothing.
+    expect(await finishPendingChecks(spec.id, { ...deps(ai), apps })).toBeUndefined();
+    expect(await finishPendingChecks('gone', { ...deps(ai), apps: { ...apps, get: async () => undefined } })).toBeUndefined();
   });
 
   it('with cloud help still off nothing changes and nothing is called', async () => {
@@ -240,8 +371,13 @@ describe('checks that waited for the network (pendingChecks, recheckPending)', (
 describe('createApplication with the verifying stage', () => {
   const request = 'A tailor shop app with customers and orders, measurements like chest waist sleeve, delivery dates, advance payment, and reading a photo of the measurement slip';
   const text = (t: string): NormalizedInput => ({ text: t, modalities: ['text'], images: [] });
+  // A button runs the step: the compiler's repair removes AI steps nothing runs (eval 2026-11-25, s23).
   const withClassify = {
     ...tailorIR,
+    screens: tailorIR.screens.map((s: { id: string; components: unknown[] }) => (s.id === 'new_customer'
+      ? { ...s, components: [...s.components, { id: 'note_kind_button', type: 'bigButton', label: 'Sort the note', action: 'run_note_kind' }] }
+      : s)),
+    actions: [...tailorIR.actions, { id: 'run_note_kind', type: 'runAI', aiBlock: 'note_kind' }],
     aiBlocks: [...tailorIR.aiBlocks, { id: 'note_kind', kind: 'classify', prompt: 'Is this note urgent, normal or about payment?', labels: ['Urgent', 'Normal', 'Payment'], inputField: 'notes', outputField: 'notes' }],
   };
   const compileThen = (r: StructuredRequest<unknown>): FakeReply => (r.role === 'compiler' ? { raw: withClassify } : responder(r));
@@ -265,8 +401,8 @@ describe('createApplication with the verifying stage', () => {
     const features = Object.fromEntries((res.understanding?.aiFeatures ?? []).map((f) => [f.id, f.verified]));
     expect(features.note_kind).toBe('Works on this device, even offline');
     expect(features.slip_to_order).toMatch(/sample photos/);
-    // The skipped photo check is recorded as a decision.
-    expect(ai.events).toContainEqual(expect.objectContaining({ taskType: 'verify_ai_block', route: 'deterministic', success: false }));
+    // The photo check waiting for samples is recorded as a decision, not as a failure.
+    expect(ai.events).toContainEqual(expect.objectContaining({ taskType: 'verify_ai_block', route: 'deterministic', success: true, errorCode: undefined }));
   });
 
   it('with cloud help off the app is still built and the step honestly stays unchecked', async () => {
@@ -279,6 +415,21 @@ describe('createApplication with the verifying stage', () => {
     expect(res.spec?.aiBlocks.note_kind?.verified).toBe('unverified');
     expect(res.verification?.find((v) => v.blockId === 'note_kind')).toMatchObject({ reason: 'cloud_off' });
     expect(ai.events).toContainEqual(expect.objectContaining({ taskType: 'verify_ai_block', errorCode: 'consent_denied' }));
+  });
+
+  it('a cancel while testing keeps the compiled app, with the steps not checked', async () => {
+    const ctl = new AbortController();
+    const ai = createFakeAI({
+      onDevice: 'available',
+      respond: (r) => {
+        if (isCaseGen(r)) ctl.abort();
+        return compileThen(r);
+      },
+    });
+    const res = await createApplicationPipeline({ ai, cloudConsent: () => true })(text(request), { signal: ctl.signal });
+    expect(res.ok).toBe(true);
+    expect(validateSpec(res.spec).ok).toBe(true);
+    expect(res.verification?.find((v) => v.blockId === 'note_kind')).toMatchObject({ status: 'unverified', reason: 'cancelled' });
   });
 
   it('never makes the person wait past the deadline', async () => {

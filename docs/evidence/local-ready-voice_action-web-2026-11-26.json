@@ -1,0 +1,137 @@
+{
+  "kind": "local-ready",
+  "record": {
+    "task": "voice_action",
+    "platform": "web",
+    "model": "gemini-nano, Chrome/158.0.0.0",
+    "date": "2026-11-26",
+    "cases": 23,
+    "schemaValid": 23,
+    "correct": 21,
+    "hallucinated": 1,
+    "p95LatencyMs": 3826,
+    "offlineOk": true,
+    "evidence": "docs/evidence/local-ready-voice_action-web-2026-11-26.json"
+  },
+  "verdict": {
+    "status": "ready",
+    "reasons": []
+  },
+  "outcomes": [
+    {
+      "id": "v02",
+      "outcome": "right",
+      "ms": 2563
+    },
+    {
+      "id": "v03",
+      "outcome": "right",
+      "ms": 3826
+    },
+    {
+      "id": "v04",
+      "outcome": "right",
+      "ms": 2449
+    },
+    {
+      "id": "v05",
+      "outcome": "right",
+      "ms": 3122
+    },
+    {
+      "id": "v06",
+      "outcome": "right",
+      "ms": 2358
+    },
+    {
+      "id": "v07",
+      "outcome": "right",
+      "ms": 2266
+    },
+    {
+      "id": "v08",
+      "outcome": "right",
+      "ms": 2523
+    },
+    {
+      "id": "v09",
+      "outcome": "right",
+      "ms": 2907
+    },
+    {
+      "id": "v10",
+      "outcome": "right",
+      "ms": 3630
+    },
+    {
+      "id": "v11",
+      "outcome": "right",
+      "ms": 2969
+    },
+    {
+      "id": "v13",
+      "outcome": "wrong",
+      "ms": 2758
+    },
+    {
+      "id": "v14",
+      "outcome": "right",
+      "ms": 3418
+    },
+    {
+      "id": "v15",
+      "outcome": "right",
+      "ms": 3321
+    },
+    {
+      "id": "v17",
+      "outcome": "invented",
+      "ms": 4328
+    },
+    {
+      "id": "v18",
+      "outcome": "right",
+      "ms": 3403
+    },
+    {
+      "id": "v19",
+      "outcome": "right",
+      "ms": 2292
+    },
+    {
+      "id": "v20",
+      "outcome": "right",
+      "ms": 2136
+    },
+    {
+      "id": "v21",
+      "outcome": "right",
+      "ms": 2236
+    },
+    {
+      "id": "v22",
+      "outcome": "right",
+      "ms": 2296
+    },
+    {
+      "id": "v24",
+      "outcome": "right",
+      "ms": 2164
+    },
+    {
+      "id": "v26",
+      "outcome": "right",
+      "ms": 2880
+    },
+    {
+      "id": "v27",
+      "outcome": "right",
+      "ms": 3004
+    },
+    {
+      "id": "v28",
+      "outcome": "right",
+      "ms": 2508
+    }
+  ]
+}

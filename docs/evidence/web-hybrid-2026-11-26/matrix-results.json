@@ -1,0 +1,1114 @@
+{
+  "runs": {
+    "s1": {
+      "startedAt": "2026-11-26T03:06:20.126Z",
+      "signedIn": true,
+      "signedInNow": false,
+      "status": {
+        "text": "apps with templates and on-device AI first. Using your apps never needs the internet. | Template | Ready-made templates and plain app logic. No AI model, and nothing leaves this device. | On device | Gemini Nano runs inside the browser or phone. What it handles stays on this device. | Cloud | Gemini through Firebase, only for work that needs a bigger model and only if you allow it. | When Kalam builds or edits an app | Hybrid | Kalam tries templates and on-device AI first, and only goes online for work that needs it. | Offline only | Kalam never goes online. Requests that need a bigger model will explain why they cannot run. | Use cloud AI when needed | Complex apps and reading sketches use Gemini through Firebase: what you describe, the words of a voice note, and any photo, video frame or drawing you attach. When Gemini Nano cannot handle it on this device, a voice command, a change you ask for with the app's design, or an app's labels to translate can be sent too. Your records are never sent, except the fields an AI step you added works on. | Allow specialist models | For rare, very hard requests, Kalam's server may ask Claude or Nebius models. Only your app description is sent, through Kalam's server. Your records and keys are never sent. | Share anonymous view counts | When on, opening an app in Kalam Bazaar or starting its preview adds one to a count the maker can see. No name, account or device is kept. Off by default. | On-device AI | Gemini Nano in Chrome and on Android runs on this device. Nothing it handles leaves this device. | Status | On-device AI ready | Platf",
+        "screenshot": "s1-0-settings-status.png"
+      },
+      "build": {
+        "prompt": "A counter for counting my daily push-ups, I want to reach 100 and go up by 5 each time",
+        "ms": 4138,
+        "forecast": "Skip to main content | Kalam | कलम | K | Shelf | Make | Bazaar | Activity | Settings | New app | Online | On-device AI ready | Use a template | Start over | Type | Photo or sketch | Voice | Video | Draw | What should your app do? | 86 of 4,000 characters | Clear | Checked | Your app is ready to review. | Review app | In this app | Add more if you like. Kalam reads everything here together. | A counter for counting my daily push-ups, I want to reach 100 and go up by 5 each time | Description | 86 characters | Add more | Nothing here leaves this device. Kalam builds this app from a ready-made template. | App preferences | App language | English | हिन्दी | ગુજરાતી | मराठी | বাংলা | தமிழ் | తెలుగు | ಕನ್ನಡ | മലയാളം | ਪੰਜਾਬੀ | Money | ₹ Rupee | $ Dollar | € Euro | £ Pound | AED Dirham | Cover for your app | Calm green | Warm paper | Ocean blue | Soft lavender | Minimal | High contrast | About the app | Who will use it | What it must or must not do | Kalam reads this when it builds. It stays with this app only. | Optional. Kalam picks sensible defaults when these are left empty. | Likely: template on this device | This matches a ready-made template, so it builds on this device. Nothing is sent online. | Build app | Make page",
+        "notice": false,
+        "finalUrl": "/create/review",
+        "progressLinesSeen": [
+          "Template",
+          "Here is what Kalam understood",
+          "Built from a template on this device",
+          "Checking the app works"
+        ],
+        "endText": "Counter\nReview before saving\nTemplate\nChecked\n26 NOV 2026\nHere is what Kalam understood\nTemplate\nChecked\nBuilt from a template on this device\nCounts counting my with one tap.\nBuilt from: text\nApp name\nChange it now or later. The preview uses this name.\nScreens\n01\n01\nOpens first\nCounter: Counting my\nButton: Add 5\nButton: Subtract 5\nButton: Reset to zero\nNew screen\nAdd screen\nFields\n00\nThis app does not store records.\nActions\n03\nAdds 5 to counting my\nTakes 5 away from counting my\nResets counting my\nData\nNothing is saved between uses.\nAI features\n00\nNone. Everything in this app runs without AI.\nCover for your app\nCalm green\nWarm paper\nOcean blue\nSoft lavender\nMinimal\nHigh contrast\nSave to Shelf\nAsk for a change\nDiscard\nTry it out here. Nothing you enter in the preview is saved.\nPreview. Records added here are not saved.\nCounter\nCounting my\n0\nAdd 5\nSubtract 5\nReset to zero\nChecking the app works",
+        "screenshots": [
+          "s1a-cold-1-create-forecast.png",
+          "s1a-cold-4-after-build.png"
+        ]
+      },
+      "buildWarm": {
+        "prompt": "A counter for counting my daily push-ups, I want to reach 100 and go up by 5 each time",
+        "ms": 4726,
+        "forecast": "Skip to main content | Kalam | कलम | K | Shelf | Make | Bazaar | Activity | Settings | New app | Online | On-device AI ready | Use a template | Start over | Type | Photo or sketch | Voice | Video | Draw | What should your app do? | 86 of 4,000 characters | Clear | Checked | Your app is ready to review. | Review app | In this app | Add more if you like. Kalam reads everything here together. | A counter for counting my daily push-ups, I want to reach 100 and go up by 5 each time | Description | 86 characters | Add more | Nothing here leaves this device. Kalam builds this app from a ready-made template. | App preferences | App language | English | हिन्दी | ગુજરાતી | मराठी | বাংলা | தமிழ் | తెలుగు | ಕನ್ನಡ | മലയാളം | ਪੰਜਾਬੀ | Money | ₹ Rupee | $ Dollar | € Euro | £ Pound | AED Dirham | Cover for your app | Calm green | Warm paper | Ocean blue | Soft lavender | Minimal | High contrast | About the app | Who will use it | What it must or must not do | Kalam reads this when it builds. It stays with this app only. | Optional. Kalam picks sensible defaults when these are left empty. | Likely: template on this device | This matches a ready-made template, so it builds on this device. Nothing is sent online. | Build app | Make page",
+        "notice": false,
+        "finalUrl": "/create/review",
+        "progressLinesSeen": [
+          "On-device AI ready",
+          "Looking for a ready-made template",
+          "Filling in details on this device",
+          "Likely: template on this device",
+          "This matches a ready-made template, so it builds on this device. Nothing is sent online.",
+          "On-device",
+          "Here is what Kalam understood",
+          "Template filled in by on-device AI",
+          "Checking the app works"
+        ],
+        "endText": "Counter\nReview before saving\nOn-device\nChecked\n26 NOV 2026\nHere is what Kalam understood\nOn-device\nChecked\nTemplate filled in by on-device AI\nCounts counting my towards a target of 100.\nBuilt from: text\nApp name\nChange it now or later. The preview uses this name.\nScreens\n01\n01\nOpens first\nCounter: Counting my\nSummary: Left to reach 100\nSummary: Status\nButton: Add 5\nButton: Subtract 5\nButton: Reset to zero\nNew screen\nAdd screen\nFields\n00\nThis app does not store records.\nActions\n03\nAdds 5 to counting my\nTakes 5 away from counting my\nResets counting my\nData\nNothing is saved between uses.\nAI features\n00\nNone. Everything in this app runs without AI.\nCover for your app\nCalm green\nWarm paper\nOcean blue\nSoft lavender\nMinimal\nHigh contrast\nSave to Shelf\nAsk for a change\nDiscard\nTry it out here. Nothing you enter in the preview is saved.\nPreview. Records added here are not saved.\nCounter\nCounting my\n0\nLeft to reach 100\n0\nStatus\nKeep going\nAdd 5\nSubtract 5\nReset to zero\nChecking the app works",
+        "screenshots": [
+          "s1b-warm-1-create-forecast.png",
+          "s1b-warm-4-after-build.png"
+        ]
+      },
+      "events": [
+        {
+          "id": "3c4d06f1-bf5f-4118-a831-a3d735d7a322",
+          "taskId": "task_e1b3oge0",
+          "taskType": "create_app",
+          "route": "template",
+          "provider": "deterministic",
+          "model": "template:counter",
+          "source": "deterministic",
+          "latencyMs": 71,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "platform": "web",
+          "at": 1795662396300,
+          "classificationMethod": "deterministic"
+        },
+        {
+          "id": "21fc9624-edd4-4788-9e72-e08475a4434d",
+          "taskId": "58089ddd-ef25-4082-96ec-69f569c136f9",
+          "taskType": "extract_template_params",
+          "route": "on_device",
+          "provider": "firebase",
+          "model": "gemini-nano",
+          "source": "on_device",
+          "latencyMs": 4014,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "escalationReason": "template parameters incomplete",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795662448901
+        },
+        {
+          "id": "d6cc3727-8e54-414a-8482-2140dc2ffe41",
+          "taskId": "task_d1p3d1k0",
+          "taskType": "create_app",
+          "route": "template",
+          "provider": "deterministic",
+          "model": "template:counter",
+          "source": "deterministic",
+          "latencyMs": 4080,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "platform": "web",
+          "at": 1795662448912,
+          "classificationMethod": "deterministic"
+        }
+      ],
+      "activity": {
+        "rows": [
+          "Template details were incomplete | 2",
+          "Make an app | 26/11/26, 8:37 am, simple request | Template | Template, Kalam | template:counter · Web | 4.1 s | Succeeded",
+          "Fill a template | 26/11/26, 8:37 am, simple request | On device | On-device model, Firebase AI Logic | gemini-nano · Prompt assistant-v1 · Web · Template details were incomplete | 4.0 s | Succeeded",
+          "Make an app | 26/11/26, 8:36 am, simple request | Template | Template, Kalam | template:counter · Web | 71 ms | Succeeded",
+          "Fill a template | 26/11/26, 8:35 am, simple request | On device | On-device model, Firebase AI Logic | Prompt assistant-v1 · Web · Template details were incomplete | 6.0 s | Failed",
+          "Make an app | 26/11/26, 8:35 am, simple request | Template | Template, Kalam | template:counter · Web | 6.1 s | Succeeded"
+        ],
+        "metrics": "Model runs | Only real calls to a model count here. Reused answers, cancels and stops before a call are listed apart. | This week, AI actions on this device: 1. Cloud runs: 0. | Counted from the activity log on this device. Clearing it resets the count. | On device | 1 of 1 worked. Typical 4.0 s, slowest 5% 4.0 s | Cloud | No runs yet | Cloud after on-device failed | None yet | Answers reused from this device | 0 | Retries | 0 | Cancelled by you | 1 | Stopped before any model ran | 0 | Cloud tokens | 0 in, 0 out | Failures on Web | 0 of 1 failed (0%)",
+        "screenshot": "s1-5-activity.png"
+      },
+      "cloudRequests": [],
+      "consoleErrors": [],
+      "pageErrors": [],
+      "finishedAt": "2026-11-26T03:07:35.586Z"
+    },
+    "s2": {
+      "startedAt": "2026-11-26T03:08:19.920Z",
+      "signedIn": true,
+      "signedInNow": false,
+      "status": {
+        "text": "apps with templates and on-device AI first. Using your apps never needs the internet. | Template | Ready-made templates and plain app logic. No AI model, and nothing leaves this device. | On device | Gemini Nano runs inside the browser or phone. What it handles stays on this device. | Cloud | Gemini through Firebase, only for work that needs a bigger model and only if you allow it. | When Kalam builds or edits an app | Hybrid | Kalam tries templates and on-device AI first, and only goes online for work that needs it. | Offline only | Kalam never goes online. Requests that need a bigger model will explain why they cannot run. | Use cloud AI when needed | Complex apps and reading sketches use Gemini through Firebase: what you describe, the words of a voice note, and any photo, video frame or drawing you attach. When Gemini Nano cannot handle it on this device, a voice command, a change you ask for with the app's design, or an app's labels to translate can be sent too. Your records are never sent, except the fields an AI step you added works on. | Allow specialist models | For rare, very hard requests, Kalam's server may ask Claude or Nebius models. Only your app description is sent, through Kalam's server. Your records and keys are never sent. | Share anonymous view counts | When on, opening an app in Kalam Bazaar or starting its preview adds one to a count the maker can see. No name, account or device is kept. Off by default. | On-device AI | Gemini Nano in Chrome and on Android runs on this device. Nothing it handles leaves this device. | Status | On-device AI ready | Platf",
+        "screenshot": "s2-0-settings-status.png"
+      },
+      "build": {
+        "prompt": "An app for my cloud kitchen: customers place orders, each order has several dishes, I track payments and pending dues per customer, and a weekly report of sales by dish with a chart",
+        "ms": 47004,
+        "forecast": "Skip to main content | Kalam | कलम | K | Shelf | Make | Bazaar | Activity | Settings | New app | Online | On-device AI ready | Use a template | Start over | Type | Photo or sketch | Voice | Video | Draw | What should your app do? | 181 of 4,000 characters | Clear | Checked | Your app is ready to review. | Review app | In this app | Add more if you like. Kalam reads everything here together. | An app for my cloud kitchen: customers place orders, each order has several dishes, I track payments and pending dues per customer, and a weekly report of sales by dish with a chart | Description | 181 characters | Add more | Items with a cloud mark go to Gemini through Firebase when you build. | App preferences | App language | English | हिन्दी | ગુજરાતી | मराठी | বাংলা | தமிழ் | తెలుగు | ಕನ್ನಡ | മലയാളം | ਪੰਜਾਬੀ | Money | ₹ Rupee | $ Dollar | € Euro | £ Pound | AED Dirham | Cover for your app | Calm green | Warm paper | Ocean blue | Soft lavender | Minimal | High contrast | About the app | Who will use it | What it must or must not do | Kalam reads this when it builds. It stays with this app only. | Optional. Kalam picks sensible defaults when these are left empty. | Likely: Firebase cloud AI | This needs the cloud to build. Your finished app runs on this device. | Build app | Make page",
+        "notice": true,
+        "finalUrl": "/create",
+        "progressLinesSeen": [
+          "On-device AI ready",
+          "Cloud",
+          "Building the app with cloud AI",
+          "Likely: Firebase cloud AI",
+          "This needs the cloud to build. Your finished app runs on this device.",
+          "This app needs Gemini in the cloud",
+          "It is too detailed to build on this device. Kalam asks before sending anything online for the first time.",
+          "Using the app you build never needs the internet. You can turn off cloud AI in Settings at any time.",
+          "Checking the app works",
+          "Use a template",
+          "Kalam couldn't turn this description into a working app. Your description is kept. Answering a question below usually helps.",
+          "Your app is unchanged. Its last working version is kept.",
+          "You can try this again.",
+          "Items with a cloud mark go to Gemini through Firebase when you build."
+        ],
+        "endText": "Skip to main content\nKalam\nकलम\nK\nShelf\nMake\nBazaar\nActivity\nSettings\nNew app\nOnline\nOn-device AI ready\nUse a template\nStart over\nType\nPhoto or sketch\nVoice\nVideo\nDraw\nWhat should your app do?\n181 of 4,000 characters\nClear\nNeeds check\nKalam could not build this app yet\nKalam couldn't turn this description into a working app. Your description is kept. Answering a question below usually helps.\nAnswer what you can, and Kalam will try again.\nWhat should the app keep for each entry (for example name, amount, date)?\nWhich screens or buttons do you need?\nAdd answers and try again\nTry naming what to track and the fields, for example \"a tailor order book with customer name, measurements and delivery date\".\nThe result did not pass Kalam's checks.\nWhat was kept\nYour app is unchanged. Its last working version is kept.\nWhat you can do\nYou can try this again.\nTry again\nChange what I added\nClose\nIn this app\nAdd more if you like. Kalam reads everything here together.\nAn app for my cloud kitchen: customers place orders, each order has several dishes, I track payments and pending dues per customer, and a weekly report of sales by dish with a chart\nDescription\n181 characters\nAdd more\nItems with a cloud mark go to Gemini through Firebase when you build.\nApp preferences\nApp language\nEnglish\nहिन्दी\nગુજરાતી\nमराठी\nবাংলা\nதமிழ்\nతెలుగు\nಕನ್ನಡ\nമലയാളം\nਪੰਜਾਬੀ\nMoney\n₹ Rupee\n$ Dollar\n€ Euro\n£ Pound\nAED Dirham\nCover for your app\nCalm green\nWarm paper\nOcean blue\nSoft lavender\nMinimal\nHigh contrast\nAbout the app\nWho will use it\nWhat it must or must not do\nKalam reads this when it builds. It stays with this app only.\nOptional. Kalam picks sensible defaults when these are left empty.\nLikely: Firebase cloud AI\nThis needs the cloud to build. Your finished app runs on this device.\nBuild app\nChecking the app works",
+        "screenshots": [
+          "s2-complex-cloud-1-create-forecast.png",
+          "s2-complex-cloud-4-after-build.png"
+        ]
+      },
+      "events": [
+        {
+          "id": "5f35cdeb-578b-4afd-a0d3-61f1e8b48339",
+          "taskId": "7dddb761-5c87-41c6-85f5-b24e1f4d885e",
+          "taskType": "create_app",
+          "route": "cloud",
+          "provider": "firebase",
+          "model": "gemini-3.8-flash",
+          "source": "cloud",
+          "latencyMs": 29152,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "complex",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795662548238,
+          "classificationMethod": "deterministic"
+        },
+        {
+          "id": "66443c6f-4453-44b7-85cc-6224005f5601",
+          "taskId": "79e78c1c-54e2-4122-bc97-4dabc3ece2ae",
+          "taskType": "repair_spec",
+          "route": "cloud",
+          "provider": "firebase",
+          "model": "gemini-3.8-flash",
+          "source": "cloud",
+          "latencyMs": 15978,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "complex",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795662564236,
+          "classificationMethod": "deterministic"
+        }
+      ],
+      "activity": {
+        "rows": [
+          "Template details were incomplete | 2",
+          "Repair an app | 26/11/26, 8:39 am, complex request | Cloud | Cloud model, Firebase AI Logic | gemini-3.8-flash · 12,364 tokens · Prompt repair-v2 · Web | 16 s | Succeeded",
+          "Make an app | 26/11/26, 8:39 am, complex request | Cloud | Cloud model, Firebase AI Logic | gemini-3.8-flash · 12,607 tokens · Prompt compile-v2 · Web | 29 s | Succeeded",
+          "Make an app | 26/11/26, 8:37 am, simple request | Template | Template, Kalam | template:counter · Web | 4.1 s | Succeeded",
+          "Fill a template | 26/11/26, 8:37 am, simple request | On device | On-device model, Firebase AI Logic | gemini-nano · Prompt assistant-v1 · Web · Template details were incomplete | 4.0 s | Succeeded",
+          "Make an app | 26/11/26, 8:36 am, simple request | Template | Template, Kalam | template:counter · Web | 71 ms | Succeeded",
+          "Fill a template | 26/11/26, 8:35 am, simple request | On device | On-device model, Firebase AI Logic | Prompt assistant-v1 · Web · Template details were incomplete | 6.0 s | Failed",
+          "Make an app | 26/11/26, 8:35 am, simple request | Template | Template, Kalam | template:counter · Web | 6.1 s | Succeeded"
+        ],
+        "metrics": "Model runs | Only real calls to a model count here. Reused answers, cancels and stops before a call are listed apart. | This week, AI actions on this device: 1. Cloud runs: 2. | Counted from the activity log on this device. Clearing it resets the count. | On device | 1 of 1 worked. Typical 4.0 s, slowest 5% 4.0 s | Cloud | 2 of 2 worked. Typical 16 s, slowest 5% 29 s | Cloud after on-device failed | None yet | Answers reused from this device | 0 | Retries | 0 | Cancelled by you | 1 | Stopped before any model ran | 0 | Cloud tokens | 16,495 in, 8,476 out | Failures on Web | 0 of 3 failed (0%)",
+        "screenshot": "s2-5-activity.png"
+      },
+      "cloudRequests": [
+        {
+          "t": "2026-11-26T03:08:39.119Z",
+          "method": "POST",
+          "host": "firebasevertexai.googleapis.com",
+          "path": "/v1beta/projects/omnicult-app/locations/global/publishers/google/models/gemini-3.8-flash:generateContent"
+        },
+        {
+          "t": "2026-11-26T03:09:08.277Z",
+          "method": "POST",
+          "host": "firebasevertexai.googleapis.com",
+          "path": "/v1beta/projects/omnicult-app/locations/global/publishers/google/models/gemini-3.8-flash:generateContent"
+        }
+      ],
+      "consoleErrors": [],
+      "pageErrors": [],
+      "finishedAt": "2026-11-26T03:09:30.616Z"
+    },
+    "s2b": {
+      "startedAt": "2026-11-26T03:10:35.650Z",
+      "signedIn": true,
+      "signedInNow": false,
+      "build": {
+        "prompt": "Tailor order book with customer name, phone, dress type, delivery date and advance paid",
+        "ms": 14574,
+        "forecast": "Skip to main content | Kalam | कलम | K | Shelf | Make | Bazaar | Activity | Settings | New app | Online | On-device AI ready | Use a template | Start over | Type | Photo or sketch | Voice | Video | Draw | What should your app do? | 87 of 4,000 characters | Clear | In this app | Add more if you like. Kalam reads everything here together. | Tailor order book with customer name, phone, dress type, delivery date and advance paid | Description | 87 characters | Add more | Items with a cloud mark go to Gemini through Firebase when you build. | App preferences | App language | English | हिन्दी | ગુજરાતી | मराठी | বাংলা | தமிழ் | తెలుగు | ಕನ್ನಡ | മലയാളം | ਪੰਜਾਬੀ | Money | ₹ Rupee | $ Dollar | € Euro | £ Pound | AED Dirham | Cover for your app | Calm green | Warm paper | Ocean blue | Soft lavender | Minimal | High contrast | About the app | Who will use it | What it must or must not do | Kalam reads this when it builds. It stays with this app only. | Optional. Kalam picks sensible defaults when these are left empty. | Likely: Firebase cloud AI | This needs the cloud to build. Your finished app runs on this device. | Build app | Make page",
+        "notice": false,
+        "finalUrl": "/create/review",
+        "progressLinesSeen": [
+          "On-device AI ready",
+          "Cloud",
+          "Building the app with cloud AI",
+          "Likely: Firebase cloud AI",
+          "This needs the cloud to build. Your finished app runs on this device.",
+          "Here is what Kalam understood",
+          "Built with Firebase cloud AI",
+          "Worth checking",
+          "Orders. Saved on this device and usable offline.",
+          "Checking the app works"
+        ],
+        "endText": "Tailor Order Book\nReview before saving\nCloud\nChecked\n26 NOV 2026\nHere is what Kalam understood\nCloud\nChecked\nBuilt with Firebase cloud AI\nTrack tailoring orders with customer details, garment type, delivery dates, and advance payments.\nBuilt from: text\nApp name\nChange it now or later. The preview uses this name.\nWorth checking\n03\nKalam assumed\nIncluded an optional Total Amount field alongside Advance Paid to make advance tracking useful.\nKeep it\nChange it\nKalam assumed\nIncluded Measurements & Notes field for recording tailoring sizing and instructions.\nKeep it\nChange it\nKalam assumed\nDefault currency set to INR (₹).\nKeep it\nChange it\nScreens\n03\n01\nOpens first\nSummary: Pending Orders\nSummary: Total Advance Collected\nButton: New Order\nList of active & Recent Orders\n02\nText box: Customer Name\nText box: Phone Number\nText box: Dress Type\nDate picker: Delivery Date\nNumber box: Total Amount (₹)\nNumber box: Advance Paid (₹)\nText box: Measurements & Notes\nChoice: Status (Pending, In Progress, Ready, Delivered)\nButton: Save Order\n03\nText box: Customer Name\nText box: Phone Number\nText box: Dress Type\nDate picker: Delivery Date\nNumber box: Total Amount (₹)\nNumber box: Advance Paid (₹)\nText box: Measurements & Notes\nChoice: Status (Pending, In Progress, Ready, Delivered)\nDate picker: Order Date\nButton: Mark as Ready\nButton: Mark as Delivered\nButton: Update Details\nButton: Delete Order\nNew screen\nAdd screen\nFields\n09\nOrders\nCustomer Name\nText\nRequired\nPhone Number\nText\nOptional\nDress Type\nText\nRequired\nOrder Date\nDate\nOptional\nDelivery Date\nDate\nRequired\nTotal Amount\nNumber\nOptional\nAdvance Paid\nNumber\nOptional\nMeasurements & Notes\nText\nOptional\nStatus\nChoice\nOptional\nActions\n05\nOpens Add Order\nSaves a new order and shows “Order saved successfully”\nUpdates the chosen order\nUpdates the chosen order and shows “Order updated”\nDeletes the chosen order after asking “Are you sure you want to delete this order?”\nData\nOrders. Saved on this device and usable offline.\nAI features\n00\nNone. Everything in this app runs without AI.\nCover for your app\nCalm green\nWarm paper\nOcean blue\nSoft lavender\nMinimal\nHigh contrast\nSave to Shelf\nAsk for a change\nDiscard\nTry it out here. Nothing you enter in the preview is saved.\nPreview. Records added here are not saved.\nTailor Orders\nPending Orders\n0\nTotal Advance Collected\n₹0.00\nNew Order\nActive & Recent Orders\nNo orders yet. Tap 'New Order' to add one.\nNew Order\nChecking the app works",
+        "screenshots": [
+          "s2b-cloud-medium-1-create-forecast.png",
+          "s2b-cloud-medium-4-after-build.png"
+        ]
+      },
+      "events": [
+        {
+          "id": "d67a00e1-e956-426e-98d6-76c877827511",
+          "taskId": "14649c5f-fed7-4a3f-9e7a-28f8a508183d",
+          "taskType": "create_app",
+          "route": "cloud",
+          "provider": "firebase",
+          "model": "gemini-3.8-flash",
+          "source": "cloud",
+          "latencyMs": 14138,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "medium",
+          "escalationReason": "task requires cloud reasoning",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795662660643,
+          "classificationMethod": "deterministic"
+        }
+      ],
+      "activity": {
+        "rows": [
+          "Template details were incomplete | 2",
+          "The task needs cloud reasoning | 1",
+          "Make an app | 26/11/26, 8:41 am, medium request | Cloud | Cloud model, Firebase AI Logic | gemini-3.8-flash · 9,442 tokens · Prompt compile-v2 · Web · The task needs cloud reasoning | 14 s | Succeeded",
+          "Repair an app | 26/11/26, 8:39 am, complex request | Cloud | Cloud model, Firebase AI Logic | gemini-3.8-flash · 12,364 tokens · Prompt repair-v2 · Web | 16 s | Succeeded",
+          "Make an app | 26/11/26, 8:39 am, complex request | Cloud | Cloud model, Firebase AI Logic | gemini-3.8-flash · 12,607 tokens · Prompt compile-v2 · Web | 29 s | Succeeded",
+          "Make an app | 26/11/26, 8:37 am, simple request | Template | Template, Kalam | template:counter · Web | 4.1 s | Succeeded",
+          "Fill a template | 26/11/26, 8:37 am, simple request | On device | On-device model, Firebase AI Logic | gemini-nano · Prompt assistant-v1 · Web · Template details were incomplete | 4.0 s | Succeeded",
+          "Make an app | 26/11/26, 8:36 am, simple request | Template | Template, Kalam | template:counter · Web | 71 ms | Succeeded",
+          "Fill a template | 26/11/26, 8:35 am, simple request | On device | On-device model, Firebase AI Logic | Prompt assistant-v1 · Web · Template details were incomplete | 6.0 s | Failed",
+          "Make an app | 26/11/26, 8:35 am, simple request | Template | Template, Kalam | template:counter · Web | 6.1 s | Succeeded"
+        ],
+        "metrics": "Model runs | Only real calls to a model count here. Reused answers, cancels and stops before a call are listed apart. | This week, AI actions on this device: 1. Cloud runs: 3. | Counted from the activity log on this device. Clearing it resets the count. | On device | 1 of 1 worked. Typical 4.0 s, slowest 5% 4.0 s | Cloud | 3 of 3 worked. Typical 16 s, slowest 5% 29 s | Cloud after on-device failed | None yet | Answers reused from this device | 0 | Retries | 0 | Cancelled by you | 1 | Stopped before any model ran | 0 | Cloud tokens | 23,358 in, 11,055 out | Failures on Web | 0 of 4 failed (0%)",
+        "screenshot": "s2b-5-activity.png"
+      },
+      "cloudRequests": [
+        {
+          "t": "2026-11-26T03:10:46.544Z",
+          "method": "POST",
+          "host": "firebasevertexai.googleapis.com",
+          "path": "/v1beta/projects/omnicult-app/locations/global/publishers/google/models/gemini-3.8-flash:generateContent"
+        }
+      ],
+      "consoleErrors": [
+        "Framing 'https://www.google.com/' violates the following report-only Content Security Policy directive: \"frame-ancestors 'self'\". The violation has been logged, but no further action has been taken.\n"
+      ],
+      "pageErrors": [],
+      "finishedAt": "2026-11-26T03:11:07.318Z"
+    },
+    "s3": {
+      "startedAt": "2026-11-26T03:11:29.372Z",
+      "signedIn": true,
+      "signedInNow": false,
+      "navigatorOnLineWhileOffline": false,
+      "build": {
+        "prompt": "Tailor order book with customer name, phone, dress type, delivery date and advance paid",
+        "ms": 4525,
+        "forecast": "Skip to main content | Kalam | कलम | K | Shelf | Make | Bazaar | Activity | Settings | New app | Offline. Simple apps still build | On-device AI ready | Use a template | Start over | Type | Photo or sketch | Voice | Video | Draw | What should your app do? | 87 of 4,000 characters | Clear | Checked | Your app is ready to review. | Review app | In this app | Add more if you like. Kalam reads everything here together. | Tailor order book with customer name, phone, dress type, delivery date and advance paid | Description | 87 characters | Add more | Items with a cloud mark go to Gemini through Firebase when you build. | App preferences | App language | English | हिन्दी | ગુજરાતી | मराठी | বাংলা | தமிழ் | తెలుగు | ಕನ್ನಡ | മലയാളം | ਪੰਜਾਬੀ | Money | ₹ Rupee | $ Dollar | € Euro | £ Pound | AED Dirham | Cover for your app | Calm green | Warm paper | Ocean blue | Soft lavender | Minimal | High contrast | About the app | Who will use it | What it must or must not do | Kalam reads this when it builds. It stays with this app only. | Optional. Kalam picks sensible defaults when these are left empty. | Needs the cloud | You are offline. This idea needs the cloud to build. Simple apps still build from a template. | Build app | Make page",
+        "notice": false,
+        "finalUrl": "/create",
+        "progressLinesSeen": [
+          "Offline. Simple apps still build",
+          "On-device AI ready",
+          "Use a template",
+          "This app needs the cloud to build",
+          "You are offline, and this idea is too detailed to build on this device. Your input is kept. Try again when you are connected.",
+          "Or describe a simpler app that matches a template, like \"a checklist for daily tasks\" or \"an expense tracker in ₹\".",
+          "Queue until online",
+          "You can try this again.",
+          "Items with a cloud mark go to Gemini through Firebase when you build.",
+          "Needs the cloud",
+          "You are offline. This idea needs the cloud to build. Simple apps still build from a template."
+        ],
+        "endText": "Skip to main content\nKalam\nकलम\nK\nShelf\nMake\nBazaar\nActivity\nSettings\nNew app\nOffline. Simple apps still build\nOn-device AI ready\nUse a template\nStart over\nType\nPhoto or sketch\nVoice\nVideo\nDraw\nWhat should your app do?\n87 of 4,000 characters\nClear\nNeeds check\nThis app needs the cloud to build\nYou are offline, and this idea is too detailed to build on this device. Your input is kept. Try again when you are connected.\nAnswer what you can, and Kalam will try again.\nWould a simpler app (counter, checklist, notes or expenses) work for now?\nAdd answers and try again\nOr describe a simpler app that matches a template, like \"a checklist for daily tasks\" or \"an expense tracker in ₹\".\nQueue until online\nSomething went wrong.\nWhat was kept\nNothing was deleted.\nWhat you can do\nYou can try this again.\nTry again\nClose\nIn this app\nAdd more if you like. Kalam reads everything here together.\nTailor order book with customer name, phone, dress type, delivery date and advance paid\nDescription\n87 characters\nAdd more\nItems with a cloud mark go to Gemini through Firebase when you build.\nApp preferences\nApp language\nEnglish\nहिन्दी\nગુજરાતી\nमराठी\nবাংলা\nதமிழ்\nతెలుగు\nಕನ್ನಡ\nമലയാളം\nਪੰਜਾਬੀ\nMoney\n₹ Rupee\n$ Dollar\n€ Euro\n£ Pound\nAED Dirham\nCover for your app\nCalm green\nWarm paper\nOcean blue\nSoft lavender\nMinimal\nHigh contrast\nAbout the app\nWho will use it\nWhat it must or must not do\nKalam reads this when it builds. It stays with this app only.\nOptional. Kalam picks sensible defaults when these are left empty.\nNeeds the cloud\nYou are offline. This idea needs the cloud to build. Simple apps still build from a template.\nBuild app\nUnderstanding your idea",
+        "screenshots": [
+          "s3a-offline-cloud-task-1-create-forecast.png",
+          "s3a-offline-cloud-task-4-after-build.png"
+        ]
+      },
+      "buildLocal": {
+        "prompt": "A counter for counting my daily push-ups, I want to reach 100 and go up by 5 each time",
+        "ms": 4177,
+        "forecast": "Skip to main content | Kalam | कलम | K | Shelf | Make | Bazaar | Activity | Settings | New app | Offline. Simple apps still build | On-device AI ready | Use a template | Start over | Type | Photo or sketch | Voice | Video | Draw | What should your app do? | 86 of 4,000 characters | Clear | Needs check | This app needs the cloud to build | You are offline, and this idea is too detailed to build on this device. Your input is kept. Try again when you are connected. | Answer what you can, and Kalam will try again. | Would a simpler app (counter, checklist, notes or expenses) work for now? | Add answers and try again | Or describe a simpler app that matches a template, like \"a checklist for daily tasks\" or \"an expense tracker in ₹\". | Queue until online | Something went wrong. | What was kept | Nothing was deleted. | What you can do | You can try this again. | Try again | Close | In this app | Add more if you like. Kalam reads everything here together. | A counter for counting my daily push-ups, I want to reach 100 and go up by 5 each time | Description | 86 characters | Add more | Nothing here leaves this device. Kalam builds this app from a ready-made template. | App preferences | App language | English | हिन्दी | ગુજરાતી | मराठी | বাংলা | தமிழ் | తెలుగు | ಕನ್ನಡ | മലയാളം | ਪੰਜਾਬੀ | Money | ₹ Rupee | $ Dollar | € Euro | £ Pound | AED Dirham | Cover for your app | Calm green | Warm paper | Ocean blue | Soft lavender | Minimal | High contrast | About the app | Who will use it | What it must or must not do | Kalam reads this when it builds. It stays with this app only. | Optional. Kalam picks sensible defaults when these are left empty. | Likely: template on this device | This matches a ready-made template, so it builds on this device. Nothing is sent online. | Build app | Und",
+        "notice": false,
+        "finalUrl": "/create/review",
+        "progressLinesSeen": [
+          "On-device",
+          "Here is what Kalam understood",
+          "Template filled in by on-device AI",
+          "Checking the app works"
+        ],
+        "endText": "Counter\nReview before saving\nOn-device\nChecked\n26 NOV 2026\nHere is what Kalam understood\nOn-device\nChecked\nTemplate filled in by on-device AI\nCounts counting my towards a target of 100.\nBuilt from: text\nApp name\nChange it now or later. The preview uses this name.\nScreens\n01\n01\nOpens first\nCounter: Counting my\nSummary: Left to reach 100\nSummary: Status\nButton: Add 5\nButton: Subtract 5\nButton: Reset to zero\nNew screen\nAdd screen\nFields\n00\nThis app does not store records.\nActions\n03\nAdds 5 to counting my\nTakes 5 away from counting my\nResets counting my\nData\nNothing is saved between uses.\nAI features\n00\nNone. Everything in this app runs without AI.\nCover for your app\nCalm green\nWarm paper\nOcean blue\nSoft lavender\nMinimal\nHigh contrast\nSave to Shelf\nAsk for a change\nDiscard\nTry it out here. Nothing you enter in the preview is saved.\nPreview. Records added here are not saved.\nCounter\nCounting my\n0\nLeft to reach 100\n0\nStatus\nKeep going\nAdd 5\nSubtract 5\nReset to zero\nChecking the app works",
+        "screenshots": [
+          "s3b-offline-template-1-create-forecast.png",
+          "s3b-offline-template-4-after-build.png"
+        ]
+      },
+      "cloudRequestsAfterCloudTask": 0,
+      "cloudRequestsAfterLocalTask": 0,
+      "events": [
+        {
+          "id": "d01e60e0-de1b-42bc-ac07-44801b242d96",
+          "taskId": "task_n89jf3f7",
+          "taskType": "create_app",
+          "route": "cloud",
+          "provider": "deterministic",
+          "source": "deterministic",
+          "latencyMs": 30,
+          "success": false,
+          "fallbackUsed": false,
+          "errorCode": "offline",
+          "complexity": "medium",
+          "escalationReason": "cloud compiler required but unavailable",
+          "platform": "web",
+          "at": 1795662705105,
+          "classificationMethod": "deterministic"
+        },
+        {
+          "id": "557650ea-b26c-4fbb-beb0-836277f9d188",
+          "taskId": "a9bbc642-38be-4e63-9a70-3f119e6ef47a",
+          "taskType": "extract_template_params",
+          "route": "on_device",
+          "provider": "firebase",
+          "model": "gemini-nano",
+          "source": "on_device",
+          "latencyMs": 3855,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "escalationReason": "template parameters incomplete",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795662751303
+        },
+        {
+          "id": "4d6e9b8b-44d7-43ec-9fda-e9aa5742ff00",
+          "taskId": "task_z6ab13mb",
+          "taskType": "create_app",
+          "route": "template",
+          "provider": "deterministic",
+          "model": "template:counter",
+          "source": "deterministic",
+          "latencyMs": 3932,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "platform": "web",
+          "at": 1795662751309,
+          "classificationMethod": "deterministic"
+        }
+      ],
+      "cloudRequests": [],
+      "consoleErrors": [
+        "Failed to load resource: net::ERR_INTERNET_DISCONNECTED"
+      ],
+      "pageErrors": [],
+      "finishedAt": "2026-11-26T03:12:35.094Z"
+    },
+    "s4a": {
+      "startedAt": "2026-11-26T03:21:00.582Z",
+      "signedIn": true,
+      "signedInNow": false,
+      "build": {
+        "ms": 4124,
+        "finalUrl": "/create/review",
+        "progressLinesSeen": [
+          "On-device",
+          "Here is what Kalam understood",
+          "Template filled in by on-device AI",
+          "Record daily spending in INR by category, with totals that work offline.",
+          "Expenses. Saved on this device and usable offline.",
+          "Checking the app works"
+        ]
+      },
+      "appUrl": "http://localhost:8095/app/app_83w7x6dr",
+      "asked": {
+        "question": "How many expenses are above 500?",
+        "ms": 7153,
+        "badge": "cloud formula",
+        "sheetText": "Ask about Expenses | Your entries stay on this device. If AI is needed, only your question and the names of your fields are used. | Your question | Ask | Try asking | How many expenses do I have? | What is the total amount? | How many expenses today? | How do I add an expense? | What does Add expense do? | How many expenses are above 500? | The answer is 0. | Formula | count(filter(expenses, amount > 500)) | Formula written online, calculated on this device",
+        "screenshot": "s4a-device-first-2-answer.png"
+      },
+      "events": [
+        {
+          "id": "48f2328e-39eb-4a09-b074-0dbea957ca00",
+          "taskId": "ec95feee-a945-4df7-ab5e-b2400ec4f6a8",
+          "taskType": "extract_template_params",
+          "route": "on_device",
+          "provider": "firebase",
+          "model": "gemini-nano",
+          "source": "on_device",
+          "latencyMs": 3543,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "escalationReason": "template parameters incomplete",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795663310238
+        },
+        {
+          "id": "1c5fad2c-3555-4dd9-be62-40457190c408",
+          "taskId": "task_36aj1kly",
+          "taskType": "create_app",
+          "route": "template",
+          "provider": "deterministic",
+          "model": "template:expense_tracker",
+          "source": "deterministic",
+          "latencyMs": 3640,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "platform": "web",
+          "at": 1795663310260,
+          "classificationMethod": "deterministic"
+        },
+        {
+          "id": "a152bfe2-ff05-4286-985c-445dfb5b96fe",
+          "taskId": "d6cb78f9-2630-4a14-90f3-1f5dfe2c5e32",
+          "taskType": "classify",
+          "route": "cloud",
+          "provider": "firebase",
+          "model": "gemini-3.5-flash-lite",
+          "source": "cloud",
+          "latencyMs": 2044,
+          "success": true,
+          "fallbackUsed": true,
+          "complexity": "simple",
+          "escalationReason": "on-device model failed its benchmark for this task; hybrid fallback to cloud",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795663318318
+        }
+      ],
+      "cloudRequests": [
+        {
+          "t": "2026-11-26T03:21:56.278Z",
+          "method": "POST",
+          "host": "firebasevertexai.googleapis.com",
+          "path": "/v1beta/projects/omnicult-app/locations/global/publishers/google/models/gemini-3.5-flash-lite:generateContent"
+        }
+      ],
+      "consoleErrors": [],
+      "pageErrors": [],
+      "finishedAt": "2026-11-26T03:22:04.436Z"
+    },
+    "s4c": {
+      "startedAt": "2026-11-26T03:23:34.463Z",
+      "signedIn": true,
+      "signedInNow": false,
+      "appUrl": "http://localhost:8095/activity",
+      "cmd": {
+        "command": "jot down lunch for 250 rupees",
+        "ms": 11291,
+        "panel": "Opened Add expense. | You said: jot down lunch for 250 rupees | Send | Repeat | Close",
+        "screenshot": "s4c-device-first-2-result.png"
+      },
+      "events": [
+        {
+          "id": "a91cb97c-197d-4aca-9f1b-9dc69fe9c8c2",
+          "taskId": "9b8c3461-76ec-4a7b-a04d-799ef3102b63",
+          "taskType": "voice_action",
+          "route": "on_device",
+          "provider": "firebase",
+          "model": "gemini-nano",
+          "source": "on_device",
+          "latencyMs": 2548,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795663463920
+        }
+      ],
+      "activity": {
+        "rows": [
+          "Template details were incomplete | 7",
+          "Needed the cloud builder, which was not available | 1",
+          "on-device model failed its benchmark for this task; Moved to the cloud | 1",
+          "The task needs cloud reasoning | 1",
+          "Voice command | 26/11/26, 8:54 am, simple request | On device | On-device model, Firebase AI Logic | gemini-nano · Prompt voice-v1 · Web | 2.5 s | Succeeded",
+          "Sort the request | 26/11/26, 8:51 am, simple request | Cloud | Fallback | Cloud model, Firebase AI Logic | gemini-3.5-flash-lite · 582 tokens · Prompt assistant-v1 · Web · on-device model failed its benchmark for this task; Moved to the cloud | 2.0 s | Succeed",
+          "Make an app | 26/11/26, 8:51 am, simple request | Template | Template, Kalam | template:expense_tracker · Web | 3.6 s | Succeeded",
+          "Fill a template | 26/11/26, 8:51 am, simple request | On device | On-device model, Firebase AI Logic | gemini-nano · Prompt assistant-v1 · Web · Template details were incomplete | 3.5 s | Succeeded",
+          "Make an app | 26/11/26, 8:49 am, simple request | Template | Template, Kalam | template:expense_tracker · Web | 4.4 s | Succeeded",
+          "Fill a template | 26/11/26, 8:49 am, simple request | On device | On-device model, Firebase AI Logic | gemini-nano · Prompt assistant-v1 · Web · Template details were incomplete | 4.4 s | Succeeded",
+          "Make an app | 26/11/26, 8:47 am, simple request | Template | Template, Kalam | template:expense_tracker · Web | 3.8 s | Succeeded",
+          "Fill a template | 26/11/26, 8:47 am, simple request | On device | On-device model, Firebase AI Logic | gemini-nano · Prompt assistant-v1 · Web · Template details were incomplete | 3.7 s | Succeeded"
+        ],
+        "metrics": "Model runs | Only real calls to a model count here. Reused answers, cancels and stops before a call are listed apart. | This week, AI actions on this device: 7. Cloud runs: 4. | Counted from the activity log on this device. Clearing it resets the count. | On device | 7 of 7 worked. Typical 3.9 s, slowest 5% 4.4 s | Cloud | 4 of 4 worked. Typical 14 s, slowest 5% 29 s | Cloud after on-device failed | None yet | Answers reused from this device | 0 | Retries | 0 | Cancelled by you | 1 | Stopped before any model ran | 0 | Cloud tokens | 23,916 in, 11,079 out | Failures on Web | 0 of 11 failed (0%)",
+        "screenshot": "s4c-3-activity.png"
+      },
+      "cloudRequests": [],
+      "consoleErrors": [],
+      "pageErrors": [],
+      "finishedAt": "2026-11-26T03:24:36.516Z"
+    },
+    "s4d": {
+      "startedAt": "2026-11-26T03:24:45.300Z",
+      "signedIn": true,
+      "signedInNow": false,
+      "appUrl": "http://localhost:8095/app/app_83w7x6dr",
+      "cmd": {
+        "command": "jot down lunch for 250 rupees",
+        "ms": 9825,
+        "panel": "Opened Add expense. | You said: jot down lunch for 250 rupees | Send | Repeat | Close",
+        "screenshot": "s4d-fallback-2-result.png"
+      },
+      "nanoCreateRefusedCount": 1,
+      "cloudRequestsDuringCommand": 1,
+      "events": [
+        {
+          "id": "e255f373-418e-424c-94bc-61fc45e14689",
+          "taskId": "b78b5500-eef9-4333-9309-d8fb80d43071",
+          "taskType": "voice_action",
+          "route": "on_device",
+          "provider": "firebase",
+          "source": "on_device",
+          "latencyMs": 6,
+          "success": false,
+          "fallbackUsed": false,
+          "errorCode": "model_unavailable",
+          "complexity": "simple",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795663496798
+        },
+        {
+          "id": "824730df-80a3-41e8-8b0b-3a30db1ee857",
+          "taskId": "b78b5500-eef9-4333-9309-d8fb80d43071",
+          "taskType": "voice_action",
+          "route": "cloud",
+          "provider": "firebase",
+          "model": "gemini-3.5-flash-lite",
+          "source": "cloud",
+          "latencyMs": 1958,
+          "success": true,
+          "fallbackUsed": true,
+          "complexity": "simple",
+          "escalationReason": "hybrid fallback to cloud; on-device failed (model_unavailable); one Firebase cloud fallback",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795663498779
+        }
+      ],
+      "activity": {
+        "rows": [
+          "Template details were incomplete | 7",
+          "Needed the cloud builder, which was not available | 1",
+          "Moved to the cloud; The on-device model failed; One cloud fallback through Firebase | 1",
+          "on-device model failed its benchmark for this task; Moved to the cloud | 1",
+          "The task needs cloud reasoning | 1",
+          "Voice command | 26/11/26, 8:54 am, simple request | Cloud | Fallback | Cloud model, Firebase AI Logic | gemini-3.5-flash-lite · 330 tokens · Prompt voice-v1 · Web · Moved to the cloud; The on-device model failed; One cloud fallback through Firebase | 2.0 s | S",
+          "Voice command | 26/11/26, 8:54 am, simple request | On device | On-device model, Firebase AI Logic | Prompt voice-v1 · Web | 6 ms | Failed",
+          "Voice command | 26/11/26, 8:54 am, simple request | On device | On-device model, Firebase AI Logic | gemini-nano · Prompt voice-v1 · Web | 2.5 s | Succeeded",
+          "Sort the request | 26/11/26, 8:51 am, simple request | Cloud | Fallback | Cloud model, Firebase AI Logic | gemini-3.5-flash-lite · 582 tokens · Prompt assistant-v1 · Web · on-device model failed its benchmark for this task; Moved to the cloud | 2.0 s | Succeed",
+          "Make an app | 26/11/26, 8:51 am, simple request | Template | Template, Kalam | template:expense_tracker · Web | 3.6 s | Succeeded",
+          "Fill a template | 26/11/26, 8:51 am, simple request | On device | On-device model, Firebase AI Logic | gemini-nano · Prompt assistant-v1 · Web · Template details were incomplete | 3.5 s | Succeeded",
+          "Make an app | 26/11/26, 8:49 am, simple request | Template | Template, Kalam | template:expense_tracker · Web | 4.4 s | Succeeded"
+        ],
+        "metrics": "Model runs | Only real calls to a model count here. Reused answers, cancels and stops before a call are listed apart. | This week, AI actions on this device: 7. Cloud runs: 5. | Counted from the activity log on this device. Clearing it resets the count. | On device | 7 of 8 worked. Typical 3.9 s, slowest 5% 4.4 s | Cloud | 5 of 5 worked. Typical 14 s, slowest 5% 29 s | Cloud after on-device failed | 1 of 1 worked | Answers reused from this device | 0 | Retries | 0 | Cancelled by you | 1 | Stopped before any model ran | 0 | Cloud tokens | 24,225 in, 11,100 out | Failures on Web | 1 of 13 failed (8%)",
+        "screenshot": "s4d-3-activity.png"
+      },
+      "cloudRequests": [
+        {
+          "t": "2026-11-26T03:24:56.823Z",
+          "method": "POST",
+          "host": "firebasevertexai.googleapis.com",
+          "path": "/v1beta/projects/omnicult-app/locations/global/publishers/google/models/gemini-3.5-flash-lite:generateContent"
+        }
+      ],
+      "consoleErrors": [],
+      "pageErrors": [],
+      "finishedAt": "2026-11-26T03:25:10.794Z"
+    },
+    "s3c": {
+      "startedAt": "2026-11-26T03:28:23.772Z",
+      "signedIn": true,
+      "signedInNow": false,
+      "settings": {
+        "onDevice": "On-device AI | Gemini Nano in Chrome and on Android runs on this device. Nothing it handles leaves this device. | Status | On-device AI ready | Platform | web: on-device AI found",
+        "cloud": "Cloud and security | How Kalam connects to Firebase when you allow cloud AI. | Network | Offline | Firebase AI Logic | Configured | App Check | Active with a debug token, for development only | Proves requests come from the real Kalam app, so nobody else can spend its AI quota. | Specialist models | Not set up | Voice and speech",
+        "screenshots": [
+          "s3c-offline-settings-a-on-device.png",
+          "s3c-offline-settings-b-cloud.png"
+        ]
+      },
+      "activity": {
+        "rows": [
+          "Template details were incomplete | 7",
+          "Needed the cloud builder, which was not available | 1",
+          "Moved to the cloud; The on-device model failed; One cloud fallback through Firebase | 1",
+          "on-device model failed its benchmark for this task; Moved to the cloud | 1",
+          "The task needs cloud reasoning | 1",
+          "Voice command | 26/11/26, 8:54 am, simple request | Cloud | Fallback | Cloud model, Firebase AI Logic | gemini-3.5-flash-lite · 330 tokens · Prompt voice-v1 · Web · Moved to the cloud; The on-device model failed; One cloud fallback through Firebase | 2.0 s | S",
+          "Voice command | 26/11/26, 8:54 am, simple request | On device | On-device model, Firebase AI Logic | Prompt voice-v1 · Web | 6 ms | Failed",
+          "Voice command | 26/11/26, 8:54 am, simple request | On device | On-device model, Firebase AI Logic | gemini-nano · Prompt voice-v1 · Web | 2.5 s | Succeeded",
+          "Sort the request | 26/11/26, 8:51 am, simple request | Cloud | Fallback | Cloud model, Firebase AI Logic | gemini-3.5-flash-lite · 582 tokens · Prompt assistant-v1 · Web · on-device model failed its benchmark for this task; Moved to the cloud | 2.0 s | Succeed",
+          "Make an app | 26/11/26, 8:51 am, simple request | Template | Template, Kalam | template:expense_tracker · Web | 3.6 s | Succeeded",
+          "Fill a template | 26/11/26, 8:51 am, simple request | On device | On-device model, Firebase AI Logic | gemini-nano · Prompt assistant-v1 · Web · Template details were incomplete | 3.5 s | Succeeded",
+          "Make an app | 26/11/26, 8:49 am, simple request | Template | Template, Kalam | template:expense_tracker · Web | 4.4 s | Succeeded"
+        ],
+        "screenshot": "s3c-offline-activity.png"
+      },
+      "cloudRequestsWhileOffline": 0,
+      "cloudRequests": [],
+      "consoleErrors": [],
+      "pageErrors": [],
+      "finishedAt": "2026-11-26T03:28:40.688Z"
+    },
+    "final": {
+      "startedAt": "2026-11-26T03:30:38.503Z",
+      "signedIn": true,
+      "signedInNow": false,
+      "settings": {
+        "onDevice": "On-device AI | Gemini Nano in Chrome and on Android runs on this device. Nothing it handles leaves this device. | Status | On-device AI ready | Platform | web: on-device AI found",
+        "cloud": "Cloud and security | How Kalam connects to Firebase when you allow cloud AI. | Network | Online | Firebase AI Logic | Configured | App Check | Active with a debug token, for development only | Proves requests come from the real Kalam app, so nobody else can spend its AI quota. | Specialist models | Not set up | Voice and speech",
+        "screenshots": [
+          "final-online-settings-a-on-device.png",
+          "final-online-settings-b-cloud.png"
+        ]
+      },
+      "activity": {
+        "rows": [
+          "Template details were incomplete | 7",
+          "Needed the cloud builder, which was not available | 1",
+          "Moved to the cloud; The on-device model failed; One cloud fallback through Firebase | 1",
+          "on-device model failed its benchmark for this task; Moved to the cloud | 1",
+          "The task needs cloud reasoning | 1",
+          "Voice command | 26/11/26, 8:54 am, simple request | Cloud | Fallback | Cloud model, Firebase AI Logic | gemini-3.5-flash-lite · 330 tokens · Prompt voice-v1 · Web · Moved to the cloud; The on-device model failed; One cloud fallback through Firebase | 2.0 s | S",
+          "Voice command | 26/11/26, 8:54 am, simple request | On device | On-device model, Firebase AI Logic | Prompt voice-v1 · Web | 6 ms | Failed",
+          "Voice command | 26/11/26, 8:54 am, simple request | On device | On-device model, Firebase AI Logic | gemini-nano · Prompt voice-v1 · Web | 2.5 s | Succeeded",
+          "Sort the request | 26/11/26, 8:51 am, simple request | Cloud | Fallback | Cloud model, Firebase AI Logic | gemini-3.5-flash-lite · 582 tokens · Prompt assistant-v1 · Web · on-device model failed its benchmark for this task; Moved to the cloud | 2.0 s | Succeed",
+          "Make an app | 26/11/26, 8:51 am, simple request | Template | Template, Kalam | template:expense_tracker · Web | 3.6 s | Succeeded",
+          "Fill a template | 26/11/26, 8:51 am, simple request | On device | On-device model, Firebase AI Logic | gemini-nano · Prompt assistant-v1 · Web · Template details were incomplete | 3.5 s | Succeeded",
+          "Make an app | 26/11/26, 8:49 am, simple request | Template | Template, Kalam | template:expense_tracker · Web | 4.4 s | Succeeded"
+        ],
+        "metrics": "Model runs | Only real calls to a model count here. Reused answers, cancels and stops before a call are listed apart. | This week, AI actions on this device: 7. Cloud runs: 5. | Counted from the activity log on this device. Clearing it resets the count. | On device | 7 of 8 worked. Typical 3.9 s, slowest 5% 4.4 s | Cloud | 5 of 5 worked. Typical 14 s, slowest 5% 29 s | Cloud after on-device failed | 1 of 1 worked | Answers reused from this device | 0 | Retries | 0 | Cancelled by you | 1 | Stopped before any model ran | 0 | Cloud tokens | 24,225 in, 11,100 out | Failures on Web | 1 of 13 failed (8%)",
+        "screenshot": "final-activity.png",
+        "extraScreenshots": [
+          "final-activity-fallback-rows.png",
+          "final-activity-metrics.png"
+        ]
+      },
+      "allEvents": [
+        {
+          "id": "c5dec704-41f6-49f1-ac1d-7607d3d44d7f",
+          "taskId": "task_i0x1idw6",
+          "taskType": "create_app",
+          "route": "template",
+          "provider": "deterministic",
+          "model": "template:counter",
+          "source": "deterministic",
+          "latencyMs": 6074,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "platform": "web",
+          "at": 1795662320311,
+          "classificationMethod": "deterministic"
+        },
+        {
+          "id": "d2a9430d-ef0b-4409-8aca-f78bd2e5cb87",
+          "taskId": "c749799c-e3fa-4c93-9780-a459fed30f91",
+          "taskType": "extract_template_params",
+          "route": "on_device",
+          "provider": "firebase",
+          "source": "on_device",
+          "latencyMs": 5983,
+          "success": false,
+          "fallbackUsed": false,
+          "errorCode": "cancelled",
+          "complexity": "simple",
+          "escalationReason": "template parameters incomplete",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795662320320
+        },
+        {
+          "id": "3c4d06f1-bf5f-4118-a831-a3d735d7a322",
+          "taskId": "task_e1b3oge0",
+          "taskType": "create_app",
+          "route": "template",
+          "provider": "deterministic",
+          "model": "template:counter",
+          "source": "deterministic",
+          "latencyMs": 71,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "platform": "web",
+          "at": 1795662396300,
+          "classificationMethod": "deterministic"
+        },
+        {
+          "id": "21fc9624-edd4-4788-9e72-e08475a4434d",
+          "taskId": "58089ddd-ef25-4082-96ec-69f569c136f9",
+          "taskType": "extract_template_params",
+          "route": "on_device",
+          "provider": "firebase",
+          "model": "gemini-nano",
+          "source": "on_device",
+          "latencyMs": 4014,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "escalationReason": "template parameters incomplete",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795662448901
+        },
+        {
+          "id": "d6cc3727-8e54-414a-8482-2140dc2ffe41",
+          "taskId": "task_d1p3d1k0",
+          "taskType": "create_app",
+          "route": "template",
+          "provider": "deterministic",
+          "model": "template:counter",
+          "source": "deterministic",
+          "latencyMs": 4080,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "platform": "web",
+          "at": 1795662448912,
+          "classificationMethod": "deterministic"
+        },
+        {
+          "id": "5f35cdeb-578b-4afd-a0d3-61f1e8b48339",
+          "taskId": "7dddb761-5c87-41c6-85f5-b24e1f4d885e",
+          "taskType": "create_app",
+          "route": "cloud",
+          "provider": "firebase",
+          "model": "gemini-3.8-flash",
+          "source": "cloud",
+          "latencyMs": 29152,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "complex",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795662548238,
+          "classificationMethod": "deterministic"
+        },
+        {
+          "id": "66443c6f-4453-44b7-85cc-6224005f5601",
+          "taskId": "79e78c1c-54e2-4122-bc97-4dabc3ece2ae",
+          "taskType": "repair_spec",
+          "route": "cloud",
+          "provider": "firebase",
+          "model": "gemini-3.8-flash",
+          "source": "cloud",
+          "latencyMs": 15978,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "complex",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795662564236,
+          "classificationMethod": "deterministic"
+        },
+        {
+          "id": "d67a00e1-e956-426e-98d6-76c877827511",
+          "taskId": "14649c5f-fed7-4a3f-9e7a-28f8a508183d",
+          "taskType": "create_app",
+          "route": "cloud",
+          "provider": "firebase",
+          "model": "gemini-3.8-flash",
+          "source": "cloud",
+          "latencyMs": 14138,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "medium",
+          "escalationReason": "task requires cloud reasoning",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795662660643,
+          "classificationMethod": "deterministic"
+        },
+        {
+          "id": "d01e60e0-de1b-42bc-ac07-44801b242d96",
+          "taskId": "task_n89jf3f7",
+          "taskType": "create_app",
+          "route": "cloud",
+          "provider": "deterministic",
+          "source": "deterministic",
+          "latencyMs": 30,
+          "success": false,
+          "fallbackUsed": false,
+          "errorCode": "offline",
+          "complexity": "medium",
+          "escalationReason": "cloud compiler required but unavailable",
+          "platform": "web",
+          "at": 1795662705105,
+          "classificationMethod": "deterministic"
+        },
+        {
+          "id": "557650ea-b26c-4fbb-beb0-836277f9d188",
+          "taskId": "a9bbc642-38be-4e63-9a70-3f119e6ef47a",
+          "taskType": "extract_template_params",
+          "route": "on_device",
+          "provider": "firebase",
+          "model": "gemini-nano",
+          "source": "on_device",
+          "latencyMs": 3855,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "escalationReason": "template parameters incomplete",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795662751303
+        },
+        {
+          "id": "4d6e9b8b-44d7-43ec-9fda-e9aa5742ff00",
+          "taskId": "task_z6ab13mb",
+          "taskType": "create_app",
+          "route": "template",
+          "provider": "deterministic",
+          "model": "template:counter",
+          "source": "deterministic",
+          "latencyMs": 3932,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "platform": "web",
+          "at": 1795662751309,
+          "classificationMethod": "deterministic"
+        },
+        {
+          "id": "43499f25-59c1-49bb-b399-7ef3d0959701",
+          "taskId": "dc6258ec-68d2-43ed-ba31-1fbcf76687b1",
+          "taskType": "extract_template_params",
+          "route": "on_device",
+          "provider": "firebase",
+          "model": "gemini-nano",
+          "source": "on_device",
+          "latencyMs": 3997,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "escalationReason": "template parameters incomplete",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795662913913
+        },
+        {
+          "id": "f9df6fc3-958b-4f78-b022-d0fb25f69626",
+          "taskId": "task_qo9x5q1f",
+          "taskType": "create_app",
+          "route": "template",
+          "provider": "deterministic",
+          "model": "template:expense_tracker",
+          "source": "deterministic",
+          "latencyMs": 4083,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "platform": "web",
+          "at": 1795662913926,
+          "classificationMethod": "deterministic"
+        },
+        {
+          "id": "df6e9728-d90f-445e-899d-0feb89fcffbc",
+          "taskId": "57b6d2a2-5b52-4535-8b3d-d57ede690a35",
+          "taskType": "extract_template_params",
+          "route": "on_device",
+          "provider": "firebase",
+          "model": "gemini-nano",
+          "source": "on_device",
+          "latencyMs": 3687,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "escalationReason": "template parameters incomplete",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795663048104
+        },
+        {
+          "id": "ec6fd027-2339-4eff-8535-0e22e3f67196",
+          "taskId": "task_1no6yi73",
+          "taskType": "create_app",
+          "route": "template",
+          "provider": "deterministic",
+          "model": "template:expense_tracker",
+          "source": "deterministic",
+          "latencyMs": 3764,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "platform": "web",
+          "at": 1795663048117,
+          "classificationMethod": "deterministic"
+        },
+        {
+          "id": "f2140620-0beb-4c88-926c-41e0e86ac9b4",
+          "taskId": "e178cca6-d7ea-459c-b45a-a351e20c9cfe",
+          "taskType": "extract_template_params",
+          "route": "on_device",
+          "provider": "firebase",
+          "model": "gemini-nano",
+          "source": "on_device",
+          "latencyMs": 4367,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "escalationReason": "template parameters incomplete",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795663177149
+        },
+        {
+          "id": "e6d6ecb7-4c04-4eb2-9f0c-74778fee9b7d",
+          "taskId": "task_lpxua4su",
+          "taskType": "create_app",
+          "route": "template",
+          "provider": "deterministic",
+          "model": "template:expense_tracker",
+          "source": "deterministic",
+          "latencyMs": 4433,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "platform": "web",
+          "at": 1795663177161,
+          "classificationMethod": "deterministic"
+        },
+        {
+          "id": "48f2328e-39eb-4a09-b074-0dbea957ca00",
+          "taskId": "ec95feee-a945-4df7-ab5e-b2400ec4f6a8",
+          "taskType": "extract_template_params",
+          "route": "on_device",
+          "provider": "firebase",
+          "model": "gemini-nano",
+          "source": "on_device",
+          "latencyMs": 3543,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "escalationReason": "template parameters incomplete",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795663310238
+        },
+        {
+          "id": "1c5fad2c-3555-4dd9-be62-40457190c408",
+          "taskId": "task_36aj1kly",
+          "taskType": "create_app",
+          "route": "template",
+          "provider": "deterministic",
+          "model": "template:expense_tracker",
+          "source": "deterministic",
+          "latencyMs": 3640,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "platform": "web",
+          "at": 1795663310260,
+          "classificationMethod": "deterministic"
+        },
+        {
+          "id": "a152bfe2-ff05-4286-985c-445dfb5b96fe",
+          "taskId": "d6cb78f9-2630-4a14-90f3-1f5dfe2c5e32",
+          "taskType": "classify",
+          "route": "cloud",
+          "provider": "firebase",
+          "model": "gemini-3.5-flash-lite",
+          "source": "cloud",
+          "latencyMs": 2044,
+          "success": true,
+          "fallbackUsed": true,
+          "complexity": "simple",
+          "escalationReason": "on-device model failed its benchmark for this task; hybrid fallback to cloud",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795663318318
+        },
+        {
+          "id": "a91cb97c-197d-4aca-9f1b-9dc69fe9c8c2",
+          "taskId": "9b8c3461-76ec-4a7b-a04d-799ef3102b63",
+          "taskType": "voice_action",
+          "route": "on_device",
+          "provider": "firebase",
+          "model": "gemini-nano",
+          "source": "on_device",
+          "latencyMs": 2548,
+          "success": true,
+          "fallbackUsed": false,
+          "complexity": "simple",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795663463920
+        },
+        {
+          "id": "e255f373-418e-424c-94bc-61fc45e14689",
+          "taskId": "b78b5500-eef9-4333-9309-d8fb80d43071",
+          "taskType": "voice_action",
+          "route": "on_device",
+          "provider": "firebase",
+          "source": "on_device",
+          "latencyMs": 6,
+          "success": false,
+          "fallbackUsed": false,
+          "errorCode": "model_unavailable",
+          "complexity": "simple",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795663496798
+        },
+        {
+          "id": "824730df-80a3-41e8-8b0b-3a30db1ee857",
+          "taskId": "b78b5500-eef9-4333-9309-d8fb80d43071",
+          "taskType": "voice_action",
+          "route": "cloud",
+          "provider": "firebase",
+          "model": "gemini-3.5-flash-lite",
+          "source": "cloud",
+          "latencyMs": 1958,
+          "success": true,
+          "fallbackUsed": true,
+          "complexity": "simple",
+          "escalationReason": "hybrid fallback to cloud; on-device failed (model_unavailable); one Firebase cloud fallback",
+          "retries": 0,
+          "cacheHit": false,
+          "platform": "web",
+          "at": 1795663498779
+        }
+      ],
+      "cloudRequests": [],
+      "consoleErrors": [],
+      "pageErrors": [],
+      "finishedAt": "2026-11-26T03:30:58.266Z"
+    }
+  },
+  "chrome": "158.0.8127.36",
+  "baseUrl": "http://localhost:8095"
+}

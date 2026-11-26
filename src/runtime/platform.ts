@@ -7,8 +7,9 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Speech from 'expo-speech';
 import { Alert, Platform } from 'react-native';
 import type { AIImage } from '@/core/contracts';
+import { limitsPolicy } from '@/core/limits/policy';
 
-const MAX_EDGE = 1024;
+const MAX_EDGE = limitsPolicy.input.imageSide;
 
 export function speakText(text: string, lang: string): void {
   try {
@@ -19,7 +20,7 @@ export function speakText(text: string, lang: string): void {
   }
 }
 
-/** Opens the system photo picker and returns a JPEG no larger than 1024px on its long edge. */
+/** Opens the system photo picker and returns a JPEG no larger than 1280px on its long edge (limits policy). */
 export async function pickImageForAI(): Promise<AIImage | undefined> {
   const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
   if (result.canceled || !result.assets?.length) return undefined;

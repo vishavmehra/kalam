@@ -12,7 +12,7 @@ import {
 import { z } from 'zod';
 import { modelForRole, ON_DEVICE_MODEL } from '@/core/ai/model-config';
 import { applyRemoteConfig, resetRemoteConfig } from '@/core/ai/remote-config';
-import type { AIImage, InferenceMode as KalamMode, StructuredRequest } from '@/core/contracts';
+import type { AIAudio, AIImage, InferenceMode as KalamMode, StructuredRequest } from '@/core/contracts';
 import { PROMPT_API_LANGUAGES, textIO } from './prompt-io';
 
 const h = vi.hoisted(() => ({
@@ -21,6 +21,7 @@ const h = vi.hoisted(() => ({
   getAI: vi.fn(),
   appCheckReady: vi.fn(),
   onDeviceStatus: vi.fn(),
+  loadRemoteConfig: vi.fn(),
   world: { app: undefined as object | undefined, languageModel: undefined as object | undefined },
 }));
 
@@ -40,6 +41,7 @@ vi.mock('./app', () => ({
   isFirebaseConfigured: () => h.world.app !== undefined,
   appCheckReady: (ms: number) => h.appCheckReady(ms),
 }));
+vi.mock('./remote-config', () => ({ loadRemoteConfig: () => h.loadRemoteConfig() }));
 vi.mock('./on-device', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./on-device')>()),
   getLanguageModel: () => h.world.languageModel,
@@ -95,6 +97,7 @@ beforeEach(() => {
   h.getAI.mockReset();
   h.appCheckReady.mockReset().mockResolvedValue(true);
   h.onDeviceStatus.mockReset().mockResolvedValue({ platform: 'web', apiExposed: true, availability: 'available' });
+  h.loadRemoteConfig.mockReset().mockResolvedValue(undefined);
   h.world.app = {};
   h.world.languageModel = undefined;
 });
@@ -437,6 +440,42 @@ describe('firebase provider: image input', () => {
   });
 });
 
+describe('firebase provider: audio input (D00-026)', () => {
+  const wav: AIAudio = { mimeType: 'audio/wav', base64: 'UklGRg==' };
+
+  it('sends a recording as an inlineData part after the text', async () => {
+    h.generateContent.mockResolvedValueOnce(ok);
+    const res = await run({ audio: [wav] });
+    expect(res).toMatchObject({ success: true, source: 'cloud' });
+    expect(sentParts()).toEqual([
+      { type: 'text', text: 'A notes app' },
+      { type: 'inlineData', inlineData: { mimeType: 'audio/wav', data: 'UklGRg==' } },
+    ]);
+  });
+
+  it('sends an MP3 under the name Gemini knows', async () => {
+    h.generateContent.mockResolvedValueOnce(ok);
+    await run({ audio: [{ mimeType: 'audio/mpeg', base64: 'SUQz' }] });
+    expect(sentParts()[1]).toEqual({ type: 'inlineData', inlineData: { mimeType: 'audio/mp3', data: 'SUQz' } });
+  });
+
+  it('keeps a prefer_on_device request with audio on the cloud leg', async () => {
+    h.world.languageModel = {};
+    h.generateContent.mockResolvedValueOnce(ok);
+    const res = await run({ mode: 'prefer_on_device', audio: [wav] });
+    expect(res).toMatchObject({ success: true, source: 'cloud' });
+    expect(modelParams(0).mode).toBe(InferenceMode.ONLY_IN_CLOUD);
+  });
+
+  it('refuses audio on-device with unsupported_modality and never calls the SDK', async () => {
+    h.world.languageModel = {};
+    const res = await run({ mode: 'only_on_device', audio: [wav] });
+    expect(res).toMatchObject({ success: false, errorCode: 'unsupported_modality', source: 'on_device', provider: 'firebase' });
+    expect(h.getGenerativeModel).not.toHaveBeenCalled();
+    expect(h.generateContent).not.toHaveBeenCalled();
+  });
+});
+
 // ─── Local-only and cloud-only policy ─────────────────────────────────────────
 describe('firebase provider: local-only and cloud-only policy', () => {
   it('only_on_device without the Prompt API fails clearly and never reaches the cloud', async () => {
@@ -527,6 +566,25 @@ describe('firebase provider: local-only and cloud-only policy', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('a Prompt API error name proves the device ran, so a prefer_on_device failure is labelled on_device even when the probe timed out', async () => {
+    vi.useFakeTimers();
+    try {
+      h.world.languageModel = {};
+      h.onDeviceStatus.mockReturnValue(never());
+      h.generateContent.mockRejectedValue(Object.assign(new Error('The model could not be created.'), { name: 'NotAllowedError' }));
+      const pending = run({ mode: 'prefer_on_device' });
+      await vi.advanceTimersByTimeAsync(1_500);
+      expect(await pending).toMatchObject({ success: false, errorCode: 'model_unavailable', source: 'on_device' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('an error without a Prompt API name on the cloud leg stays labelled cloud', async () => {
+    h.generateContent.mockRejectedValue(httpError(500));
+    expect(await run({ mode: 'prefer_in_cloud' })).toMatchObject({ success: false, source: 'cloud' });
   });
 
   it('prefer_on_device with an availability probe that throws is treated as a cloud leg', async () => {
@@ -679,9 +737,16 @@ describe('firebase provider: SDK error mapping', () => {
     expect(h.generateContent).toHaveBeenCalledTimes(1);
   });
 
-  it('a blocked response (response-error) maps to provider_error', async () => {
+  it('a blocked response (response-error) maps to bad_request, and is not sent again without the schema', async () => {
     h.generateContent.mockRejectedValue(new AIError(SdkErrorCode.RESPONSE_ERROR, 'Response was blocked due to SAFETY'));
-    expect(await run()).toMatchObject({ success: false, errorCode: 'provider_error' });
+    expect(await run()).toMatchObject({ success: false, errorCode: 'bad_request' });
+    expect(h.generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it('another 4xx (413) is a refused request: bad_request, one call', async () => {
+    h.generateContent.mockRejectedValue(fetchError(413, '[413 Payload Too Large]'));
+    expect(await run()).toMatchObject({ success: false, errorCode: 'bad_request' });
+    expect(h.generateContent).toHaveBeenCalledTimes(1);
   });
 
   it('a Prompt API NotSupportedError on-device maps to model_unavailable', async () => {
@@ -757,6 +822,21 @@ describe('firebase provider: token usage', () => {
     expect(onUsage).toHaveBeenCalledWith({ input: 10, output: 4 });
   });
 
+  it('never reports NaN when the service leaves a count out', async () => {
+    h.generateContent.mockResolvedValueOnce(withUsage('{"answer":"yes"}', { promptTokenCount: 12, thoughtsTokenCount: 2048, totalTokenCount: 2060 }));
+    const onUsage = vi.fn();
+    await run({ onUsage });
+    expect(onUsage).toHaveBeenCalledWith({ input: 12, output: 2048 });
+    h.generateContent.mockResolvedValueOnce(withUsage('{"answer":"yes"}', { promptTokenCount: 12 }));
+    const inputOnly = vi.fn();
+    await run({ onUsage: inputOnly });
+    expect(inputOnly).toHaveBeenCalledWith({ input: 12, output: undefined });
+    h.generateContent.mockResolvedValueOnce(withUsage('{"answer":"yes"}', {}));
+    const none = vi.fn();
+    await run({ onUsage: none });
+    expect(none).not.toHaveBeenCalled();
+  });
+
   it('reports nothing when the response carries no usage, and a throwing callback never fails the request', async () => {
     h.generateContent.mockResolvedValueOnce(ok);
     const quiet = vi.fn();
@@ -770,6 +850,20 @@ describe('firebase provider: token usage', () => {
 // ─── Remote Config ────────────────────────────────────────────────────────────
 describe('firebase provider: Remote Config', () => {
   afterEach(() => resetRemoteConfig());
+
+  it('starts the Remote Config load only when the cloud may be used (docs/07 §9.5)', async () => {
+    h.world.languageModel = {};
+    h.generateContent.mockResolvedValue(reply('{"answer":"yes"}', 'on_device'));
+    await run({ mode: 'only_on_device' });
+    expect(h.loadRemoteConfig).not.toHaveBeenCalled();
+    h.world.languageModel = undefined;
+    await run({ mode: 'only_on_device' }); // no Prompt API: fails, still no contact with Google
+    expect(h.loadRemoteConfig).not.toHaveBeenCalled();
+    h.generateContent.mockResolvedValue(ok);
+    await run({ mode: 'prefer_on_device' });
+    await run();
+    expect(h.loadRemoteConfig).toHaveBeenCalledTimes(2);
+  });
 
   it('sends the model Remote Config names for the role, and the default otherwise', async () => {
     h.generateContent.mockResolvedValue(ok);

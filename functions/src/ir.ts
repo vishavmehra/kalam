@@ -1,8 +1,8 @@
 /**
  * Server copy of Kalam's compiler IR (src/core/compiler/ir.ts + the constants it uses from
- * src/core/spec/schema.ts). The specialist callable pins its output schema per task instead of
- * trusting one sent by the client (docs/SECURITY_REVIEW.md R-01), so repair_spec and
- * interpret_sketch can only ever return IR-shaped, length-bounded JSON.
+ * src/core/spec/schema.ts and src/core/reports/chart-component.ts). The specialist callable pins its
+ * output schema per task instead of trusting one sent by the client (docs/SECURITY_REVIEW.md R-01), so
+ * repair_spec and interpret_sketch can only ever return IR-shaped, length-bounded JSON.
  *
  * Kept in sync by src/core/compiler/server-ir-parity.test.ts (root test suite): it fails when this
  * file and the client IR produce different JSON Schemas.
@@ -12,7 +12,8 @@ import { z } from 'zod';
 const LIMITS = {
   screens: 8, componentsPerScreen: 40, collections: 10, fieldsPerCollection: 30, aiBlocks: 15, actions: 60,
   intentPhrasesPerAction: 12, enumOptions: 50, nameLength: 60, labelLength: 120, descriptionLength: 280,
-  promptLength: 1200, formulaLength: 300, classifyLabels: 12,
+  promptLength: 1200, formulaLength: 300, classifyLabels: 12, layoutNodesPerScreen: 16, layoutChildren: 12,
+  terminology: 40,
 } as const;
 const THEME_PRESETS = ['calm_green', 'warm_paper', 'ocean_blue', 'soft_lavender', 'minimal_neutral', 'high_contrast'] as const;
 const ICON_GLYPHS = [
@@ -20,14 +21,25 @@ const ICON_GLYPHS = [
   'ruler', 'bell', 'heart', 'pill', 'shopping_cart', 'scissors', 'calendar', 'book', 'star', 'home',
   'briefcase', 'leaf', 'dumbbell', 'graduation_cap', 'coffee', 'camera', 'mic', 'globe', 'timer', 'sparkles',
 ] as const;
-const FIELD_TYPES = ['text', 'number', 'date', 'boolean', 'enum'] as const;
+const FIELD_TYPES = ['text', 'number', 'date', 'boolean', 'enum', 'image'] as const;
 const COMPONENT_TYPES = [
   'text', 'heading', 'number', 'textInput', 'date', 'choice', 'toggle', 'counter', 'bigButton', 'list', 'stat', 'photo',
+  'chart', 'timer', 'reminder', 'signature',
 ] as const;
 const ACTION_TYPES = [
   'navigate', 'insert', 'update', 'delete', 'increment', 'decrement', 'reset', 'runAI', 'speak', 'feedback', 'clearForm',
 ] as const;
 const AI_BLOCK_KINDS = ['extractFromPhoto', 'classify', 'summarise', 'translate'] as const;
+const LAYOUT_TYPES = ['row', 'grid', 'card'] as const;
+const ON_DELETE_RULES = ['restrict', 'cascade', 'clear'] as const;
+const STYLE_SIZES = ['small', 'medium', 'large'] as const;
+const STYLE_EMPHASIS = ['subtle', 'normal', 'strong'] as const;
+const STYLE_TONES = ['neutral', 'primary', 'secondary', 'success', 'warning', 'danger'] as const;
+const STYLE_ALIGN = ['start', 'center', 'end'] as const;
+const SUGGESTED_MODES = ['large', 'highContrast', 'simple', 'readAloud'] as const;
+const CHART_KINDS = ['bar', 'line', 'donut'] as const;
+const METRIC_OPERATIONS = ['count', 'sum', 'average'] as const;
+const TIME_UNITS = ['day', 'week', 'month'] as const;
 
 const idLike = z.string().min(1).max(80);
 const text = (max: number) => z.string().max(max);
@@ -44,6 +56,9 @@ const irFieldSchema = z.object({
   decimals: z.number().int().optional(),
   multiline: z.boolean().optional(),
   defaultValue: text(500).optional(),
+  refCollection: idLike.optional(),
+  refDisplay: idLike.optional(),
+  onDelete: z.enum(ON_DELETE_RULES).optional(),
 });
 
 const irCollectionSchema = z.object({
@@ -83,6 +98,35 @@ const irComponentSchema = z.object({
   prefix: text(8).optional(),
   suffix: text(12).optional(),
   aiBlock: idLike.optional(),
+  size: z.enum(STYLE_SIZES).optional(),
+  emphasis: z.enum(STYLE_EMPHASIS).optional(),
+  colorTone: z.enum(STYLE_TONES).optional(),
+  align: z.enum(STYLE_ALIGN).optional(),
+  fullWidth: z.boolean().optional(),
+  chart: z.enum(CHART_KINDS).optional(),
+  metric: z.enum(METRIC_OPERATIONS).optional(),
+  valueField: idLike.optional(),
+  groupBy: idLike.optional(),
+  period: z.enum(TIME_UNITS).optional(),
+  dateField: idLike.optional(),
+  rangeLast: z.number().int().optional(),
+  rangeUnit: z.enum(TIME_UNITS).optional(),
+  mode: z.enum(['countdown', 'stopwatch']).optional(),
+  durationSec: z.number().int().optional(),
+  unit: z.enum(['seconds', 'minutes']).optional(),
+  leadDays: z.number().int().optional(),
+  time: text(5).optional(),
+  doneField: idLike.optional(),
+  titleField: idLike.optional(),
+  message: text(120).optional(),
+});
+
+const irGroupSchema = z.object({
+  id: idLike,
+  type: z.enum(LAYOUT_TYPES),
+  title: text(LIMITS.labelLength).optional(),
+  columns: z.number().int().optional(),
+  items: z.array(idLike).max(LIMITS.layoutChildren),
 });
 
 const irScreenSchema = z.object({
@@ -91,6 +135,7 @@ const irScreenSchema = z.object({
   description: text(LIMITS.labelLength).optional(),
   form: idLike.optional(),
   components: z.array(irComponentSchema).max(LIMITS.componentsPerScreen),
+  groups: z.array(irGroupSchema).max(LIMITS.layoutNodesPerScreen).optional(),
 });
 
 const irActionSchema = z.object({
@@ -108,6 +153,7 @@ const irActionSchema = z.object({
   thenSpeak: text(200).optional(),
   thenNavigate: idLike.optional(),
   thenFeedback: text(120).optional(),
+  set: z.array(z.object({ field: idLike, value: text(500) })).max(LIMITS.fieldsPerCollection).optional(),
 });
 
 const irAIBlockSchema = z.object({
@@ -140,6 +186,18 @@ export const serverCompilerIRSchema = z.object({
   actions: z.array(irActionSchema).max(LIMITS.actions).optional(),
   aiBlocks: z.array(irAIBlockSchema).max(LIMITS.aiBlocks).optional(),
   intents: z.array(irIntentSchema).max(LIMITS.actions).optional(),
+  settings: z.object({ currency: text(3).optional(), timeFormat: z.enum(['12h', '24h']).optional() }).optional(),
+  accessibility: z
+    .object({ summary: text(300).optional(), suggestedModes: z.array(z.enum(SUGGESTED_MODES)).max(SUGGESTED_MODES.length).optional() })
+    .optional(),
+  terminology: z
+    .array(z.object({
+      term: text(60),
+      keep: z.boolean().optional(),
+      translations: z.array(z.object({ lang: text(16), text: text(60) })).max(12).optional(),
+    }))
+    .max(LIMITS.terminology)
+    .optional(),
   assumptions: z.array(text(200)).max(10).optional(),
   clarifications: z.array(text(200)).max(5).optional(),
 });

@@ -4,7 +4,10 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleShee
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useT } from '@/i18n/react';
+
 import { Button, IconButton } from './Button';
+import { Perforation } from './Slip';
 import { usePresence } from './presence';
 import { Text } from './Text';
 import { useBreakpoint, useKalamTheme } from './theme';
@@ -23,6 +26,8 @@ export interface SheetProps {
   maxWidth?: number;
   /** Set false while a blocking action runs. */
   dismissible?: boolean;
+  /** Perforated top edge: only for record sheets (an order, an entry). */
+  perforated?: boolean;
   testID?: string;
 }
 
@@ -30,8 +35,9 @@ export interface SheetProps {
  * Bottom sheet on phones and tablets, centred dialog at ≥1024px. Modal, focus-trapped on web,
  * closes on Escape / Android back. Reduced motion → fade only.
  */
-export function Sheet({ visible, onClose, title, description, children, footer, maxWidth = 480, dismissible = true, testID }: SheetProps) {
+export function Sheet({ visible, onClose, title, description, children, footer, maxWidth = 480, dismissible = true, perforated, testID }: SheetProps) {
   const theme = useKalamTheme();
+  const tr = useT(theme.uiLanguage);
   const { isDesktop, height } = useBreakpoint();
   const insets = useSafeAreaInsets();
   const reduced = theme.reducedMotion;
@@ -65,7 +71,7 @@ export function Sheet({ visible, onClose, title, description, children, footer, 
       {/* iOS: lift the sheet above the keyboard (Android resizes the window itself). */}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: isDesktop ? 'center' : 'flex-end', alignItems: 'center' }} testID={testID}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.scrim }, scrimStyle]}>
-          <Pressable style={{ flex: 1 }} onPress={close} accessibilityLabel="Close" role="button" tabIndex={-1} />
+          <Pressable style={{ flex: 1 }} onPress={close} accessibilityLabel={tr('common.close')} role="button" tabIndex={-1} />
         </Animated.View>
         <Animated.View
           role="dialog"
@@ -78,10 +84,10 @@ export function Sheet({ visible, onClose, title, description, children, footer, 
               width: '100%',
               maxWidth: isDesktop ? maxWidth : 720,
               maxHeight: isDesktop ? height * 0.86 : height * 0.92,
-              backgroundColor: theme.colors.surfaceElevated,
+              backgroundColor: theme.colors.surface,
               borderRadius: theme.radius.xl,
-              borderBottomLeftRadius: isDesktop ? theme.radius.xl : 0,
-              borderBottomRightRadius: isDesktop ? theme.radius.xl : 0,
+              borderBottomStartRadius: isDesktop ? theme.radius.xl : 0,
+              borderBottomEndRadius: isDesktop ? theme.radius.xl : 0,
               paddingTop: isDesktop ? 24 : 12,
               paddingBottom: isDesktop ? 24 : Math.max(insets.bottom, 16) + 8,
               borderWidth: theme.accessModes.highContrast ? 2 : 0,
@@ -91,15 +97,16 @@ export function Sheet({ visible, onClose, title, description, children, footer, 
             panelStyle,
           ]}
         >
+          {perforated ? <Perforation behind={theme.colors.scrim} /> : null}
           {isDesktop ? null : (
-            <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: theme.colors.borderStrong, marginBottom: 8 }} />
+            <View aria-hidden style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: theme.colors.borderStrong, marginBottom: 8 }} />
           )}
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingLeft: 24, paddingRight: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingStart: 24, paddingEnd: 12 }}>
             <View style={{ flex: 1, gap: 6, paddingTop: 10 }}>
-              <Text variant="h3">{title}</Text>
+              <Text variant="h3" level={2}>{title}</Text>
               {description ? <Text tone="secondary">{description}</Text> : null}
             </View>
-            {dismissible ? <IconButton icon={X} label="Close" onPress={onClose} /> : null}
+            {dismissible ? <IconButton icon={X} label={tr('common.close')} onPress={onClose} /> : null}
           </View>
           {children ? (
             <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16 }} keyboardShouldPersistTaps="handled">
@@ -139,7 +146,9 @@ export interface ConfirmSheetProps {
 }
 
 /** Confirmation dialog for destructive or important decisions. */
-export function ConfirmSheet({ visible, title, message, confirmLabel, cancelLabel = 'Cancel', destructive, onConfirm, onCancel }: ConfirmSheetProps) {
+export function ConfirmSheet({ visible, title, message, confirmLabel, cancelLabel, destructive, onConfirm, onCancel }: ConfirmSheetProps) {
+  const theme = useKalamTheme();
+  const tr = useT(theme.uiLanguage);
   const [busy, setBusy] = useState(false);
   const { isDesktop } = useBreakpoint();
   const confirm = async () => {
@@ -155,7 +164,7 @@ export function ConfirmSheet({ visible, title, message, confirmLabel, cancelLabe
       dismissible={!busy}
       footer={
         <>
-          <Button label={cancelLabel} variant="ghost" onPress={onCancel} disabled={busy} fullWidth={!isDesktop} />
+          <Button label={cancelLabel ?? tr('common.cancel')} variant="ghost" onPress={onCancel} disabled={busy} fullWidth={!isDesktop} />
           <Button label={confirmLabel} variant={destructive ? 'destructive' : 'primary'} onPress={confirm} loading={busy} fullWidth={!isDesktop} />
         </>
       }

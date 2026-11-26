@@ -9,16 +9,19 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import type { EditService } from '@/core/contracts';
+import { DEFAULT_SPEECH, type EditService } from '@/core/contracts';
 import {
   diffParts, findPart, partName, partTag, runVisualEdit,
   type PartDiff, type VisualAnnotation, type VisualEditOutcome, type VisualEditRequest,
 } from '@/core/edit/visual-edit';
 import type { KalamComponent, KalamSpec } from '@/core/spec/schema';
 import { ConfirmSheet, useBreakpoint, useKalamTheme, useReducedMotion, useToast, type ExecutionSource } from '@/design';
+import type { TranslationKey } from '@/i18n/keys';
+import { useT } from '@/i18n/react';
 import { ComponentBoundsProvider, createBoundsRegistry, type BoundsRect, type MeasurableNode } from '@/runtime/layout';
 import { useOnline } from '@/runtime/RunAppScreen';
 import { getServices } from '@/services';
+import { useSettingsStore } from '@/state/settings-store';
 import { routeSource } from '../edit-model';
 import { boundsOf, type Point } from './geometry';
 import { classifyStroke, combineStrokes, markPoints, type InkPoint, type MarkGesture } from './gestures';
@@ -77,30 +80,36 @@ const COMBINE_MS = 1500;
 const EMPTY_RECTS: ReadonlyMap<string, BoundsRect> = new Map();
 const NO_IDS: ReadonlySet<string> = new Set();
 const NO_STROKES: InkStroke[] = [];
-const HINTS: Record<Extract<MarkIntent, { kind: 'none' }>['reason'], string> = {
-  empty: 'Draw around a part of the app to pick it.',
-  no_source: 'Start the arrow on the part you want to move.',
-  same_place: 'It is already there.',
+const HINTS: Record<Extract<MarkIntent, { kind: 'none' }>['reason'], TranslationKey> = {
+  empty: 'edit.draw.hint.empty',
+  no_source: 'edit.draw.hint.noSource',
+  same_place: 'edit.draw.hint.samePlace',
 };
-/** Lead decision 7: offline structural edits are refused plainly and the words are kept. */
-const OFFLINE_EDIT = "You're offline. This change needs the internet, so Kalam didn't make it. Your words are kept. Colours, sizes and names still work offline.";
+/** How a part was picked, as the panel says it back ("You circled ..."). */
+const PICKED: Record<'circled' | 'picked' | 'underlined' | 'marked', TranslationKey> = {
+  circled: 'edit.draw.picked.circled',
+  picked: 'edit.draw.picked.picked',
+  underlined: 'edit.draw.picked.underlined',
+  marked: 'edit.draw.picked.marked',
+};
 
 const annotationOf = (g: MarkGesture): VisualAnnotation => {
   const b = boundsOf(markPoints(g));
   return { kind: g.kind, x: b.x, y: b.y, width: b.width, height: b.height };
 };
 
-function examples(c: KalamComponent | undefined): string {
+function examples(c: KalamComponent | undefined): TranslationKey {
   switch (c?.type) {
-    case 'bigButton': return 'For example: bigger, green';
-    case 'number': case 'textInput': case 'date': case 'choice': return 'For example: make it required';
-    case 'heading': case 'text': return 'For example: call it Today';
-    default: return 'For example: move it up';
+    case 'bigButton': return 'edit.draw.example.button';
+    case 'number': case 'textInput': case 'date': case 'choice': return 'edit.draw.example.field';
+    case 'heading': case 'text': return 'edit.draw.example.text';
+    default: return 'edit.draw.example.any';
   }
 }
 
 export function EditByDrawing({ spec, active, renderApp, onKeep, onClose, onPendingChange, edit }: EditByDrawingProps) {
   const k = useKalamTheme();
+  const t = useT(k.uiLanguage);
   const reduced = useReducedMotion();
   const { isDesktop } = useBreakpoint();
   const toast = useToast();
@@ -128,7 +137,9 @@ export function EditByDrawing({ spec, active, renderApp, onKeep, onClose, onPend
   const fadeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const busyRef = useRef<AbortController | null>(null);
   const lastScreen = useRef(spec.initialScreen);
-  const dictation = useDictation(spec.lang, setWords);
+  // Speech uses the listening language from Settings, not the app's language (docs/10 §11.2).
+  const listenIn = useSettingsStore((st) => (st.settings.speech ?? DEFAULT_SPEECH).sttLanguage);
+  const dictation = useDictation(listenIn, setWords);
 
   const shown = proposal && !peek ? proposal.outcome.spec : spec;
   const screen = useMemo(() => shownScreen(shown, rects), [shown, rects]);
@@ -201,6 +212,8 @@ export function EditByDrawing({ spec, active, renderApp, onKeep, onClose, onPend
   useEffect(() => {
     onPendingChange?.(!!proposal);
   }, [proposal, onPendingChange]);
+  // Leaving (or being swapped out) clears the host's "a drawn change is waiting" flag.
+  useEffect(() => () => onPendingChange?.(false), [onPendingChange]);
 
   useEffect(() => () => {
     clearTimeout(settleTimer.current);
@@ -237,11 +250,12 @@ export function EditByDrawing({ spec, active, renderApp, onKeep, onClose, onPend
         setProposal({ outcome: { ...outcome, spec: outcome.spec }, diff: diffParts(spec, outcome.spec), request, base: spec });
         return true;
       }
+      // Lead decision 7: offline structural edits are refused plainly and the words are kept.
       const offline = !getServices().network.online() && outcome.route === 'cloud';
-      setMessage({ text: offline ? OFFLINE_EDIT : outcome.message ?? "Kalam couldn't make that change. Try saying it differently.", tone: 'danger' });
+      setMessage({ text: offline ? t('edit.draw.offline') : outcome.message ?? t('edit.draw.couldNot'), tone: 'danger' });
       return false;
     } catch {
-      if (!ctrl.signal.aborted) setMessage({ text: "Kalam couldn't make that change. Your app is unchanged.", tone: 'danger' });
+      if (!ctrl.signal.aborted) setMessage({ text: t('edit.error.unchanged'), tone: 'danger' });
       return false;
     } finally {
       clearTimeout(slow);
@@ -250,7 +264,7 @@ export function EditByDrawing({ spec, active, renderApp, onKeep, onClose, onPend
         setBusy(null);
       }
     }
-  }, [spec, edit, stopListening]);
+  }, [spec, edit, stopListening, t]);
 
   // ── Strokes ────────────────────────────────────────────────────────────────
   const onStrokeStart = useCallback(() => {
@@ -304,13 +318,13 @@ export function EditByDrawing({ spec, active, renderApp, onKeep, onClose, onPend
       }
       case 'none':
         setMark(null);
-        setMessage({ text: HINTS[intent.reason], tone: 'muted' });
+        setMessage({ text: t(HINTS[intent.reason]), tone: 'muted' });
         fadeTimer.current = setTimeout(() => {
           gestureRef.current = null;
           setStrokes(NO_STROKES);
         }, 900);
     }
-  }, [proposal, measureNow, spec, area.height, tool, propose, requestFor]);
+  }, [proposal, measureNow, spec, area.height, tool, propose, requestFor, t]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
   const submitWords = useCallback(() => {
@@ -357,14 +371,14 @@ export function EditByDrawing({ spec, active, renderApp, onKeep, onClose, onPend
         setProposal(null);
         clearMarks();
       } else {
-        setMessage({ text: "Couldn't save the change. Your app is unchanged.", tone: 'danger' });
+        setMessage({ text: t('edit.saveFailed'), tone: 'danger' });
       }
     } catch {
-      setMessage({ text: "Couldn't save the change. Your app is unchanged.", tone: 'danger' });
+      setMessage({ text: t('edit.saveFailed'), tone: 'danger' });
     } finally {
       setSaving(false);
     }
-  }, [proposal, saving, onKeep, clearMarks]);
+  }, [proposal, saving, onKeep, clearMarks, t]);
 
   const discard = useCallback(() => {
     const kind = proposal?.request.gesture.kind;
@@ -375,14 +389,14 @@ export function EditByDrawing({ spec, active, renderApp, onKeep, onClose, onPend
   }, [proposal, clearMarks]);
 
   const close = useCallback(() => {
-    if (proposal) toast.show({ message: 'Change discarded', tone: 'neutral' });
+    if (proposal) toast.show({ message: t('edit.discarded'), tone: 'neutral' });
     onClose();
-  }, [proposal, toast, onClose]);
+  }, [proposal, toast, onClose, t]);
 
-  const chooseTool = useCallback((t: OverlayTool) => {
-    setTool(t);
+  const chooseTool = useCallback((next: OverlayTool) => {
+    setTool(next);
     setNoteDraft(null);
-    if (t === 'scroll') {
+    if (next === 'scroll') {
       // Ink is drawn in screen space; once the app scrolls it would point at the wrong place.
       gestureRef.current = null;
       setStrokes(NO_STROKES);
@@ -406,10 +420,15 @@ export function EditByDrawing({ spec, active, renderApp, onKeep, onClose, onPend
   }, [active, picking, noteDraft, proposal, mark, strokes.length, discard, clearMarks, close]);
 
   // ── View model ─────────────────────────────────────────────────────────────
+  // English reads "the "Amount" field"; other languages get the part's own words in quotes, not an English noun.
   const nameOf = useCallback((id: string) => {
     const c = findPart(spec, id)?.component;
-    return c ? partName(c) : 'this part';
-  }, [spec]);
+    if (!c) return t('edit.draw.thisPart');
+    if (k.uiLanguage === 'en') return partName(c);
+    const label = 'label' in c && typeof c.label === 'string' ? c.label.trim() : '';
+    return label ? `"${label}"` : partTag(c);
+  }, [spec, t, k.uiLanguage]);
+  const many = (n: number) => t('edit.draw.parts', { count: n });
 
   const names = useMemo(() => {
     const out: Record<string, string> = {};
@@ -426,7 +445,7 @@ export function EditByDrawing({ spec, active, renderApp, onKeep, onClose, onPend
       return {
         stage: 'proposed', summary: proposal.outcome.summary, notes: proposal.outcome.notes, warnings: proposal.outcome.warnings,
         source: routeSource(proposal.outcome.route), saving, message,
-        alternative: g.kind === 'remove' && g.mode !== 'hide' ? { key: 'hide', label: 'Hide it instead', onPress: hideInstead } : undefined,
+        alternative: g.kind === 'remove' && g.mode !== 'hide' ? { key: 'hide', label: t('edit.draw.hideInstead'), onPress: hideInstead } : undefined,
       };
     }
     if (busy?.slow) return { stage: 'working' };
@@ -436,12 +455,13 @@ export function EditByDrawing({ spec, active, renderApp, onKeep, onClose, onPend
       const chips: PanelChip[] = [];
       if (mark.kind === 'select') {
         if (targets.length === 1 && first) {
-          chips.push({ key: 'rename', label: 'Rename', onPress: () => { setMark({ kind: 'relabel', target: first, screen: mark.screen }); setWords(''); } });
-          chips.push({ key: 'up', label: 'Move up', onPress: () => void propose(requestFor(mark, 'move up')) });
-          chips.push({ key: 'down', label: 'Move down', onPress: () => void propose(requestFor(mark, 'move down')) });
+          chips.push({ key: 'rename', label: t('edit.draw.rename'), onPress: () => { setMark({ kind: 'relabel', target: first, screen: mark.screen }); setWords(''); } });
+          // The instruction stays English: it goes to the deterministic edit parser, never on screen.
+          chips.push({ key: 'up', label: t('edit.draw.moveUp'), onPress: () => void propose(requestFor(mark, 'move up')) });
+          chips.push({ key: 'down', label: t('edit.draw.moveDown'), onPress: () => void propose(requestFor(mark, 'move down')) });
         }
         chips.push({
-          key: 'remove', label: 'Remove',
+          key: 'remove', label: t('common.remove'),
           onPress: () => {
             const m: Mark = { kind: 'remove', targets, mode: 'remove', screen: mark.screen };
             setMark(m);
@@ -449,27 +469,27 @@ export function EditByDrawing({ spec, active, renderApp, onKeep, onClose, onPend
           },
         });
       }
-      const who = targets.length === 1 && first ? nameOf(first) : `${targets.length} parts`;
+      const who = targets.length === 1 && first ? nameOf(first) : many(targets.length);
       const component = first ? findPart(spec, first)?.component : undefined;
       return {
         stage: 'picked',
-        title: mark.kind === 'select' ? `You ${mark.via} ${who}.` : `New words for ${who}`,
+        title: mark.kind === 'select' ? t(PICKED[mark.via], { name: who }) : t('edit.draw.newWordsFor', { name: who }),
         chips, words, busy: !!busy, autoFocus: Platform.OS === 'web' && isDesktop, offline: !online,
         message: message ?? (dictation.error ? { text: dictation.error, tone: 'danger' } : undefined),
         mic: { listening: dictation.listening, onPress: () => void dictation.toggle(words) },
-        inputLabel: mark.kind === 'select' ? 'What should change?' : 'New words',
-        placeholder: mark.kind === 'select' ? examples(component) : 'Type the new words',
+        inputLabel: mark.kind === 'select' ? t('edit.draw.whatChange') : t('edit.draw.newWords'),
+        placeholder: mark.kind === 'select' ? t(examples(component)) : t('edit.draw.typeNewWords'),
       };
     }
     if (mark?.kind === 'remove') {
-      const who = mark.targets.length === 1 && mark.targets[0] ? nameOf(mark.targets[0]) : `${mark.targets.length} parts`;
+      const who = mark.targets.length === 1 && mark.targets[0] ? nameOf(mark.targets[0]) : many(mark.targets.length);
       return {
-        stage: 'waiting', title: `You crossed out ${who}.`, message,
-        alternative: message?.tone === 'danger' && mark.mode !== 'hide' ? { key: 'hide', label: 'Hide it instead', onPress: hideInstead } : undefined,
+        stage: 'waiting', title: t('edit.draw.crossedOut', { name: who }), message,
+        alternative: message?.tone === 'danger' && mark.mode !== 'hide' ? { key: 'hide', label: t('edit.draw.hideInstead'), onPress: hideInstead } : undefined,
       };
     }
-    if (mark?.kind === 'move') return { stage: 'waiting', title: `Moving ${nameOf(mark.target)}.`, message };
-    if (mark?.kind === 'note') return { stage: 'waiting', title: mark.target ? `Your note on ${nameOf(mark.target)}` : 'Adding your note', message };
+    if (mark?.kind === 'move') return { stage: 'waiting', title: t('edit.draw.moving', { name: nameOf(mark.target) }), message };
+    if (mark?.kind === 'note') return { stage: 'waiting', title: mark.target ? t('edit.draw.noteOn', { name: nameOf(mark.target) }) : t('edit.draw.addingNote'), message };
     return { stage: 'hint', message };
   })();
 
@@ -491,7 +511,8 @@ export function EditByDrawing({ spec, active, renderApp, onKeep, onClose, onPend
   }, [screen, spec]);
 
   const inkStyle = useMemo(
-    () => ({ ink: k.colors.accent, halo: k.scheme === 'dark' ? k.colors.onPrimary : k.colors.text, size: 7 }),
+    // The teacher's red pen (DIRECTION §6): sindoor strokes on the app.
+    () => ({ ink: k.colors.mark, halo: k.scheme === 'dark' ? k.colors.onPrimary : k.colors.text, size: 7 }),
     [k.colors, k.scheme],
   );
 
@@ -576,9 +597,9 @@ export function EditByDrawing({ spec, active, renderApp, onKeep, onClose, onPend
           />
           <ConfirmSheet
             visible={!!dictation.ask}
-            title="Use online speech?"
+            title={t('edit.draw.speech.askTitle')}
             message={dictation.ask?.message ?? ''}
-            confirmLabel="Use it"
+            confirmLabel={t('edit.draw.speech.askConfirm')}
             onConfirm={() => dictation.ask?.answer(true)}
             onCancel={() => dictation.ask?.answer(false)}
           />

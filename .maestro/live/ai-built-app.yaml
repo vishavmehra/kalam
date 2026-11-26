@@ -1,0 +1,43 @@
+# An app built by Gemini on a phone (checklist D15-046, D17-013). NOT part of the CI smoke run: it needs a build with
+# Firebase configured (EXPO_PUBLIC_FIREBASE_*, App Check) and a network, and it spends a little model quota.
+# Run it by hand against such a build:   maestro test .maestro/live/ai-built-app.yaml
+# "Tailor order book" is a medium request: the template route cannot build it, so Firebase AI Logic does.
+appId: com.kalam.app
+name: App built by cloud AI
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Your shelf.*"
+    timeout: 120000
+- tapOn: "(Create|Make)"
+- extendedWaitUntil:
+    visible: "Describe the app you want to create.*"
+    timeout: 30000
+- scrollUntilVisible:
+    element: "Tailor order book.*"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Tailor order book.*"
+- tapOn:
+    id: create-app
+# The first cloud use asks before anything is sent.
+- runFlow:
+    when:
+      visible: ".*needs Gemini in the cloud.*"
+    commands:
+      - tapOn: "Send and build.*"
+- extendedWaitUntil:
+    visible: ".*Kalam understood.*"
+    timeout: 180000
+- takeScreenshot: live-01-review
+- scrollUntilVisible:
+    element:
+      id: save-to-shelf
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: save-to-shelf
+- extendedWaitUntil:
+    visible: ".*(Customer|Order|Delivery).*"
+    timeout: 60000
+- takeScreenshot: live-02-app-built-by-ai

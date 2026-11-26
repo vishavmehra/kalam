@@ -1,7 +1,9 @@
 /**
  * Streamable HTTP, only with --http. Bound to 127.0.0.1, never another interface. Stateless: a fresh
  * server and transport per POST, as the SDK documents for servers without sessions. The Host and
- * Origin checks stop DNS rebinding (a web page making the browser talk to this port).
+ * Origin checks stop DNS rebinding (a web page making the browser talk to this port). There is no
+ * login, so any program on this computer can call it: config.ts refuses --http with --workspace or
+ * --firebase.
  */
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -39,25 +41,27 @@ export function startHttp(port: number, makeServer: () => McpServer): Promise<Se
       res.writeHead(status, { 'content-type': 'application/json', ...headers });
       res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message }, id: null }));
     };
-    if (!hosts.has(req.headers.host ?? '')) return reply(403, 'This host name is not allowed.');
-    const origin = req.headers.origin;
-    if (origin !== undefined && !origins.has(origin)) return reply(403, 'This origin is not allowed.');
-    if (new URL(req.url ?? '/', `http://${HOST}`).pathname !== '/mcp') return reply(404, 'Not found. The endpoint is /mcp.');
-    if (req.method !== 'POST') return reply(405, 'This server has no sessions, so only POST is used.', { allow: 'POST' });
+    // Nothing in a request may throw out of this handler: an unhandled rejection would stop the process.
+    try {
+      if (!hosts.has(req.headers.host ?? '')) return reply(403, 'This host name is not allowed.');
+      const origin = req.headers.origin;
+      if (origin !== undefined && !origins.has(origin)) return reply(403, 'This origin is not allowed.');
+      // A plain string compare: `new URL()` throws on targets such as `//`.
+      if ((req.url ?? '').split('?')[0] !== '/mcp') return reply(404, 'Not found. The endpoint is /mcp.');
+      if (req.method !== 'POST') return reply(405, 'This server has no sessions, so only POST is used.', { allow: 'POST' });
 
-    let body: unknown;
-    try {
-      body = await readJson(req);
-    } catch (e) {
-      return reply(e instanceof HttpError ? e.status : 400, e instanceof Error ? e.message : 'Bad request.');
-    }
-    const server = makeServer();
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-    res.on('close', () => {
-      void transport.close();
-      void server.close();
-    });
-    try {
+      let body: unknown;
+      try {
+        body = await readJson(req);
+      } catch (e) {
+        return reply(e instanceof HttpError ? e.status : 400, e instanceof Error ? e.message : 'Bad request.');
+      }
+      const server = makeServer();
+      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+      res.on('close', () => {
+        void transport.close().catch(() => {});
+        void server.close().catch(() => {});
+      });
       await server.connect(transport);
       await transport.handleRequest(req, res, body);
     } catch {

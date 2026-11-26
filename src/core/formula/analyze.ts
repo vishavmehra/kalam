@@ -67,6 +67,9 @@ export function validateFormula(src: string, scope: FormulaScope): string[] {
         const { name } = node as Ident;
         if (name === 'today' || name === 'now') return;
         if (has(record, name) || ownKey(scope.collections, name)) return;
+        if (name === 'selected') return; // id of the entry opened from a list
+        if (record && name === 'id') return; // the entry's own id: filter(customers, id == selected) is the opened customer
+
         if (name === 'form' || name === 'state') { errors.push(`Use ${name}.<name>, not "${name}" on its own`); return; }
         errors.push(record ? `Unknown name "${name}" (not a field of these records)` : `Unknown name "${name}"`);
         return;
@@ -118,7 +121,7 @@ export function formulaDependencies(src: string): FormulaDependencies {
     switch (node.type) {
       case 'Identifier': {
         const { name } = node as Ident;
-        if (!inPredicate && name !== 'today' && name !== 'now') deps.collections.add(name);
+        if (!inPredicate && name !== 'today' && name !== 'now' && name !== 'selected') deps.collections.add(name);
         return;
       }
       case 'MemberExpression': {

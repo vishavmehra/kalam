@@ -244,6 +244,8 @@ export function coerceFieldValue(def: KalamField, raw: unknown, now?: Date, hint
       return toIsoDate(raw, now, { direction: dateDirection(def.label, hints.id) });
     case 'enum':
       return matchOption(def.options, raw);
+    case 'image':
+      return undefined; // a model never fills a photo
   }
 }
 
@@ -305,6 +307,7 @@ export function fieldJsonSchema(def: KalamField): Record<string, unknown> {
     case 'date':
       return { type: 'string', description: `${def.label} as YYYY-MM-DD` };
     case 'text':
+    case 'image':
       return { type: 'string', description: def.label };
   }
 }

@@ -5,7 +5,7 @@
  */
 import type { RecordValue } from '@/core/contracts';
 import { localDate } from '@/core/formula';
-import type { KalamComponent, KalamField, KalamScreen, KalamSpec } from '@/core/spec/schema';
+import { LOCAL_MEDIA_REF, type KalamComponent, type KalamField, type KalamScreen, type KalamSpec } from '@/core/spec/schema';
 import { engineText } from '@/i18n/engine-messages';
 import type { FieldDef, FormValues } from './types';
 
@@ -25,6 +25,8 @@ function fromField(id: string, f: KalamField): FieldDef {
       return { ...base, defaultValue: f.defaultValue };
     case 'enum':
       return { ...base, options: f.options, defaultValue: f.defaultValue };
+    case 'image':
+      return base;
   }
 }
 
@@ -34,6 +36,10 @@ export function boundField(c: KalamComponent): string | undefined {
     case 'number': case 'textInput': case 'date': case 'choice': case 'toggle':
       return c.field;
     case 'counter':
+      return c.field;
+    // KalamSpec 1.1: a timer writes its time and a signature pad its signature into the screen form,
+    // so a required signature is checked on Save like any other required input.
+    case 'timer': case 'signature':
       return c.field;
     default:
       return undefined;
@@ -49,6 +55,8 @@ function fromComponent(c: KalamComponent, field: string): FieldDef | undefined {
     case 'choice': return { id: field, type: 'enum', label: c.label, required, options: c.options };
     case 'toggle': return { id: field, type: 'boolean', label: c.label, required: false };
     case 'counter': return { id: field, type: 'number', label: c.label, required: false, min: c.min, max: c.max };
+    case 'timer': return { id: field, type: 'number', label: c.label, required: false };
+    case 'signature': return { id: field, type: 'text', label: c.label, required };
     default: return undefined;
   }
 }
@@ -177,6 +185,9 @@ export function coerceValue(def: FieldDef, raw: RecordValue | undefined, now: Da
       if (def.options && !def.options.includes(s)) return say('chooseOption');
       return { ok: true, value: s };
     }
+    case 'image':
+      // Only a reference to a picture kept on this device, never a URL or the picture itself.
+      return typeof raw === 'string' && LOCAL_MEDIA_REF.test(raw) ? { ok: true, value: raw } : say('required');
   }
 }
 

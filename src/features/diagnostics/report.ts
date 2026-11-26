@@ -9,6 +9,7 @@
  * so a prompt, a record value, an app name or a file name has nowhere to go.
  */
 import type { KalamSettings } from '@/core/contracts';
+import { LIMITS_POLICY_VERSION } from '@/core/limits';
 import { TIMING_NAMES, toErrorCode, type ErrorCode, type TimingName, type TimingSummary } from '@/core/observability';
 
 import { diagnosticsCopy } from './copy';
@@ -38,6 +39,8 @@ export interface ProblemReport {
   createdAt: string;
   area: ReportArea;
   appVersion: string;
+  /** Version of the limits policy this build enforces (core/limits). A constant, never read from the device. */
+  limitsVersion: string;
   platform: ReportPlatform;
   osVersion: string;
   recentErrors: Array<{ code: ErrorCode; count: number }>;
@@ -169,6 +172,7 @@ export function buildProblemReport(input: ReportInput): ProblemReport {
     createdAt: Number.isFinite(input.now) ? new Date(input.now).toISOString() : 'unknown',
     area: REPORT_AREAS.includes(input.area as ReportArea) ? (input.area as ReportArea) : 'other',
     appVersion: typeof input.appVersion === 'string' && VERSION.test(input.appVersion) ? input.appVersion : 'unknown',
+    limitsVersion: LIMITS_POLICY_VERSION,
     platform: input.platform === 'web' || input.platform === 'android' || input.platform === 'ios' ? input.platform : 'other',
     osVersion: typeof input.osVersion === 'string' && OS_FORMAT.test(input.osVersion) ? input.osVersion : 'unknown',
     recentErrors: cleanErrors(input.errorCodes),
@@ -213,6 +217,7 @@ export function formatProblemReport(report: ProblemReport): string {
     `${c.created}: ${report.createdAt}`,
     `${c.area}: ${diagnosticsCopy.problem.areas[report.area]}`,
     `${c.version}: ${report.appVersion}`,
+    `${c.limits}: ${report.limitsVersion}`,
     `${c.device}: ${c.platforms[report.platform]}, ${report.osVersion}`,
     `${c.errors}: ${errors}`,
     `${c.timings}:`,

@@ -1,0 +1,45 @@
+{
+  "kind": "android-on-device-nano-check",
+  "recordedAt": "2026-11-25T04:37:31Z",
+  "service": "Firebase Test Lab, physical device, Robo test with a Robo script",
+  "testLab": {
+    "matrixId": "matrix-w8jxq8ljlua4a",
+    "deviceAxis": "frankel-36-en_US-portrait",
+    "outcome": "Failed (Robo: 'Test failed to run'). The script's force-stop (am start -S) ended the Robo session; the check itself had already run and logged every step.",
+    "durationOnDeviceSeconds": 53
+  },
+  "build": {
+    "apk": "android-release-apk artifact of GitHub Actions run 45609966736 (branch ci/mobile-smoke, commit a33c7a7)",
+    "type": "release, signed with the debug key from expo prebuild",
+    "routeOpened": "kalam://nano-check"
+  },
+  "device": { "brand": "google", "model": "Pixel 10", "android": "16", "apiLevel": 36 },
+  "result": {
+    "nativeModuleLinked": true,
+    "availability": "unavailable",
+    "availabilityDetail": null,
+    "aicoreReason": "AICore could not be bound on this Test Lab device. ActivityManager: 'Unable to start service com.google.android.aicore/.../AiCoreService U=0: not found'. ML Kit GenAI inside Kalam's process: '[ErrorCode 601] AICore failed with error type 4-CONNECTION_ERROR and error code 601-BINDING_FAILURE: AiCore service failed to bind to primary or fallback.'",
+    "download": "not offered (status was unavailable, not downloadable)",
+    "availabilityAfter": "unavailable",
+    "prompt": {
+      "mode": "only_on_device",
+      "taskType": "classify",
+      "success": false,
+      "errorCode": "model_unavailable",
+      "errorMessage": "On-device AI is not ready on this device (unavailable).",
+      "sourceLabel": "on_device (intended leg; the orchestrator refused, no model ran)",
+      "latencyMs": 7,
+      "outputValid": false,
+      "cloudFallback": "none: the orchestrator did not send the only_on_device request to the cloud"
+    },
+    "appCheck": "not_configured: Firebase was never initialised because the orchestrator refused before the provider, so no App Check token was requested",
+    "totalCheckMs": 5173
+  },
+  "files": {
+    "logcat-kalam-nano-check.txt": "the KALAM_NANO_CHECK lines (logcat tag ReactNativeJS)",
+    "logcat-aicore.txt": "the AICore binding failures from the same logcat",
+    "nano-check-screen-from-video.png": "last frame of the Test Lab video: the check screen on the Pixel 10",
+    "app-launched-onboarding.png": "Robo screenshot: Kalam launched on the device before the deep link",
+    "testlab-session.mp4": "Test Lab screen recording of the session (22 s)"
+  }
+}

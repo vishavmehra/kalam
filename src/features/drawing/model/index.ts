@@ -18,3 +18,6 @@ export * from './handwriting';
 export * from './svg-export';
 export * from './svg-import';
 export * from './pdf';
+export * from './crop';
+export * from './sensitive';
+export * from './native-format';

@@ -1,7 +1,15 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+
+import type { AIErrorCode } from '@/core/contracts';
 
 import { createErrorLog, KNOWN_ERROR_CODES, toErrorCode } from './errors';
 import { createTimingLog, TIMING_NAMES } from './timing';
+
+const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+const source = (file: string) => readFileSync(`${ROOT}${file}`, 'utf8');
+const found = (text: string, pattern: RegExp) => [...text.matchAll(pattern)].map((m) => m[1]);
 
 /** A fake clock the test moves by hand. */
 function fakeClock() {
@@ -78,6 +86,41 @@ describe('timing log', () => {
     expect(log.events().map((e) => e.ms)).toEqual([3, 4, 5]);
   });
 
+  it('keeps a ring for each name, so a burst of one name cannot push out the others', () => {
+    const log = createTimingLog({ capacity: 3 });
+    log.record('app_open', 100);
+    log.record('record_write', 7);
+    for (let i = 1; i <= 20; i += 1) log.record('spec_validate', i);
+    expect(log.events().filter((e) => e.name === 'spec_validate').map((e) => e.ms)).toEqual([18, 19, 20]);
+    expect(log.summarize().map((s) => [s.name, s.runs])).toEqual([['app_open', 1], ['spec_validate', 3], ['record_write', 1]]);
+    // Oldest first across names.
+    expect(log.events()[0].name).toBe('app_open');
+    expect(log.events()[1].name).toBe('record_write');
+  });
+
+  it('keeps at least one event even when asked for none', () => {
+    for (const capacity of [0, -4, Number.NaN]) {
+      const log = createTimingLog({ capacity });
+      for (let i = 1; i <= 5; i += 1) log.record('app_open', i);
+      expect(log.events().length).toBeGreaterThanOrEqual(1);
+      expect(log.events().length).toBeLessThanOrEqual(50);
+    }
+    const one = createTimingLog({ capacity: 0 });
+    one.record('app_open', 1);
+    one.record('app_open', 2);
+    expect(one.events().map((e) => e.ms)).toEqual([2]);
+  });
+
+  it('a subscriber that throws does not break the work being timed', async () => {
+    const log = createTimingLog();
+    log.subscribe(() => { throw new Error('bad subscriber'); });
+    await expect(log.time('record_write', async () => 42)).resolves.toBe(42);
+    expect(log.time('spec_validate', () => 'ok')).toBe('ok');
+    expect(log.record('app_open', 3)).toBeDefined();
+    expect(log.events()).toHaveLength(3);
+    expect(() => log.clear()).not.toThrow();
+  });
+
   it('time() wraps sync code, async code and failures', async () => {
     const c = fakeClock();
     const log = createTimingLog({ clock: c.now });
@@ -99,7 +142,8 @@ describe('timing log', () => {
       { name: 'app_open', runs: 1, failed: 0, medianMs: 300, p95Ms: 300, maxMs: 300 },
       { name: 'record_write', runs: 6, failed: 1, medianMs: 20, p95Ms: 100, maxMs: 100 },
     ]);
-    expect(log.summarize().map((s) => s.name)).toEqual(TIMING_NAMES.filter((n) => n !== 'spec_validate'));
+    expect(log.summarize().map((s) => s.name)).toEqual(['app_open', 'record_write']);
+    expect(TIMING_NAMES).toContain('spec_validate');
   });
 
   it('tells subscribers when it changes, and stops after unsubscribe', () => {
@@ -134,11 +178,56 @@ describe('error codes', () => {
     expect(toErrorCode(42)).toBe('other');
   });
 
-  it('lists every AI error code from the contract', () => {
-    for (const code of ['offline', 'consent_denied', 'model_unavailable', 'not_configured', 'timeout', 'invalid_output',
-      'provider_error', 'quota', 'unsupported_modality', 'cancelled', 'app_check_failed', 'bad_request']) {
-      expect(KNOWN_ERROR_CODES).toContain(code);
+  it('lists every AI error code from the contract (a new contract code fails this file to compile)', () => {
+    // Record<AIErrorCode, true> has no missing key and no extra key only while it matches the contract.
+    const aiCodes: Record<AIErrorCode, true> = {
+      offline: true, consent_denied: true, model_unavailable: true, not_configured: true, timeout: true,
+      invalid_output: true, provider_error: true, quota: true, unsupported_modality: true, cancelled: true,
+      app_check_failed: true, bad_request: true,
+    };
+    for (const code of Object.keys(aiCodes)) expect(KNOWN_ERROR_CODES).toContain(code);
+  });
+
+  it('has no repeated code', () => {
+    expect(new Set(KNOWN_ERROR_CODES).size).toBe(KNOWN_ERROR_CODES.length);
+  });
+
+  it('lists every code the validator, the edit patcher, storage, backup and sharing raise', () => {
+    const raised = [
+      ...found(source('src/core/spec/validate.ts'), /\.error\(\s*'([A-Z_]+)'/g),
+      ...found(source('src/core/spec/validate.ts'), /return '([A-Z_]+)'/g),
+      ...found(source('src/core/edit/apply.ts'), /opError\([^,]+,\s*'([A-Z_]+)'/g),
+      ...found(source('src/infrastructure/storage/storage-limits.ts'), /readonly code = '([a-z_]+)'/g),
+      ...found(source('src/infrastructure/storage/migrations.ts'), /readonly code = '([a-z_]+)'/g),
+      ...found(source('src/core/share/service.ts'), /readonly code = '([a-z_]+)'/g),
+      ...found(source('src/core/backup/errors.ts').split('const MESSAGES')[0], /\|\s*'([a-z_]+)'/g),
+    ];
+    // A scan that finds nothing would pass for the wrong reason.
+    expect(raised.length).toBeGreaterThan(30);
+    expect(raised.filter((code) => !(KNOWN_ERROR_CODES as readonly string[]).includes(code))).toEqual([]);
+  });
+
+  it('knows a typed error by its class name, without ever reading its message', () => {
+    for (const [name, code] of [['InvalidSpecError', 'invalid_spec'], ['RecordValidationError', 'record_invalid'], ['ShareStoreError', 'share_store']]) {
+      const error = Object.assign(new Error('Invalid record: name: Asha Verma is not a number'), { name });
+      expect(toErrorCode(error)).toBe(code);
     }
+    expect(toErrorCode(Object.assign(new Error('x'), { name: 'TypeError' }))).toBe('other');
+    expect(toErrorCode(Object.assign(new Error('x'), { name: 'toString' }))).toBe('other');
+    expect(toErrorCode(Object.assign(new Error('x'), { name: 'constructor' }))).toBe('other');
+  });
+
+  it('knows the codes that real classes in the app carry', () => {
+    for (const code of ['PATCH_INVALID', 'PATCH_TOO_LARGE', 'shared_record_read_only', 'media_permission', 'video_too_long']) {
+      expect(toErrorCode({ code })).toBe(code);
+    }
+  });
+
+  it('a subscriber that throws does not break noting an error', () => {
+    const log = createErrorLog();
+    log.subscribe(() => { throw new Error('bad subscriber'); });
+    expect(log.note('timeout')).toBe('timeout');
+    expect(log.recent()).toHaveLength(1);
   });
 
   it('keeps recent errors newest first, bounded, with only a code and a time', () => {

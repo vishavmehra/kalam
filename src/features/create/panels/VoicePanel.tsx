@@ -4,107 +4,160 @@
  * The transcript is editable. The raw recording is kept on this device only when Settings say so
  * (lead decision 3, docs/11 §7.3); otherwise only the words are kept.
  */
-import { Download, Mic, Play, Square, Trash2 } from 'lucide-react-native';
+import { Download, Mic, Pause, Play, Square, Trash2 } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 import {
   RecordingPresets, requestRecordingPermissionsAsync, useAudioPlayer, useAudioRecorder,
 } from 'expo-audio';
-import { Button, Chip, Surface, SwitchRow, Text, TextField, useKalamTheme, useReducedMotion, webData } from '@/design';
+import { DEFAULT_SPEECH } from '@/core/contracts';
+import { canListenIn, LANGUAGES, recogniserFor } from '@/components/languages';
+import { Button, Chip, Stamp, Surface, SwitchRow, Text, TextField, useKalamTheme, useReducedMotion, webData } from '@/design';
+import { speechServiceName } from '@/features/settings/speech/languages';
 import { discardRecording, settleRecording } from '@/infrastructure/platform/media-audio';
-import {
-  getSpeechCapability, installOnDeviceSpeech, startDictation, type DictationSession, type SpeechCapability,
-} from '@/infrastructure/platform/speech';
+import { getSpeechCapability, installOnDeviceSpeech, type SpeechCapability } from '@/infrastructure/platform/speech';
+import { useSegmentedDictation } from '@/features/media';
+import { useT } from '@/i18n/react';
 import { useCreationStore } from '@/state/creation-store';
 import { useSettingsStore } from '@/state/settings-store';
 
-const SERVICE_NAME = Platform.OS === 'web'
-  ? 'your browser\'s speech service'
-  : Platform.OS === 'ios' ? 'Apple\'s speech service' : 'Android\'s speech service';
+import { useRadioRoving } from '../PreferencesPanel';
+import { removeVoiceNote } from '../voice-note';
+
+const SERVICE_NAME = speechServiceName(Platform.OS);
+const baseOf = (tag: string) => tag.toLowerCase().split('-')[0];
+/** What was found for a language tag: the same tag, else any region of the same language ("en-US" is answered by "en-IN"). */
+const found = (verdicts: Record<string, SpeechCapability>, tag: string) => verdicts[tag] ?? Object.entries(verdicts).find(([k]) => baseOf(k) === baseOf(tag))?.[1];
+const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 export function VoicePanel() {
-  const { colors, space } = useKalamTheme();
+  const theme = useKalamTheme();
+  const t = useT(theme.uiLanguage);
+  const { colors, space } = theme;
   const reduced = useReducedMotion();
-  const language = useCreationStore((s) => s.preferences.language);
+  // Recognition uses the listening language from Settings; the app's own language is only for what is built.
+  const speech = useSettingsStore((s) => s.settings.speech ?? DEFAULT_SPEECH);
+  const updateSettings = useSettingsStore((s) => s.update);
+  const language = speech.sttLanguage;
   const voice = useCreationStore((s) => s.voice);
   const setVoice = useCreationStore((s) => s.setVoice);
   const cloudAllowed = useSettingsStore((s) => s.settings.aiMode !== 'offline_only' && s.settings.allowCloud);
   const keepRecording = useSettingsStore((s) => !!s.settings.speech?.keepRecordings);
 
-  const [cap, setCap] = useState<SpeechCapability>();
+  /**
+   * What the recogniser says about each language, by locale. Empty until the first tap on the microphone or on a
+   * language: some browsers misbehave when recognition is probed on page load.
+   */
+  const [verdicts, setVerdicts] = useState<Record<string, SpeechCapability>>({});
+  const cap = found(verdicts, language);
+  const setCap = (c: SpeechCapability) => setVerdicts((v) => ({ ...v, [language]: c }));
+  const checkAll = async (): Promise<Record<string, SpeechCapability>> => {
+    const entries = await Promise.all(LANGUAGES.map(async (l) => {
+      const c = await getSpeechCapability(l.locale).catch((): SpeechCapability => ({ supported: false, onDevice: 'unavailable', locale: l.locale }));
+      return [l.locale, c] as const;
+    }));
+    const all = Object.fromEntries(entries);
+    setVerdicts(all);
+    return all;
+  };
+  const [checking, setChecking] = useState(false);
   const [consent, setConsent] = useState(false);
-  const [listening, setListening] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [error, setError] = useState<string>();
   const [seconds, setSeconds] = useState(0);
-  const session = useRef<DictationSession | undefined>(undefined);
+  // Pause and resume with timed segments (docs/06 §2.3). The words so far are kept while paused.
+  const d = useSegmentedDictation({ lang: language, onDevice: cap?.onDevice === 'available', keepRecording });
+  const { state: dState, recordings, error: dError, elapsedMs } = d;
+  const listening = dState === 'listening';
+  const paused = dState === 'paused';
+  const active = useRef(false);
+  /** Listening really began since the last start; an idle state before that is not an end. */
+  const ran = useRef(false);
+  const where = useRef<'on_device' | 'cloud_service'>('on_device');
   const base = useRef('');
-  const startedAt = useRef(0);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const webRecording = useRef(false);
   const player = useAudioPlayer(voice?.audioUri ?? null);
 
   useEffect(() => {
-    let alive = true;
-    getSpeechCapability(language).then((c) => alive && setCap(c)).catch(() => alive && setCap(undefined));
-    return () => { alive = false; };
-  }, [language]);
-
-  useEffect(() => {
-    if (!listening) return;
-    const t0 = Date.now();
-    const id = setInterval(() => setSeconds(Math.floor((Date.now() - t0) / 1000)), 500);
+    if (!listening) return undefined;
+    const id = setInterval(() => setSeconds(Math.floor(elapsedMs() / 1000)), 500);
     return () => clearInterval(id);
-  }, [listening]);
+  }, [listening, elapsedMs]);
 
-  useEffect(() => () => session.current?.abort(), []);
+  // The transcript follows what the recogniser has heard so far, after any words already there.
+  useEffect(() => {
+    if (!active.current) return;
+    const words = (base.current + d.transcript).trim();
+    if (words) setVoice({ ...(useCreationStore.getState().voice ?? {}), transcript: words, recognizedBy: where.current });
+  }, [d.transcript, setVoice]);
+  useEffect(() => { if (listening) ran.current = true; }, [listening]);
+
+  // When listening ends: the recorded copy is kept only if "Keep recordings" is on (lead decision 3), else deleted.
+  useEffect(() => {
+    if (dState !== 'idle' || !active.current || !(ran.current || dError)) return undefined;
+    let alive = true;
+    void (async () => {
+      let uri: string | undefined;
+      if (webRecording.current) {
+        webRecording.current = false;
+        try { await recorder.stop(); uri = recorder.uri ?? undefined; } catch { /* keep the transcript */ }
+      }
+      const [first, ...rest] = [...(uri ? [uri] : []), ...recordings];
+      const kept = await settleRecording(first, keepRecording, discardRecording);
+      for (const extra of rest) await settleRecording(extra, false, discardRecording);
+      if (!alive) return;
+      const current = useCreationStore.getState().voice;
+      if (current) setVoice({ ...current, ...(kept ? { audioUri: kept } : {}), durationSec: Math.max(1, Math.round(elapsedMs() / 1000)) });
+    })();
+    return () => { alive = false; };
+  }, [dState, dError, recordings, elapsedMs, keepRecording, recorder, setVoice]);
 
   const onDevice = cap?.onDevice === 'available';
   const canUseCloud = cloudAllowed && consent;
   const canListen = !!cap?.supported && (onDevice || canUseCloud);
 
-  const start = async () => {
+  const onMic = async () => {
+    if (listening) { d.stop(); return; }
+    if (paused) { resumeListening(); return; }
+    let c = cap;
+    if (!c) {
+      setChecking(true);
+      c = found(await checkAll(), language) ?? { supported: false, onDevice: 'unavailable', locale: language };
+      setChecking(false);
+    }
+    const local = c.onDevice === 'available';
+    if (c.supported && (local || canUseCloud)) await start(local);
+  };
+
+  const start = async (local: boolean) => {
     setError(undefined);
     setSeconds(0);
-    startedAt.current = Date.now();
     base.current = voice?.transcript ? `${voice.transcript} ` : '';
+    where.current = local ? 'on_device' : 'cloud_service';
+    active.current = true;
+    ran.current = false;
     // Web: record a local copy alongside recognition only if the person chose to keep recordings
     // (Android keeps it natively under the same setting).
-    let recording = false;
     if (Platform.OS === 'web' && keepRecording) {
       try {
         if ((await requestRecordingPermissionsAsync()).granted) {
           await recorder.prepareToRecordAsync();
           recorder.record();
-          recording = true;
+          webRecording.current = true;
         }
-      } catch { recording = false; }
+      } catch { webRecording.current = false; }
     }
-    try {
-      const where = onDevice ? 'on_device' : 'cloud_service';
-      session.current = await startDictation({
-        lang: language,
-        onDevice,
-        keepRecording,
-        onText: (text) => setVoice({ transcript: (base.current + text).trim(), recognizedBy: where }),
-        onError: (msg) => setError(msg),
-        onEnd: async ({ audioUri }) => {
-          setListening(false);
-          session.current = undefined;
-          let uri = audioUri ?? undefined;
-          if (recording) {
-            try { await recorder.stop(); uri = recorder.uri ?? uri; } catch { /* keep transcript */ }
-          }
-          // Lead decision 3: the raw audio is deleted unless "Keep recordings" is on.
-          uri = await settleRecording(uri, keepRecording, discardRecording);
-          const current = useCreationStore.getState().voice;
-          if (current) setVoice({ ...current, ...(uri ? { audioUri: uri } : {}), durationSec: Math.round((Date.now() - startedAt.current) / 1000) });
-        },
-      });
-      setListening(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Speech recognition could not start.');
-      if (recording) recorder.stop().catch(() => {});
-    }
+    await d.start({ onDevice: local });
+  };
+
+  const pauseListening = () => {
+    d.pause();
+    if (webRecording.current) try { recorder.pause(); } catch { /* the copy simply keeps running */ }
+  };
+  const resumeListening = () => {
+    if (webRecording.current) try { recorder.record(); } catch { /* ignore */ }
+    void d.resume();
   };
 
   const install = async () => {
@@ -112,22 +165,47 @@ export function VoicePanel() {
     const ok = await installOnDeviceSpeech(language);
     setInstalling(false);
     setCap(await getSpeechCapability(language));
-    if (!ok) setError('The on-device speech model could not be downloaded right now.');
+    if (!ok) setError(t('create.speak.downloadFailed'));
   };
 
-  const statusChip = onDevice
-    ? <Chip label="Transcribed on this device" tone="success" />
-    : canUseCloud ? <Chip label={`Transcribed by ${SERVICE_NAME}`} tone="info" /> : null;
+  // Only languages the recogniser can handle are offered; the rest are named, never shown as available (docs/06 §8.6).
+  const rows = LANGUAGES.map((l) => ({ l, selected: baseOf(l.locale) === baseOf(language), r: recogniserFor(verdicts[l.locale], cloudAllowed) }));
+  const offered = rows.filter((x) => x.selected || canListenIn(x.r));
+  const unavailable = rows.filter((x) => !offered.includes(x));
+  const pickLanguage = (locale: string) => {
+    if (baseOf(locale) === baseOf(language) || listening || paused) return;
+    void updateSettings({ speech: { ...speech, sttLanguage: locale } }).catch(() => undefined);
+    if (!Object.keys(verdicts).length) void checkAll();
+  };
+  const roving = useRadioRoving(offered.map((x) => x.l.code), offered.find((x) => x.selected)?.l.code, (code) => {
+    const next = LANGUAGES.find((l) => l.code === code);
+    if (next) pickLanguage(next.locale);
+  });
+
+  const statusStamp = onDevice
+    ? <Stamp kind="device" label={t('create.speak.onDevice')} size="sm" />
+    : canUseCloud ? <Stamp kind="cloud" label={t('create.speak.byService', { service: SERVICE_NAME })} size="sm" /> : null;
 
   return (
     <View style={{ gap: space[4] }}>
-      <Text tone="secondary">
-        Explain your app out loud: who uses it, what to record, what to add up. You can fix the words before building.
-      </Text>
+      <Text tone="secondary">{t('create.speak.intro')}</Text>
+
+      <View role="radiogroup" aria-label={t('create.speak.language')} style={{ gap: space[2] }}>
+        <Text weight="semibold" tone="secondary" variant="bodySmall">{t('create.speak.language')}</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {offered.map(({ l, selected }, i) => (
+            <Chip key={l.code} label={l.native} lang={l.code} accessibilityLabel={l.english} role="radio" selected={selected}
+              onPress={() => pickLanguage(l.locale)} rovingProps={roving.itemProps(i)} />
+          ))}
+        </View>
+        {unavailable.length ? (
+          <Text variant="caption" tone="muted">{t('create.speak.languagesOff', { names: unavailable.map((x) => x.l.english).join(', ') })}</Text>
+        ) : null}
+      </View>
 
       {cap && !cap.supported ? (
         <Surface tone="alt" padded radius="lg">
-          <Text>Speech recognition is not available here. Type your idea in Describe instead.</Text>
+          <Text>{t('create.speak.unavailable')}</Text>
         </Surface>
       ) : null}
 
@@ -135,65 +213,85 @@ export function VoicePanel() {
         <Surface tone="alt" padded radius="lg" style={{ gap: space[3] }}>
           {cap.onDevice === 'downloadable' || cap.onDevice === 'downloading' ? (
             <View style={{ gap: space[2] }}>
-              <Text>On-device speech recognition can be downloaded for {cap.locale}. Your voice then never leaves this device.</Text>
+              <Text>{t('create.speak.downloadBody', { locale: cap.locale })}</Text>
               <View style={{ flexDirection: 'row' }}>
-                <Button label="Download speech model" icon={Download} variant="outline" loading={installing || cap.onDevice === 'downloading'} onPress={install} />
+                <Button label={t('create.speak.download')} icon={Download} variant="outline" loading={installing || cap.onDevice === 'downloading'} onPress={install} />
               </View>
             </View>
           ) : null}
           {cloudAllowed ? (
             <SwitchRow
-              label={`Use ${SERVICE_NAME}`}
-              description="Your voice is sent to that service to be turned into text. Kalam does not upload the recording."
+              label={t('create.speak.useService', { service: SERVICE_NAME })}
+              description={t('create.speak.useServiceBody')}
               value={consent}
               onValueChange={setConsent}
             />
           ) : (
-            <Text tone="secondary">Online AI is turned off in Settings, so only on-device speech can be used.</Text>
+            <Text tone="secondary">{t('create.speak.cloudOff')}</Text>
           )}
         </Surface>
       ) : null}
 
       <View style={{ alignItems: 'center', gap: space[3], paddingVertical: space[4] }}>
         <Pressable
-          onPress={listening ? () => session.current?.stop() : start}
-          disabled={!canListen && !listening}
+          onPress={() => void onMic()}
+          disabled={(!!cap && !canListen && !listening && !paused) || checking}
           accessibilityRole="button"
-          accessibilityLabel={listening ? 'Stop listening' : 'Start speaking'}
-          accessibilityState={{ disabled: !canListen && !listening }}
+          accessibilityLabel={t(listening ? 'create.speak.stop' : paused ? 'create.speak.resume' : 'create.speak.start')}
+          accessibilityState={{ disabled: (!!cap && !canListen && !listening && !paused) || checking, busy: checking }}
           {...webData({ kPress: '' })}
           style={{
             width: 88, height: 88, borderRadius: 44,
             alignItems: 'center', justifyContent: 'center',
-            backgroundColor: listening ? colors.danger : canListen ? colors.primary : colors.surfaceAlt,
+            // Listening is not an error: the key turns to ink with a haldi ring, never danger red.
+            backgroundColor: listening ? colors.text : canListen || !cap || paused ? colors.actionBg : colors.surfaceAlt,
             borderWidth: listening && !reduced ? 6 : 0,
-            borderColor: colors.dangerSoft,
+            borderColor: colors.accent,
           }}
         >
-          {listening ? <Square size={28} color={colors.onPrimary} fill={colors.onPrimary} /> : <Mic size={32} color={canListen ? colors.onPrimary : colors.textMuted} />}
+          {listening ? <Square size={28} color={colors.background} fill={colors.background} /> : paused ? <Mic size={32} color={colors.actionFg} /> : <Mic size={32} color={canListen || !cap ? colors.actionFg : colors.textMuted} />}
         </Pressable>
         <Text variant="bodySmall" tone="secondary" numeric accessibilityLiveRegion="polite">
-          {listening ? `Listening… ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : canListen ? 'Tap to speak' : 'Choose how to transcribe first'}
+          {listening
+            ? t('create.speak.listening', { time: clock(seconds) })
+            : paused
+              ? t('create.speak.paused', { time: clock(Math.floor(elapsedMs() / 1000)) })
+              : t(checking ? 'create.speak.checking' : canListen || !cap ? 'create.speak.tap' : 'create.speak.chooseFirst')}
         </Text>
-        {statusChip}
+        {listening || paused ? (
+          <View style={{ flexDirection: 'row', gap: space[2] }}>
+            {listening
+              ? <Button label={t('create.speak.pause')} icon={Pause} variant="outline" size="sm" onPress={pauseListening} />
+              : <Button label={t('create.speak.done')} icon={Square} variant="outline" size="sm" onPress={() => d.stop()} />}
+          </View>
+        ) : null}
+        {statusStamp}
       </View>
 
-      {error ? <Text tone="danger" accessibilityRole="alert">{error}</Text> : null}
+      {error ?? dError ? <Text tone="danger" accessibilityRole="alert">{error ?? dError}</Text> : null}
 
       <TextField
-        label="Transcript"
+        label={t('create.voice.transcript')}
         multiline
+        // Words arrive while listening or paused; typing would be overwritten by the next stretch, so fix them after.
+        editable={!listening && !paused}
         value={voice?.transcript ?? ''}
         onChangeText={(t) => setVoice(t ? { ...(voice ?? { recognizedBy: 'typed' }), transcript: t } : undefined)}
-        placeholder="Your words appear here. Fix anything Kalam misheard."
-        helper={voice?.audioUri ? 'The recording is kept on this device only.' : undefined}
+        placeholder={t('create.voice.transcriptPlaceholder')}
+        helper={voice?.audioUri ? t('create.speak.kept') : undefined}
       />
       {voice ? (
         <View style={{ flexDirection: 'row', gap: space[2], flexWrap: 'wrap' }}>
           {voice.audioUri ? (
-            <Button label="Play recording" icon={Play} variant="outline" size="sm" onPress={() => { player.seekTo(0); player.play(); }} />
+            <Button label={t('create.voice.play')} icon={Play} variant="outline" size="sm" onPress={() => { player.seekTo(0); player.play(); }} />
           ) : null}
-          <Button label="Remove voice note" icon={Trash2} variant="ghost" size="sm" onPress={() => setVoice(undefined)} />
+          <Button
+            label={t('create.voice.remove')}
+            icon={Trash2}
+            variant="ghost"
+            size="sm"
+            onPress={() => { active.current = false; d.stop(); removeVoiceNote(voice, setVoice); }}
+          />
         </View>
       ) : null}
     </View>

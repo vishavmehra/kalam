@@ -1,0 +1,28 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <!--
+      Home screen and lock screen (Android tablets and Android 16 phones). A widget whose person left "hide when locked" on
+      (the default) draws only a lock notice while it is hosted on the lock screen: see KalamWidgetProvider.render.
+
+      Not exported: the system sends APPWIDGET_UPDATE with its own authority (the platform's own widget guide declares
+      providers this way), and the two private actions (the pin answer and the midnight alarm) come from this app's own
+      PendingIntents. No other app can send the widget anything. Confirm on a device build: see the module README.
+    -->
+    <receiver
+      android:name="expo.modules.kalamwidget.KalamWidgetProvider"
+      android:exported="false"
+      android:label="@string/kalam_widget_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/kalam_widget_info" />
+    </receiver>
+
+    <!-- Lets someone who added the widget from the widget list pick which Kalam widget it shows. Only the widget itself opens it. -->
+    <activity
+      android:name="expo.modules.kalamwidget.WidgetPickerActivity"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+  </application>
+</manifest>

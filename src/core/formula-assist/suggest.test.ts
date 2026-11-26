@@ -6,14 +6,14 @@ import type { AIOrchestrator, KalamRecord, RecordRepository, RecordValue } from 
 import { applyPatchOps, parsePatchOp } from '../edit';
 import type { KalamSpec } from '../spec/schema';
 import { validateSpec } from '../spec/validate';
-import { formulaEditOps, type FormulaAssistResult, type FormulaSuggestion, suggestFormula } from './index';
+import { checkFormula, formulaEditOps, type FormulaAssistResult, type FormulaSuggestion, suggestFormula } from './index';
 import { unsupportedPeriod } from './rules';
 
 const FIXTURES = new URL('../../../tests/fixtures/specs/valid/', import.meta.url);
 const read = (name: string): unknown => JSON.parse(readFileSync(new URL(`${name}.json`, FIXTURES), 'utf8'));
 const check = (raw: unknown, what: string): KalamSpec => {
   const r = validateSpec(raw);
-  if (!r.ok || !r.spec) throw new Error(`${what} is invalid: ${JSON.stringify(r.issues)}`);
+  if (!r.ok || !r.spec) throw new Error(`${what} is invalid: ${JSON.stringify(r.errors)}`);
   return r.spec;
 };
 const load = (name: string): KalamSpec => check(read(name), name);
@@ -96,7 +96,10 @@ describe('rule path: no model, formula checked and worked out here', () => {
     const times = ok(await ask(gst, 'price before tax times gst rate', { componentId: 'gst_amount' }));
     expect(times).toMatchObject({ formula: 'form.amount * form.rate', source: 'deterministic' });
     expect(times.sampleValues).toMatchObject({ kind: 'examples', result: 5000, label: 'Example only. These are made-up values, not yours.' });
-    expect(times.sampleValues.inputs).toEqual([{ label: 'Price before tax', value: '1,000' }, { label: 'GST rate (%)', value: '5' }]);
+    expect(times.sampleValues.inputs).toEqual([
+      { id: 'amount', label: 'Price before tax', value: '1,000', editable: true },
+      { id: 'rate', label: 'GST rate (%)', value: '5' },
+    ]);
     expect(times.explanation).toBe('Shows price before tax times GST rate (%).');
     expect(ok(await ask(gst, '18 percent of price before tax', { screenId: 'calc' }))).toMatchObject({ formula: 'round(form.amount * 18 / 100, 2)', sampleValues: { result: 180 } });
     expect(ok(await ask(gst, 'divide price before tax by gst rate', { screenId: 'calc' })).formula).toBe('round(form.amount / form.rate, 2)');
@@ -343,6 +346,37 @@ describe('privacy', () => {
       const words = r.ok ? [r.explanation, r.badge, r.sampleValues.label, ...r.warnings] : [r.message];
       for (const t of words) expect(t).not.toMatch(/[—–!]/);
     }
+  });
+});
+
+describe('editing the formula by hand', () => {
+  it('checks a typed formula like a suggestion, without any model', async () => {
+    const { records, reads } = fakeRecords();
+    const a = ok(await checkFormula(expenses, ' = sum(expenses.amount) ', { records, now: NOW, componentId: 'all_total' }));
+    expect(a).toMatchObject({ formula: 'sum(expenses.amount)', source: 'deterministic', badge: BADGE_DEVICE, explanation: 'Shows the total amount of expenses.' });
+    expect(a.sampleValues).toMatchObject({ kind: 'entries', result: 1000.5 });
+    expect(reads).toEqual(['expense_tracker/expenses']);
+    const typed = ok(await checkFormula(invoice, 'form.total * 2', { componentId: 'remaining', now: NOW }));
+    expect(typed.sampleValues).toMatchObject({ kind: 'examples', result: 2000 });
+  });
+
+  it('lists what is wrong in plain words, and reads nothing', async () => {
+    const { records, reads } = fakeRecords();
+    const r = await checkFormula(expenses, 'sum(expenses.price) + sum(orders.amount)', { records });
+    expect(r).toMatchObject({ ok: false, reason: 'invalid_formula', message: 'That formula cannot be used yet. Fix what is listed, then check it again.' });
+    expect(r.ok ? [] : r.problems).toEqual(['"expenses" has no field "price"', '"orders.amount" is not allowed because "orders" is not a collection']);
+    for (const bad of ['eval("1")', 'process.exit()', 'expenses.constructor', 'sum(', 'form.total']) {
+      const out = await checkFormula(expenses, bad, { records });
+      expect(out, bad).toMatchObject({ ok: false, reason: 'invalid_formula' });
+      expect(out.ok ? [] : out.problems?.length, bad).toBeGreaterThan(0);
+    }
+    expect(await checkFormula(expenses, `1${' + 1'.repeat(100)}`, { records })).toMatchObject({ ok: false, reason: 'invalid_formula' });
+    expect(await checkFormula(expenses, '  ', { records })).toMatchObject({ ok: false, reason: 'empty', message: 'Type a formula to check.' });
+    expect(reads).toHaveLength(0);
+  });
+
+  it('still refuses a list of entries', async () => {
+    expect(await checkFormula(expenses, 'expenses.note', { now: NOW })).toMatchObject({ ok: false, reason: 'not_single_value' });
   });
 });
 

@@ -53,6 +53,7 @@ export function requestKey(req: StructuredRequest<unknown>, k: KeyContext): stri
     v: 2, ...k, appId: k.appId ?? '',
     system: req.system, prompt: req.prompt, jsonSchema: req.jsonSchema,
     images: req.images?.map((i) => `${i.mimeType}:${hash(i.base64)}`),
+    audio: req.audio?.map((a) => `${a.mimeType}:${hash(a.base64)}`),
     languages: req.languages, temperature: req.temperature, maxOutputTokens: req.maxOutputTokens,
   }));
 }
@@ -147,7 +148,7 @@ export function createResultCache(opts: {
       remember(key, { answer, expiresAt });
       if (store) {
         void Promise.resolve()
-          .then(() => store.set(key, { v: 2, expiresAt, ...answer, ...(appId ? { appId } : {}) }, { taskType, source: answer.source }))
+          .then(() => store.set(key, { v: 2, expiresAt, ...answer, ...(appId ? { appId } : {}) }, { taskType, source: answer.source, ...(appId ? { appId } : {}) }))
           .catch(() => { /* persistence is optional */ });
       }
     },

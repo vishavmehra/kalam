@@ -15,6 +15,7 @@ import type {
   AIOrchestrator, FormulaScope, FormulaValue, InferenceSource, KeyValueRepository, RecordRepository, StructuredRequest,
 } from '../contracts';
 import { evaluateFormula, formulaDependencies, validateFormula } from '../formula';
+import { unsupportedPeriod } from '../formula-assist/period';
 import { type KalamSpec, LIMITS } from '../spec/schema';
 import { answerHelp } from './help';
 import { NOTHING_YET, planFormula } from './plan';
@@ -49,11 +50,13 @@ const REFUSALS: Record<RefusalReason, string> = {
   error: 'Something went wrong. Try again.',
 };
 
+const PERIOD_TEXT = 'I can only look at today or this month. Try asking about one of those.';
+
 /** Requests that are not questions, or that reach past this app. Checked after the rule-based answers. */
 const BLOCKED: ReadonlyArray<readonly [RegExp, string]> = [
-  [/\b(ignore|forget|disregard)\b.*\b(instruction|rule|prompt|above|previous)|system prompt|api key|password|secret key/, REFUSALS.unsafe],
+  [/\b(ignore|forget|disregard|override|reveal|pretend)\b.*\b(instruction|rule|prompt|above|previous|system)|\b(you are now|new instructions|act as|developer mode|jailbreak)\b|system prompt|api key|password|secret key/, REFUSALS.unsafe],
   [/\b(other|another|all my|every|my other)\s+apps?\b/, 'I only know about this app.'],
-  [/^(please |can you |could you |just )?(delete|remove|erase|wipe|clear|drop|reset|update|change|edit|rename|add|insert|create|send|share|upload|export|email|publish|post)\b/, REFUSALS.unsafe],
+  [new RegExp(String.raw`^(?:(?:please|kindly|just|now|hey|ok|okay|can you|could you|would you|will you|go ahead and|i want you to|i need you to|i would like you to|i would like to|i want to|i need to)\s+)*(?:delete|remove|erase|wipe|clear|drop|reset|update|change|edit|rename|add|insert|create|send|share|upload|export|email|publish|post|set|mark|move|copy|archive|complete|modify|replace|save|write)\b|\b(?:and|then|also)\s+(?:please\s+)?(?:delete|remove|erase|wipe|clear|drop|reset|update|change|edit|rename|send|share|upload|export|email|publish)\b`), REFUSALS.unsafe],
   [/\b(all|every|each)\b.{0,20}\b(records?|entries|rows|data)\b|\b(dump|everything)\b/, 'I do not read out every entry. Ask for a count, a total or an average, or open the list in the app.'],
 ];
 
@@ -103,6 +106,7 @@ Rules:
 - Names: collection (all its records), collection.field (list of one field's values), state.counter, today (YYYY-MM-DD), now.
 - Inside filter() tests write bare field names. Operators: + - * / % == != < <= > >= && || ! and a ? b : c. Text goes in 'single quotes'.
 - sum, avg, min and max need a field, for example sum(expenses.amount). count takes a collection, for example count(filter(orders, status == 'Done')).
+- The only periods that exist are today (date == today) and the current month (month(date) == month(today)). Weeks, years and other date ranges cannot be written: set answerable to false.
 - The answer must be one number, one piece of text or yes/no. Never return a list of records.
 - If the question cannot be answered from the listed names, set answerable to false and leave formula empty.`;
 
@@ -227,6 +231,12 @@ export function createAppAssistant(deps: AppAssistantDeps): AppAssistant {
         const answer = await calculate(spec, appId, planned.formula, { source: 'deterministic' }, now, planned.say);
         await noteDeterministic(appId, 'rule-based calculation', started, answer.kind === 'calculation');
         return answer;
+      }
+
+      // A formula has today and the current month and nothing else: say so instead of answering with this month's number.
+      if (unsupportedPeriod(question, spec)) {
+        await noteDeterministic(appId, 'period a formula cannot express', started, false);
+        return refused('cannot_answer', 'deterministic', PERIOD_TEXT);
       }
 
       const lowered = question.toLowerCase();

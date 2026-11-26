@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ink night palette from src/design/tokens.ts (palette.ink: sheet, rule, ink, ink3). -->
+<resources>
+  <color name="kalam_widget_bg">#131B4A</color>
+  <color name="kalam_widget_border">#273069</color>
+  <color name="kalam_widget_text">#EEF0F8</color>
+  <color name="kalam_widget_muted">#8C93BA</color>
+</resources>

@@ -1,21 +1,46 @@
 /**
- * WebGL hero (web only, dynamically imported). The story in one take:
- *   1. The five ways in arrive: a typed note, a live voice note, a strip of video frames and a
- *      photo of a paper sketch float onto the desk while a pen draws the app on ruled paper.
- *   2. Everything is pulled into one screen and the finished app prints over the sketch.
- *   3. The phone lifts off the page; the inputs settle beside it, smaller, as "built from".
- * Renders on demand, pauses offscreen and in hidden tabs, stops animating after a short idle,
- * caps DPR and disposes every GPU resource. Reduced motion never loads this file.
+ * WebGL hero (web only, dynamically imported; W4's three.js and GSAP stage, restyled for "Khata and Kalam").
+ * The story in one take (timings in story.ts):
+ *   1. The ways in arrive around a blank order-book page: a typed note, a live voice note, a photo of the page
+ *      and a strip of video frames.
+ *   2. A fountain pen writes the Hindi title and field labels on the paper, line by line.
+ *   3. Kalam reads each field with a red pen. The inputs fly into the tilted phone and the order-book app
+ *      appears in it; the name types in and the balance rolls to ₹350.
+ *   4. The Checked stamp lands on the page, the route stamps show, the wifi drops and the app still saves.
+ * While the pen writes, the inputs wait beside the page and never over the phone or the writing (owner override 2;
+ * story.ts hoverSlots). Renders on demand, pauses offscreen and in hidden tabs, caps DPR and disposes every GPU
+ * resource. Reduced motion (or `?still`) never loads this file: the still frame shows the end of the story.
  */
 import gsap from 'gsap';
 import * as THREE from 'three';
 
+import { filmStrip, fontsOrTimeout, type Fragment, scenePalette, sketchPhoto, textNote, voiceNote } from './scene/fragments.web';
+import type { PlayState, StoryStatus } from './HeroField';
 import {
-  filmStrip, fontsOrTimeout, type Fragment, paperSheet, scenePalette, sketchPhoto, textNote, voiceNote,
-} from './scene/fragments.web';
-import { APP_UI, buildSketch, DRAW_SECONDS, INK, ribbon, SCREEN, type UIPrim } from './sketch-data';
+  APP_THEME, type AppState, BEZEL, CAMERA_FOV, FIELDS, FONT_FAMILY, type Hover, HOVER_Z, hoverMagnification, hoverSlots, orderAppUI,
+  PAPER_TILT_RAD, PEN_RED, penAt, type Prim, READ_SCHEDULE, rolledBalance, SCREEN, STAMP_VIOLET, stageLayout, T, typedName,
+  WAY_IN_TILT, wayInScale, wayInScreenSizes, WRITE_SCHEDULE,
+} from './story';
 
-/** Elapsed seconds that can stop and restart (THREE.Clock is deprecated). */
+export interface HeroSceneOptions {
+  container: HTMLElement;
+  dark: boolean;
+  /** Image URLs: the written page, the same page blank, the stamp frame. */
+  images: { sketch: string; blank: string; stamp: string };
+  /** Words painted into the scene, in the UI language. */
+  labels: { onThisPhone: string; checked: string; stampDate: string };
+  onStatus(status: StoryStatus): void;
+  onPlayState(state: PlayState): void;
+}
+
+export interface HeroScene {
+  /** Pause, resume, or replay once the story has ended. */
+  toggle(): void;
+  replay(): void;
+  dispose(): void;
+}
+
+/** Elapsed seconds that can stop and restart. */
 function stopwatch() {
   let origin = performance.now();
   let stoppedAt: number | null = null;
@@ -26,53 +51,65 @@ function stopwatch() {
   };
 }
 
-export interface HeroScene {
-  replay(): void;
-  dispose(): void;
-}
+const PX = 100; // screen px per world unit at the z = 0 plane
 
-const U = 100; // sketch units per world unit
-const toX = (x: number) => (x - SCREEN.w / 2) / U;
-const toY = (y: number) => (SCREEN.h / 2 - y) / U;
+const BASIC_VERT = /* glsl */ `
+varying vec2 vUv;
+void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
 
-const STROKE_VERT = /* glsl */ `
-attribute float aDraw;
-attribute float aSide;
-attribute vec3 aColor;
-varying float vDraw;
-varying float vSide;
-varying vec3 vColor;
-void main() {
-  vDraw = aDraw; vSide = aSide; vColor = aColor;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}`;
-const STROKE_FRAG = /* glsl */ `
+/** The page: the blank paper where the pen has not written yet, the written page behind the pen. */
+const PAGE_FRAG = /* glsl */ `
+uniform sampler2D uBlank;
+uniform sampler2D uInk;
 uniform float uTime;
-uniform float uOpacity;
-varying float vDraw;
-varying float vSide;
-varying vec3 vColor;
+uniform vec4 uBox[9];
+uniform vec2 uWin[9];
+uniform vec4 uLine[8];
+uniform vec2 uLineWin[8];
+uniform vec3 uRed;
+varying vec2 vUv;
 void main() {
-  if (vDraw > uTime) discard;
-  float edge = 1.0 - smoothstep(0.82, 1.0, abs(vSide));
-  gl_FragColor = vec4(vColor, uOpacity * edge);
+  vec2 p = vec2(vUv.x, 1.0 - vUv.y);
+  vec3 blank = texture2D(uBlank, vUv).rgb;
+  vec3 ink = texture2D(uInk, vUv).rgb;
+  float hide = 1.0;
+  float any = 0.0;
+  for (int i = 0; i < 9; i++) {
+    vec4 b = uBox[i];
+    float inside = step(b.x - 0.025, p.x) * step(p.x, b.x + b.z + 0.025) * step(b.y - 0.016, p.y) * step(p.y, b.y + b.w + 0.008);
+    float prog = clamp((uTime - uWin[i].x) / uWin[i].y, 0.0, 1.0);
+    float front = (b.x - 0.025) + (b.z + 0.05) * prog;
+    float hidden = prog >= 1.0 ? 0.0 : smoothstep(front - 0.006, front + 0.002, p.x);
+    hide = min(hide, mix(1.0, hidden, inside));
+    any = max(any, inside);
+  }
+  vec3 col = mix(ink, blank, any * hide);
+  for (int i = 0; i < 8; i++) {
+    vec4 l = uLine[i];
+    float prog = clamp((uTime - uLineWin[i].x) / uLineWin[i].y, 0.0, 1.0);
+    float x1 = l.x + l.z * prog;
+    float y = l.y + 0.0016 * sin(p.x * 46.0 + float(i)) - 0.0022 * (p.x - l.x) / max(l.z, 0.01);
+    float d = abs(p.y - y);
+    float on = step(l.x, p.x) * step(p.x, x1) * (1.0 - smoothstep(l.w * 0.45, l.w, d));
+    col = mix(col, uRed, on * 0.9);
+  }
+  gl_FragColor = vec4(col, 1.0);
   #include <colorspace_fragment>
 }`;
 
-const SCREEN_VERT = /* glsl */ `
-varying vec2 vUv;
-void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+/** The lit, empty phone screen prints the app from the top as it appears; a haldi line marks the edge. */
 const SCREEN_FRAG = /* glsl */ `
 uniform sampler2D uMap;
 uniform float uReveal;
 uniform vec3 uGlow;
+uniform vec3 uIdle;
 varying vec2 vUv;
 void main() {
   float y = 1.0 - vUv.y;
-  float shown = 1.0 - smoothstep(uReveal - 0.05, uReveal, y);
-  float line = (1.0 - smoothstep(0.0, 0.01, abs(y - uReveal + 0.004))) * step(0.001, uReveal) * (1.0 - step(1.02, uReveal));
+  float shown = 1.0 - smoothstep(uReveal - 0.04, uReveal, y);
+  float line = (1.0 - smoothstep(0.0, 0.008, abs(y - uReveal + 0.004))) * step(0.001, uReveal) * (1.0 - step(1.02, uReveal));
   vec4 c = texture2D(uMap, vUv);
-  gl_FragColor = vec4(mix(c.rgb, uGlow, line), max(shown, line));
+  gl_FragColor = vec4(mix(mix(uIdle, c.rgb, shown), uGlow, line), 1.0);
   #include <colorspace_fragment>
 }`;
 
@@ -87,7 +124,6 @@ function roundedRectShape(w: number, h: number, r: number): THREE.Shape {
   return s;
 }
 
-/** Remaps ShapeGeometry UVs (raw positions) to 0..1 over the shape's bounds. */
 function normalizeUv(geo: THREE.BufferGeometry, w: number, h: number) {
   const pos = geo.getAttribute('position');
   const uv = new Float32Array(pos.count * 2);
@@ -98,59 +134,47 @@ function normalizeUv(geo: THREE.BufferGeometry, w: number, h: number) {
   geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
 }
 
-function buildStrokeGeometry(): THREE.BufferGeometry {
-  const strokes = buildSketch();
-  // Ink is always ink: the sketch lives on a sheet of paper in both colour schemes.
-  const ink = new THREE.Color(INK.ink);
-  const accent = new THREE.Color(INK.accent);
-  const pos: number[] = [], draw: number[] = [], side: number[] = [], col: number[] = [], idx: number[] = [];
-  for (const s of strokes) {
-    // Slightly bolder than the SVG: the WebGL stage renders the sheet larger and in perspective.
-    const { left, right } = ribbon({ ...s, width: s.width * 1.35 });
-    const color = s.color === 'accent' ? accent : ink;
-    const base = pos.length / 3;
-    let acc = 0;
-    const lens = s.points.map((p, i) => (acc += i ? Math.hypot(p[0] - s.points[i - 1][0], p[1] - s.points[i - 1][1]) : 0));
-    const total = acc || 1;
-    // The highlighter sits under the ink, a hair above the paper.
-    const z = s.color === 'accent' ? 0.001 : 0.002;
-    s.points.forEach((_, i) => {
-      const t = s.start + (s.duration * lens[i]) / total;
-      pos.push(toX(left[i][0]), toY(left[i][1]), z, toX(right[i][0]), toY(right[i][1]), z);
-      draw.push(t, t);
-      side.push(-1, 1);
-      col.push(color.r, color.g, color.b, color.r, color.g, color.b);
-      if (i < s.points.length - 1) {
-        const a = base + i * 2;
-        idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
-      }
-    });
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('aDraw', new THREE.Float32BufferAttribute(draw, 1));
-  geo.setAttribute('aSide', new THREE.Float32BufferAttribute(side, 1));
-  geo.setAttribute('aColor', new THREE.Float32BufferAttribute(col, 3));
-  geo.setIndex(idx);
-  return geo;
+function canvas2d(w: number, h: number, scale = 2) {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(w * scale);
+  canvas.height = Math.round(h * scale);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('2D canvas unavailable');
+  ctx.scale(scale, scale);
+  return { canvas, ctx };
 }
 
-const FAMILY: Record<number, string> = { 400: 'Inter', 500: 'Inter_500Medium', 600: 'Inter_600SemiBold', 700: 'Inter_700Bold' };
+function canvasTexture(canvas: HTMLCanvasElement): THREE.CanvasTexture {
+  const t = new THREE.CanvasTexture(canvas);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
 
-function paintApp(ctx: CanvasRenderingContext2D) {
+const FALLBACK: Record<string, string> = {
+  AnekDevanagari_400Regular: 'AnekLatin_400Regular', AnekDevanagari_600SemiBold: 'AnekLatin_600SemiBold',
+  AnekDevanagari_700Bold: 'AnekLatin_700Bold', AnekLatin_700Wide: 'AnekLatin_700Bold',
+};
+
+/** Paints the order-book app (story.ts primitives) into a 2D canvas. */
+function paintApp(ctx: CanvasRenderingContext2D, prims: Prim[]) {
   ctx.clearRect(0, 0, SCREEN.w, SCREEN.h);
-  for (const p of APP_UI as UIPrim[]) {
+  for (const p of prims) {
     if (p.kind === 'rect') {
       ctx.beginPath();
       ctx.roundRect(p.x, p.y, p.w, p.h, p.r);
       if (p.fill) { ctx.fillStyle = p.fill; ctx.fill(); }
-      if (p.stroke) { ctx.strokeStyle = p.stroke; ctx.lineWidth = 1.5; ctx.stroke(); }
-    } else if (p.kind === 'circle') {
-      ctx.beginPath(); ctx.arc(p.cx, p.cy, p.r, 0, Math.PI * 2); ctx.fillStyle = p.fill; ctx.fill();
-    } else if (p.kind === 'line') {
-      ctx.beginPath(); ctx.moveTo(p.x1, p.y1); ctx.lineTo(p.x2, p.y2); ctx.strokeStyle = p.stroke; ctx.lineWidth = 1; ctx.stroke();
+      if (p.stroke) { ctx.strokeStyle = p.stroke; ctx.lineWidth = p.lw ?? 1; ctx.stroke(); }
+    } else if (p.kind === 'path') {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.scale(p.s, p.s);
+      ctx.strokeStyle = p.stroke; ctx.lineWidth = p.lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.stroke(new Path2D(p.d));
+      ctx.restore();
     } else {
-      ctx.font = `${p.size}px "${FAMILY[p.weight]}", system-ui, sans-serif`;
+      const family = FONT_FAMILY[p.font];
+      ctx.font = `${p.size}px "${family}", "${FALLBACK[family] ?? 'AnekLatin_400Regular'}", system-ui, sans-serif`;
       ctx.fillStyle = p.fill;
       ctx.textAlign = p.anchor === 'middle' ? 'center' : p.anchor === 'end' ? 'right' : 'left';
       ctx.fillText(p.text, p.x, p.y);
@@ -158,66 +182,92 @@ function paintApp(ctx: CanvasRenderingContext2D) {
   }
 }
 
-/** The finished app as a texture, plus a repaint for when the real fonts arrive. */
-function paintAppTexture(): { tex: THREE.CanvasTexture; repaint(): void } {
-  const scale = 2;
-  const canvas = document.createElement('canvas');
-  canvas.width = SCREEN.w * scale;
-  canvas.height = SCREEN.h * scale;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('2D canvas unavailable');
-  ctx.scale(scale, scale);
-  paintApp(ctx);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return { tex, repaint: () => { paintApp(ctx); tex.needsUpdate = true; } };
+/** A fountain pen, tip at the left edge: steel nib, black grip, royal barrel with a haldi band. */
+function paintPen(): { canvas: HTMLCanvasElement; w: number; h: number } {
+  const w = 320, h = 44;
+  const { canvas, ctx } = canvas2d(w, h);
+  const cy = h / 2;
+  ctx.fillStyle = 'rgba(2,4,18,0.22)';
+  ctx.beginPath(); ctx.roundRect(70, cy + 6, 236, 14, 7); ctx.fill();
+  const steel = ctx.createLinearGradient(0, cy - 9, 0, cy + 9);
+  steel.addColorStop(0, '#E9EBF2'); steel.addColorStop(0.5, '#AEB3C4'); steel.addColorStop(1, '#7D8396');
+  ctx.fillStyle = steel;
+  ctx.beginPath(); ctx.moveTo(0, cy); ctx.quadraticCurveTo(26, cy - 10, 58, cy - 9); ctx.lineTo(58, cy + 9); ctx.quadraticCurveTo(26, cy + 10, 0, cy); ctx.fill();
+  ctx.strokeStyle = '#4B5063'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(4, cy); ctx.lineTo(40, cy); ctx.stroke();
+  ctx.fillStyle = '#12172E'; ctx.beginPath(); ctx.roundRect(56, cy - 11, 50, 22, 5); ctx.fill();
+  const barrel = ctx.createLinearGradient(0, cy - 14, 0, cy + 14);
+  barrel.addColorStop(0, '#4A5BE0'); barrel.addColorStop(0.45, '#2234C2'); barrel.addColorStop(1, '#16238A');
+  ctx.fillStyle = barrel; ctx.beginPath(); ctx.roundRect(102, cy - 14, 214, 28, 13); ctx.fill();
+  ctx.fillStyle = '#F5B323'; ctx.fillRect(214, cy - 14, 9, 28);
+  ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.beginPath(); ctx.roundRect(110, cy - 10, 196, 4, 2); ctx.fill();
+  return { canvas, w, h };
+}
+
+/** The Checked impression: the generated stamp frame tinted violet, a tick, the word and the date. */
+function paintStamp(frame: HTMLImageElement | null, label: string, date: string) {
+  const w = 400, h = Math.round(400 * (573 / 900));
+  const { canvas, ctx } = canvas2d(w, h);
+  if (frame) {
+    ctx.drawImage(frame, 0, 0, w, h);
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.fillStyle = STAMP_VIOLET;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'source-over';
+  } else {
+    ctx.strokeStyle = STAMP_VIOLET; ctx.lineWidth = 9;
+    ctx.beginPath(); ctx.roundRect(8, 8, w - 16, h - 16, 18); ctx.stroke();
+  }
+  ctx.save();
+  ctx.translate(w / 2, h / 2);
+  ctx.rotate((-4 * Math.PI) / 180);
+  ctx.globalAlpha = 0.88;
+  ctx.strokeStyle = STAMP_VIOLET; ctx.fillStyle = STAMP_VIOLET; ctx.lineWidth = 11; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(-150, 4); ctx.lineTo(-126, 28); ctx.lineTo(-88, -22); ctx.stroke();
+  const size = label.length > 9 ? 40 : 54;
+  ctx.font = `${size}px "AnekLatin_700Bold", "AnekDevanagari_700Bold", system-ui, sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.fillText(label, -70, 10, 230);
+  ctx.font = '24px "CourierPrime_700Bold", "Courier New", monospace';
+  ctx.fillText(date, -64, 52, 220);
+  ctx.restore();
+  return { canvas, w, h };
+}
+
+function loadImage(url: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
 }
 
 function shadowTexture(): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = c.height = 128;
-  const ctx = c.getContext('2d');
-  if (ctx) {
-    const g = ctx.createRadialGradient(64, 64, 4, 64, 64, 64);
-    g.addColorStop(0, 'rgba(16,19,43,0.5)');
-    g.addColorStop(1, 'rgba(16,19,43,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 128, 128);
-  }
-  return new THREE.CanvasTexture(c);
+  const { canvas, ctx } = canvas2d(128, 128, 1);
+  const g = ctx.createRadialGradient(64, 64, 6, 64, 64, 64);
+  g.addColorStop(0, 'rgba(2,4,18,0.55)');
+  g.addColorStop(1, 'rgba(2,4,18,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(canvas);
 }
 
-interface Pose { x: number; y: number; z: number; rz: number; s: number }
 type InputKey = 'text' | 'voice' | 'photo' | 'video';
+const ORDER_KEYS: InputKey[] = ['text', 'voice', 'photo', 'video'];
+interface Pose { x: number; y: number; z: number; rz: number; s: number }
 
-/** Where each input floats while the sketch is drawn, and where it rests at the end. */
-const COLLAGE: Record<InputKey, Pose> = {
-  text: { x: -2.95, y: 2.6, z: 0.6, rz: 0.06, s: 1 },
-  voice: { x: -3.05, y: -0.5, z: 0.9, rz: -0.05, s: 1 },
-  photo: { x: 3.0, y: 1.95, z: 0.7, rz: -0.08, s: 1 },
-  video: { x: 2.95, y: -1.95, z: 0.5, rz: 0.05, s: 1 },
-};
-const RESTING: Record<InputKey, Pose> = {
-  text: { x: -3.15, y: 2.7, z: 1.3, rz: 0.05, s: 0.56 },
-  voice: { x: -3.45, y: 1.2, z: 1.4, rz: -0.04, s: 0.56 },
-  photo: { x: -3.3, y: -0.45, z: 1.3, rz: -0.07, s: 0.56 },
-  video: { x: -3.0, y: -1.95, z: 1.2, rz: 0.04, s: 0.56 },
-};
-const ORDER: InputKey[] = ['text', 'voice', 'photo', 'video'];
+export async function createHeroScene(opts: HeroSceneOptions): Promise<HeroScene> {
+  const { container, labels } = opts;
+  const [fonts, blankImg, sketchImg, stampImg] = await Promise.all([
+    fontsOrTimeout(),
+    loadImage(opts.images.blank),
+    loadImage(opts.images.sketch),
+    loadImage(opts.images.stamp),
+  ]);
+  if (!blankImg || !sketchImg) throw new Error('hero images unavailable');
+  const pal = scenePalette(opts.dark);
 
-/** Narrow stages (phones) pull the inputs in over the paper's edges so the sheet can be larger. */
-function layoutFor(compact: boolean) {
-  if (!compact) return { collage: COLLAGE, resting: RESTING, fitW: 10.2, fitH: 10.2 };
-  const squeeze = (src: Record<InputKey, Pose>, kx: number, ks: number) =>
-    Object.fromEntries(ORDER.map((k) => [k, { ...src[k], x: src[k].x * kx, s: src[k].s * ks }])) as Record<InputKey, Pose>;
-  return { collage: squeeze(COLLAGE, 0.76, 0.86), resting: squeeze(RESTING, 0.84, 1.05), fitW: 8.1, fitH: 9.6 };
-}
-
-export async function createHeroScene({ container, dark }: { container: HTMLElement; dark: boolean }): Promise<HeroScene> {
-  const fonts = await fontsOrTimeout();
-  const pal = scenePalette(dark);
-  const { collage, resting, fitW, fitH } = layoutFor(container.clientWidth < 560);
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setClearColor(0x000000, 0);
@@ -226,71 +276,154 @@ export async function createHeroScene({ container, dark }: { container: HTMLElem
   canvas.setAttribute('aria-hidden', 'true');
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
-  const root = new THREE.Group();
-  scene.add(root);
+  const camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 0.1, 200);
   const disposers: Array<() => void> = [];
+  const tex = (img: HTMLImageElement) => {
+    const t = new THREE.Texture(img);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    t.needsUpdate = true;
+    disposers.push(() => t.dispose());
+    return t;
+  };
 
-  // Painter's order, no depth writes: paper, ink, shadow, phone body, screen, then the inputs.
-  const sheet = paperSheet(pal, 4.7, 8.6, 0.22);
-  sheet.mesh.position.set(0, 0.02, -0.02);
-  sheet.mesh.renderOrder = -1;
-  root.add(sheet.mesh);
-  disposers.push(sheet.dispose);
-
-  const strokeGeo = buildStrokeGeometry();
-  const strokeMat = new THREE.ShaderMaterial({
-    // DoubleSide: the y-flip from sketch to world space reverses ribbon winding.
-    vertexShader: STROKE_VERT, fragmentShader: STROKE_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
-    uniforms: { uTime: { value: 0 }, uOpacity: { value: 1 } },
-  });
-  const strokeMesh = new THREE.Mesh(strokeGeo, strokeMat);
-  strokeMesh.renderOrder = 0;
-  root.add(strokeMesh);
-  disposers.push(() => { strokeGeo.dispose(); strokeMat.dispose(); });
-
+  // ── The page, with its pen and stamp as children (they move with it) ──
+  const page = new THREE.Group();
+  scene.add(page);
   const shadowTex = shadowTexture();
-  const shadowGeo = new THREE.PlaneGeometry(5.4, 9.4);
-  const shadowMat = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0, depthWrite: false });
-  const shadow = new THREE.Mesh(shadowGeo, shadowMat);
-  shadow.position.z = -0.001;
-  shadow.renderOrder = 1;
-  root.add(shadow);
-  disposers.push(() => { shadowGeo.dispose(); shadowMat.dispose(); shadowTex.dispose(); });
+  disposers.push(() => shadowTex.dispose());
+  const pageShadowMat = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.8, depthWrite: false });
+  const pageShadow = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.24), pageShadowMat);
+  pageShadow.position.set(0.03, -0.06, -0.01);
+  pageShadow.renderOrder = -2;
+  page.add(pageShadow);
+  const pageMat = new THREE.ShaderMaterial({
+    vertexShader: BASIC_VERT, fragmentShader: PAGE_FRAG, depthWrite: false, transparent: true,
+    uniforms: {
+      uBlank: { value: tex(blankImg) },
+      uInk: { value: tex(sketchImg) },
+      uTime: { value: 0 },
+      uBox: { value: WRITE_SCHEDULE.map((s) => { const b = FIELDS[s.key]; return new THREE.Vector4(b.x, b.y, b.w, b.h); }) },
+      uWin: { value: WRITE_SCHEDULE.map((s) => new THREE.Vector2(s.start, s.duration)) },
+      uLine: { value: READ_SCHEDULE.map((r) => { const b = FIELDS[r.key]; return new THREE.Vector4(b.x, b.y + b.h + 0.006, b.w, 0.0042); }) },
+      uLineWin: { value: READ_SCHEDULE.map((r) => new THREE.Vector2(r.start, r.duration)) },
+      uRed: { value: new THREE.Color(PEN_RED) },
+    },
+  });
+  const pageMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), pageMat);
+  pageMesh.renderOrder = -1;
+  page.add(pageMesh);
+  disposers.push(() => { pageMesh.geometry.dispose(); pageMat.dispose(); pageShadow.geometry.dispose(); pageShadowMat.dispose(); });
 
+  const penPaint = paintPen();
+  const penTex = canvasTexture(penPaint.canvas);
+  const penMat = new THREE.MeshBasicMaterial({ map: penTex, transparent: true, depthWrite: false, opacity: 0 });
+  const penGeo = new THREE.PlaneGeometry(1, penPaint.h / penPaint.w);
+  penGeo.translate(0.5, 0, 0); // tip at the origin
+  const pen = new THREE.Mesh(penGeo, penMat);
+  pen.rotation.z = 0.62;
+  pen.renderOrder = 5;
+  page.add(pen);
+  disposers.push(() => { penGeo.dispose(); penMat.dispose(); penTex.dispose(); });
+
+  const stampPaint = paintStamp(stampImg, labels.checked, labels.stampDate);
+  const stampTex = canvasTexture(stampPaint.canvas);
+  const stampMat = new THREE.MeshBasicMaterial({ map: stampTex, transparent: true, depthWrite: false, opacity: 0 });
+  const stampGeo = new THREE.PlaneGeometry(1, stampPaint.h / stampPaint.w);
+  const stamp = new THREE.Mesh(stampGeo, stampMat);
+  stamp.renderOrder = 4;
+  page.add(stamp);
+  disposers.push(() => { stampGeo.dispose(); stampMat.dispose(); stampTex.dispose(); });
+
+  // ── The phone ──
   const phone = new THREE.Group();
-  phone.position.z = 0.004;
-  root.add(phone);
-  const sw = SCREEN.w / U, sh = SCREEN.h / U;
-  const bodyGeo = new THREE.ShapeGeometry(roundedRectShape(sw + 0.28, sh + 0.28, 0.54), 12);
-  const bodyMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(pal.device), transparent: true, opacity: 0, depthWrite: false });
-  const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
-  bodyMesh.renderOrder = 2;
-  phone.add(bodyMesh);
-  const screenGeo = new THREE.ShapeGeometry(roundedRectShape(sw, sh, SCREEN.r / U), 12);
+  scene.add(phone);
+  const sw = SCREEN.w / PX, sh = SCREEN.h / PX, bz = BEZEL / PX;
+  const phoneShadowMat = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.75, depthWrite: false });
+  const phoneShadow = new THREE.Mesh(new THREE.PlaneGeometry(sw * 1.5, sh * 1.25), phoneShadowMat);
+  phoneShadow.renderOrder = 0;
+  scene.add(phoneShadow);
+  const bodyGeo = new THREE.ShapeGeometry(roundedRectShape(sw + bz * 2, sh + bz * 2, (SCREEN.r + BEZEL) / PX), 12);
+  const bodyMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(pal.device), transparent: true, depthWrite: false });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.renderOrder = 1;
+  phone.add(body);
+  const screenGeo = new THREE.ShapeGeometry(roundedRectShape(sw, sh, SCREEN.r / PX), 12);
   normalizeUv(screenGeo, sw, sh);
-  const app = paintAppTexture();
-  const appTex = app.tex;
+  const app = canvas2d(SCREEN.w, SCREEN.h);
+  const appTex = canvasTexture(app.canvas);
+  const appState: AppState = { name: '', balance: 0, offline: false, saved: false, onThisPhone: labels.onThisPhone };
+  let painted = '';
+  const repaint = () => {
+    const key = `${appState.name}|${appState.balance}|${appState.offline}|${appState.saved}`;
+    if (key === painted) return;
+    painted = key;
+    paintApp(app.ctx, orderAppUI(appState));
+    appTex.needsUpdate = true;
+  };
+  repaint();
   const screenMat = new THREE.ShaderMaterial({
-    vertexShader: SCREEN_VERT, fragmentShader: SCREEN_FRAG, transparent: true, depthWrite: false,
-    uniforms: { uMap: { value: appTex }, uReveal: { value: 0 }, uGlow: { value: new THREE.Color(INK.accent) } },
+    vertexShader: BASIC_VERT, fragmentShader: SCREEN_FRAG, transparent: true, depthWrite: false,
+    uniforms: { uMap: { value: appTex }, uReveal: { value: 0 }, uGlow: { value: new THREE.Color(pal.haldi) }, uIdle: { value: new THREE.Color(APP_THEME.bg) } },
   });
   const screenMesh = new THREE.Mesh(screenGeo, screenMat);
-  screenMesh.position.z = 0.003;
-  screenMesh.renderOrder = 3;
+  screenMesh.position.z = 0.002;
+  screenMesh.renderOrder = 2;
   phone.add(screenMesh);
-  disposers.push(() => { bodyGeo.dispose(); bodyMat.dispose(); screenGeo.dispose(); screenMat.dispose(); appTex.dispose(); });
+  disposers.push(() => {
+    bodyGeo.dispose(); bodyMat.dispose(); screenGeo.dispose(); screenMat.dispose(); appTex.dispose();
+    phoneShadow.geometry.dispose(); phoneShadowMat.dispose();
+  });
 
-  // ── The inputs ──
-  const note = textNote(pal);
+  // ── The ways in ──
+  const note = textNote(pal, ['मेरी सिलाई की दुकान के लिए', 'ऑर्डर बुक, नाप और बाकी']);
   const voice = voiceNote(pal);
-  const frags: Record<InputKey, Fragment> = { text: note, voice, photo: sketchPhoto(pal), video: filmStrip(pal) };
-  for (const k of ORDER) {
+  const frags: Record<InputKey, Fragment> = { text: note, voice, photo: sketchPhoto(pal, sketchImg), video: filmStrip(pal) };
+  for (const k of ORDER_KEYS) {
     scene.add(frags[k].group);
     disposers.push(frags[k].dispose);
   }
 
   container.appendChild(canvas);
+
+  // ── Layout: world units are stage px / 100 at z = 0, so the 3D frame lines up with the still frame ──
+  const L = { w: 1, h: 1, chip: 0.5, phoneX: 0, phoneY: 0, hover: null as Record<InputKey, Hover> | null };
+  const toWorld = (x: number, y: number) => ({ x: (x - L.w / 2) / PX, y: (L.h / 2 - y) / PX });
+  const pointer = { x: 0, y: 0 };
+  const tilt = { rx: 0.07, ry: -0.2 };
+  const placePhone = () => {
+    phone.position.set(L.phoneX - pointer.x * 0.06, L.phoneY + pointer.y * 0.04, 0.1);
+    phone.rotation.set(tilt.rx, tilt.ry, -0.015);
+    phoneShadow.position.set(L.phoneX + 0.35, L.phoneY - 0.3, -0.02);
+  };
+  const fit = () => {
+    const w = Math.max(1, container.clientWidth), h = Math.max(1, container.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, w < 640 ? 1.5 : 2));
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.position.set(0, 0, h / PX / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))));
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    L.w = w; L.h = h;
+    const { paper, phone: ph, stamp: sp } = stageLayout(w, h);
+    const pc = toWorld(paper.x + paper.w / 2, paper.y + paper.h / 2);
+    page.position.set(pc.x, pc.y, 0);
+    page.rotation.z = PAPER_TILT_RAD;
+    page.scale.set(paper.w / PX, paper.h / PX, 1);
+    // The pen and stamp are children of a non-uniformly scaled page; undo the squash for them.
+    pen.scale.set(0.42, (0.42 * paper.w) / paper.h, 1);
+    stamp.scale.set(sp.w, (sp.w * paper.w) / paper.h, 1);
+    stamp.position.set(sp.cx - 0.5, 0.5 - sp.cy, 0.01);
+    stamp.rotation.z = (-sp.rotate * Math.PI) / 180;
+    const phc = toWorld(ph.x + ph.w / 2, ph.y + ph.h / 2);
+    L.phoneX = phc.x; L.phoneY = phc.y;
+    phone.scale.setScalar(ph.w / (SCREEN.w + BEZEL * 2));
+    phoneShadow.scale.setScalar(ph.w / (SCREEN.w + BEZEL * 2));
+    L.chip = wayInScale(w);
+    L.hover = hoverSlots(w, h, wayInScreenSizes(w, h));
+    placePhone();
+    invalidate();
+  };
 
   // ── Render on demand ──
   let needsRender = true;
@@ -299,162 +432,172 @@ export async function createHeroScene({ container, dark }: { container: HTMLElem
   if (!fonts.ready) {
     void fonts.late.then(() => {
       if (disposed) return;
-      app.repaint();
+      painted = '';
+      repaint();
       note.repaint();
       invalidate();
     });
   }
-  let live = true; // inputs animate (waveform, film) while the story and the short idle run
+  const story = { t: 0 };
   const clock = stopwatch();
-  let frozenAt = 0;
-  const bob = { t: 0, amount: 0 };
-  const pointer = { x: 0, y: 0 };
+  let live = true; // the voice waveform and film strip move while they are on screen
   const tick = () => {
-    const t = live ? clock.getElapsedTime() : frozenAt;
+    const t = live ? clock.getElapsedTime() : 0;
     let dirty = needsRender;
-    for (const k of ORDER) dirty = frags[k].update(t) || dirty;
+    for (const k of ORDER_KEYS) dirty = frags[k].update(t) || dirty;
     if (!dirty) return;
     needsRender = false;
-    // Gentle float + depth parallax on the inputs, applied on top of their tweened pose.
-    ORDER.forEach((k, i) => {
+    ORDER_KEYS.forEach((k, i) => {
       const g = frags[k].group;
       const base = g.userData.pose as Pose | undefined;
       if (!base) return;
-      const wob = Math.sin(t * 1.1 + i * 1.7) * 0.05 * bob.amount;
-      g.position.set(base.x - pointer.x * 0.12 * base.z, base.y + wob - pointer.y * 0.08 * base.z, base.z);
+      const bob = Math.sin(t * 1.2 + i * 1.7) * 0.04;
+      g.position.set(base.x - pointer.x * 0.1 * base.z, base.y + bob - pointer.y * 0.07 * base.z, base.z);
       g.rotation.set(0, 0, base.rz);
       g.scale.setScalar(base.s);
     });
     renderer.render(scene, camera);
   };
 
-  // ── Story state ──
-  const lift = { root: 0, px: 0, py: 0, pz: 0.004, rx: 0, ry: 0, cam: 0, zoom: 0 };
-  let baseDist = 20;
-  const applyLift = () => {
-    root.rotation.x = lift.root;
-    phone.position.set(lift.px, lift.py, lift.pz);
-    phone.rotation.set(lift.rx, lift.ry, 0);
-    shadow.position.set(lift.px * 0.9 + 0.18, lift.py - 0.22, -0.001);
-    camera.position.set(lift.cam, 0, baseDist * (1 + lift.zoom));
-    camera.lookAt(lift.cam, 0, 0);
+  // ── Story state, driven by one GSAP timeline over `story.t` ──
+  const poses = Object.fromEntries(ORDER_KEYS.map((k) => [k, { x: 0, y: 0, z: 0, rz: 0, s: 0 }])) as Record<InputKey, Pose>;
+  // Each input waits in its slot beside the page, clear of the phone and the writing (story.ts hoverSlots).
+  // Things at the hover depth look bigger, so the slot's screen position is divided back to world units.
+  const hoverPose = (k: InputKey): Pose => {
+    const slot = L.hover![k];
+    const p = toWorld(slot.cx, slot.cy);
+    const m = hoverMagnification(L.h);
+    return { x: p.x / m, y: p.y / m, z: HOVER_Z, rz: WAY_IN_TILT[k], s: L.chip * slot.k };
+  };
+  const apply = () => {
+    const t = story.t;
+    pageMat.uniforms.uTime.value = t;
+    const pose = penAt(t);
+    pen.position.set(pose.x - 0.5, 0.5 - pose.y, pose.down ? 0.02 : 0.05);
+    penMat.opacity = pose.shown;
+    screenMat.uniforms.uReveal.value = 1.08 * Math.min(1, Math.max(0, (t - T.reveal) / 1.0));
+    appState.name = typedName((t - T.typeName) / 0.7);
+    appState.balance = rolledBalance((t - T.roll) / 0.7);
+    appState.offline = t >= T.offline;
+    appState.saved = t >= T.offline + 0.25;
+    repaint();
     invalidate();
   };
-
-  const fit = () => {
-    const w = Math.max(1, container.clientWidth), h = Math.max(1, container.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, w < 640 ? 1.5 : 2));
-    renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    // Frame the sheet plus the inputs on either side.
-    baseDist = Math.max(fitH / (2 * t), fitW / (2 * t * camera.aspect));
-    camera.updateProjectionMatrix();
-    applyLift();
+  let status: StoryStatus | null = null;
+  const report = (next: StoryStatus) => {
+    if (status && next.step === status.step && next.route === status.route && next.offline === status.offline) return;
+    status = next;
+    opts.onStatus(next);
   };
-  fit();
-
-  // Each input carries a mutable pose the tick reads; GSAP tweens the pose.
-  const poses = Object.fromEntries(ORDER.map((k) => [k, { ...collage[k] }])) as Record<InputKey, Pose>;
-  const resetInputs = () => {
-    ORDER.forEach((k) => {
-      const c = collage[k];
-      Object.assign(poses[k], { x: c.x * 1.7, y: c.y * 1.3, z: -4, rz: c.rz * 4, s: c.s * 0.9 });
+  const reset = () => {
+    story.t = 0;
+    ORDER_KEYS.forEach((k) => {
+      const h = hoverPose(k);
+      Object.assign(poses[k], { x: h.x * 1.6, y: h.y * 1.4, z: -3, rz: h.rz * 4, s: L.chip * 0.8 });
       frags[k].group.userData.pose = poses[k];
       frags[k].opacity.value = 0;
     });
     note.setTyped(0);
     voice.amp.value = 1;
-    bob.amount = 0;
+    stampMat.opacity = 0;
+    live = true;
+    report({ step: 0, route: false, offline: false });
+    apply();
   };
-  resetInputs();
 
-  const D = DRAW_SECONDS;
-  const A = 0.35 + D + 0.15; // the moment everything is pulled into the screen
-  const tl = gsap.timeline({ onUpdate: invalidate, delay: 0.25, paused: true });
-  ORDER.forEach((k, i) => {
-    tl.to(poses[k], { ...collage[k], duration: 1.05, ease: 'power3.out' }, 0.1 + i * 0.14)
-      .to(frags[k].opacity, { value: 1, duration: 0.5, ease: 'power1.out' }, 0.1 + i * 0.14);
+  fit();
+  reset();
+
+  const tl = gsap.timeline({ paused: true, onUpdate: invalidate });
+  tl.to(story, { t: T.end, duration: T.end, ease: 'none', onUpdate: apply }, 0);
+  ORDER_KEYS.forEach((k, i) => {
+    const at = T.inputsIn + i * 0.14;
+    tl.to(poses[k], { x: () => hoverPose(k).x, y: () => hoverPose(k).y, z: HOVER_Z, rz: WAY_IN_TILT[k], s: () => hoverPose(k).s, duration: 1.0, ease: 'power3.out' }, at)
+      .to(frags[k].opacity, { value: 1, duration: 0.45, ease: 'power1.out' }, at);
   });
   const typing = { c: 0 };
-  tl.to(typing, { c: 40, duration: 1.4, ease: 'none', onUpdate: () => note.setTyped(typing.c) }, 0.45)
-    .to(bob, { amount: 1, duration: 0.8 }, 1.2)
-    .to(strokeMat.uniforms.uTime, { value: D + 0.1, duration: D, ease: 'none' }, 0.35);
-  ORDER.forEach((k, i) => {
-    tl.to(poses[k], { x: 0, y: 0.4, z: 0.7, rz: 0, s: 0.14, duration: 0.6, ease: 'power2.in' }, A + i * 0.09)
-      .to(frags[k].opacity, { value: 0, duration: 0.25, ease: 'power1.in' }, A + i * 0.09 + 0.38);
+  tl.to(typing, { c: 48, duration: 1.6, ease: 'none', onUpdate: () => note.setTyped(typing.c) }, 0.5);
+  ORDER_KEYS.forEach((k, i) => {
+    const at = T.pull + i * 0.1;
+    tl.to(poses[k], {
+      x: () => L.phoneX, y: () => L.phoneY + 0.4, z: 0.6, rz: 0, s: () => L.chip * 0.12, duration: 0.6, ease: 'power2.in',
+    }, at).to(frags[k].opacity, { value: 0, duration: 0.22, ease: 'power1.in' }, at + 0.4);
   });
-  tl.to(bob, { amount: 0, duration: 0.3 }, A)
-    .to(voice.amp, { value: 0.25, duration: 0.4 }, A)
-    .to(screenMat.uniforms.uReveal, { value: 1.08, duration: 1.15, ease: 'power2.inOut' }, A + 0.45)
-    .to(strokeMat.uniforms.uOpacity, { value: 0.45, duration: 0.8 }, A + 0.45)
-    .to(bodyMat, { opacity: 1, duration: 0.35, ease: 'power1.out' }, A + 1.35)
-    .to(lift, {
-      root: -0.42, px: 1.5, py: -0.15, pz: 0.95, rx: 0.42, ry: -0.26, cam: 0.72, zoom: 0.16,
-      duration: 1.5, ease: 'power3.inOut', onUpdate: applyLift,
-    }, A + 1.55)
-    .to(shadowMat, { opacity: 0.6, duration: 1.2, ease: 'power2.out' }, A + 1.75)
-    .to(strokeMat.uniforms.uOpacity, { value: 0.85, duration: 1.0 }, A + 1.95);
-  ORDER.forEach((k, i) => {
-    const at = A + 2.6 + i * 0.1;
-    tl.set(poses[k], { ...resting[k], x: resting[k].x - 0.6, s: resting[k].s * 0.75 }, at)
-      .to(poses[k], { ...resting[k], duration: 0.8, ease: 'power3.out' }, at)
-      .to(frags[k].opacity, { value: 1, duration: 0.5, ease: 'power1.out' }, at);
-  });
-  tl.to(voice.amp, { value: 0.7, duration: 0.5 }, A + 2.7)
-    .to(bob, { amount: 0.6, duration: 0.8 }, A + 2.8)
-    // A short idle, then everything comes to rest and rendering stops.
-    .to(bob, { amount: 0, duration: 1.2, ease: 'power1.inOut' }, A + 11)
-    .to(voice.amp, { value: 0.45, duration: 1.2 }, A + 11)
-    .call(() => { frozenAt = clock.getElapsedTime(); live = false; invalidate(); }, undefined, A + 12.3);
-  tl.play();
+  tl.to(voice.amp, { value: 0.2, duration: 0.4 }, T.pull)
+    .call(() => report({ step: 1, route: false, offline: false }), undefined, T.pull)
+    .call(() => { live = false; }, undefined, T.pull + 1.0)
+    // The stamp is the one ease-in: it drops (power3.in, 260 ms), then settles (80 ms).
+    .fromTo(stamp.position, { z: 0.6 }, { z: 0.01, duration: 0.26, ease: 'power3.in' }, T.stamp)
+    .fromTo(stampMat, { opacity: 0 }, { opacity: 0.92, duration: 0.2, ease: 'power1.in' }, T.stamp)
+    .to(stamp.rotation, { z: stamp.rotation.z - 0.02, duration: 0.08, ease: 'power1.out' }, T.stamp + 0.26)
+    .call(() => report({ step: 2, route: false, offline: false }), undefined, T.stamp)
+    .call(() => report({ step: 3, route: true, offline: false }), undefined, T.route)
+    .call(() => report({ step: 3, route: true, offline: true }), undefined, T.offline);
 
-  // ── Pointer parallax after the story (fine pointers only) ──
+  let userPaused = false;
+  let ended = false;
+  tl.eventCallback('onComplete', () => { ended = true; opts.onPlayState('done'); });
+
+  // ── Pointer parallax (fine pointers only); the phone follows the pointer gently ──
   const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-  const tiltX = gsap.quickTo(phone.rotation, 'x', { duration: 0.6, ease: 'power3', onUpdate: invalidate });
-  const tiltY = gsap.quickTo(phone.rotation, 'y', { duration: 0.6, ease: 'power3', onUpdate: invalidate });
-  const toPX = gsap.quickTo(pointer, 'x', { duration: 0.8, ease: 'power3', onUpdate: invalidate });
-  const toPY = gsap.quickTo(pointer, 'y', { duration: 0.8, ease: 'power3', onUpdate: invalidate });
+  const toPX = gsap.quickTo(pointer, 'x', { duration: 0.8, ease: 'power3', onUpdate: () => { placePhone(); invalidate(); } });
+  const toPY = gsap.quickTo(pointer, 'y', { duration: 0.8, ease: 'power3', onUpdate: () => { placePhone(); invalidate(); } });
   const onMove = (e: PointerEvent) => {
     if (!finePointer) return;
     const r = container.getBoundingClientRect();
-    const nx = (e.clientX - r.left) / r.width - 0.5, ny = (e.clientY - r.top) / r.height - 0.5;
-    toPX(nx); toPY(-ny);
-    if (tl.time() < A + 3.1) return;
-    tiltY(-0.26 + nx * 0.3);
-    tiltX(0.42 - ny * 0.18);
+    toPX((e.clientX - r.left) / r.width - 0.5);
+    toPY(-((e.clientY - r.top) / r.height - 0.5));
   };
   container.addEventListener('pointermove', onMove);
 
-  // ── Pause when offscreen or hidden ──
+  // ── Pause when offscreen, hidden, or paused by the person ──
   let onScreen = true;
   const sync = () => {
     const active = onScreen && document.visibilityState === 'visible';
-    if (active) { if (tl.progress() < 1) tl.resume(); clock.start(); renderer.setAnimationLoop(tick); invalidate(); }
-    else { tl.pause(); clock.stop(); renderer.setAnimationLoop(null); }
+    if (active && !userPaused) {
+      if (!ended) tl.resume();
+      clock.start();
+      renderer.setAnimationLoop(tick);
+      invalidate();
+    } else {
+      tl.pause();
+      clock.stop();
+      // A paused story on screen keeps its (idle) loop, so a resize redraws the frozen frame.
+      renderer.setAnimationLoop(active ? tick : null);
+      if (active) invalidate();
+    }
   };
-  const io = new IntersectionObserver(([entry]) => { onScreen = entry.isIntersecting; sync(); }, { threshold: 0.05 });
+  const io = new IntersectionObserver(([entry]) => { onScreen = !!entry?.isIntersecting; sync(); }, { threshold: 0.05 });
   io.observe(container);
   document.addEventListener('visibilitychange', sync);
-  const ro = new ResizeObserver(fit);
+  const ro = new ResizeObserver(() => { fit(); apply(); });
   ro.observe(container);
   renderer.setAnimationLoop(tick);
+  tl.play();
+  opts.onPlayState('playing');
+
+  const replay = () => {
+    ended = false;
+    userPaused = false;
+    reset();
+    tl.invalidate().restart();
+    clock.start();
+    renderer.setAnimationLoop(tick);
+    opts.onPlayState('playing');
+  };
 
   return {
-    replay() {
-      gsap.killTweensOf(phone.rotation);
-      lift.root = 0; lift.px = 0; lift.py = 0; lift.pz = 0.004; lift.rx = 0; lift.ry = 0; lift.cam = 0; lift.zoom = 0;
-      typing.c = 0;
-      resetInputs();
-      live = true;
-      clock.start();
-      tl.restart(true);
-      applyLift();
+    toggle() {
+      if (ended) { replay(); return; }
+      userPaused = !userPaused;
+      sync();
+      opts.onPlayState(userPaused ? 'paused' : 'playing');
     },
+    replay,
     dispose() {
       disposed = true;
       tl.kill();
-      gsap.killTweensOf([phone.rotation, pointer]);
+      gsap.killTweensOf(pointer);
       io.disconnect();
       ro.disconnect();
       document.removeEventListener('visibilitychange', sync);
@@ -467,3 +610,4 @@ export async function createHeroScene({ container, dark }: { container: HTMLElem
     },
   };
 }
+

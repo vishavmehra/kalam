@@ -55,4 +55,8 @@ export function ChartView({ result, kind, style, metric = 0, hideSummary }: Char
         )}
       </Animated.View>
       {kind === 'table' ? null : (
-        <ChartToggle label={table ? COPY.showChart : COPY.showTable} expanded={table} style={
+        <ChartToggle label={table ? COPY.showChart : COPY.showTable} expanded={table} style={style} onPress={() => setTable((t) => !t)} />
+      )}
+    </View>
+  );
+}

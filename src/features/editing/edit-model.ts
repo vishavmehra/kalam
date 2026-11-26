@@ -3,18 +3,11 @@
  * writing an AI-block verification result into a spec (never mutating the input).
  */
 import type { AIBlockVerificationOutcome, EditOutcome, SpecPatchOp } from '@/core/contracts';
-import { SCHEMA_VERSION, type KalamAIBlockKind, type KalamSpec, type ThemePreset } from '@/core/spec/schema';
+import { SCHEMA_VERSION, type KalamSpec, type ThemePreset } from '@/core/spec/schema';
 import { THEME_PRESET_TOKENS } from '@/core/templates/themes';
+import { t as gt } from '@/i18n/active';
 
-export const PRESET_LABELS: Record<ThemePreset, string> = {
-  calm_green: 'Calm green',
-  warm_paper: 'Warm paper',
-  ocean_blue: 'Ocean blue',
-  soft_lavender: 'Soft lavender',
-  minimal_neutral: 'Minimal',
-  high_contrast: 'High contrast',
-};
-
+/** Swatch `name`s are keys into the edit.theme.colour.* words (ThemePanel). */
 export const PRIMARY_SWATCHES: ReadonlyArray<{ name: string; hex: string }> = [
   { name: 'Forest', hex: '#315C4C' },
   { name: 'Teal', hex: '#0F766E' },
@@ -88,15 +81,6 @@ export function joinSummary(previous: string | undefined, next: string): string 
   return s.length > 240 ? `${s.slice(0, 237)}…` : s;
 }
 
-export function blockKindLabel(kind: KalamAIBlockKind): string {
-  switch (kind) {
-    case 'extractFromPhoto': return 'Reads a photo and fills in fields';
-    case 'classify': return 'Sorts text into labels';
-    case 'summarise': return 'Summarises text';
-    case 'translate': return 'Translates text';
-  }
-}
-
 /** Edit route → execution-source badge. Specialist providers also run online. */
 export function routeSource(route: EditOutcome['route']): 'deterministic' | 'on_device' | 'cloud' {
   return route === 'specialist' ? 'cloud' : route;
@@ -136,7 +120,8 @@ export function applyVerification(spec: KalamSpec, blockId: string, outcome: AIB
   };
 }
 
+/** The version note for a check, in the UI language when it is saved (it is stored with the version). */
 export function verificationSummary(blockId: string, o: AIBlockVerificationOutcome): string {
-  const result = o.status === 'onDevice' ? 'runs on this device' : o.status === 'cloudPreferred' ? 'will prefer the cloud' : 'stays unverified';
-  return `Checked "${humanize(blockId)}" on this device: ${o.passCount} of ${o.testCount} passed, ${result}`;
+  const key = o.status === 'onDevice' ? 'edit.checkSummary.onDevice' : o.status === 'cloudPreferred' ? 'edit.checkSummary.cloud' : 'edit.checkSummary.unverified';
+  return gt(key, { name: humanize(blockId), pass: o.passCount, total: o.testCount });
 }

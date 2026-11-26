@@ -1,0 +1,9 @@
+11-25 04:49:42.640 17297 21669 I PhenotypeResourceReader: unable to find any Phenotype resource metadata for com.google.android.aicore
+11-25 04:49:44.712 16215 21812 I Finsky  : [255] Installer package name of package com.google.android.aicore is 
+11-25 04:49:47.742 17297 21694 I PhenotypeResourceReader: unable to find any Phenotype resource metadata for com.google.android.aicore
+11-25 04:49:48.953  1386  7154 V SettingsProvider: did not write settings for prefix 'aicore/' because sync is disabled
+11-25 04:49:54.009  1386  5153 V SettingsProvider: did not write settings for prefix 'aicore/' because sync is disabled
+11-25 04:49:59.034  1386  1466 V SettingsProvider: did not write settings for prefix 'aicore/' because sync is disabled
+11-25 04:50:04.046  1386  7705 V SettingsProvider: did not write settings for prefix 'aicore/' because sync is disabled
+11-25 04:50:09.070  1386  7705 V SettingsProvider: did not write settings for prefix 'aicore/' because sync is disabled
+11-25 04:50:09.071 17297 22830 W PlatformConfigurator: Retried propagating for com.google.android.platform.aicore 5 times without succeeding. Giving up. [CONTEXT service_id=204 ]

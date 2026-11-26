@@ -1,0 +1,124 @@
+{
+  "kind": "local-ready",
+  "record": {
+    "task": "translate",
+    "platform": "web",
+    "model": "gemini-nano, Chrome/158.0.0.0",
+    "date": "2026-11-26",
+    "cases": 20,
+    "schemaValid": 20,
+    "correct": 15,
+    "hallucinated": 0,
+    "p95LatencyMs": 2567,
+    "offlineOk": true,
+    "evidence": "docs/evidence/local-ready-translate-web-2026-11-26.json"
+  },
+  "verdict": {
+    "status": "failed",
+    "reasons": [
+      "correct 75%, needs 90%"
+    ]
+  },
+  "outcomes": [
+    {
+      "id": "t01",
+      "outcome": "right",
+      "ms": 2034
+    },
+    {
+      "id": "t02",
+      "outcome": "right",
+      "ms": 1594
+    },
+    {
+      "id": "t03",
+      "outcome": "right",
+      "ms": 2007
+    },
+    {
+      "id": "t04",
+      "outcome": "right",
+      "ms": 1991
+    },
+    {
+      "id": "t05",
+      "outcome": "right",
+      "ms": 2567
+    },
+    {
+      "id": "t06",
+      "outcome": "right",
+      "ms": 2238
+    },
+    {
+      "id": "t07",
+      "outcome": "right",
+      "ms": 2289
+    },
+    {
+      "id": "t08",
+      "outcome": "right",
+      "ms": 2224
+    },
+    {
+      "id": "t09",
+      "outcome": "right",
+      "ms": 2521
+    },
+    {
+      "id": "t10",
+      "outcome": "right",
+      "ms": 2371
+    },
+    {
+      "id": "t11",
+      "outcome": "right",
+      "ms": 2382
+    },
+    {
+      "id": "t12",
+      "outcome": "right",
+      "ms": 1828
+    },
+    {
+      "id": "t13",
+      "outcome": "wrong",
+      "ms": 1596
+    },
+    {
+      "id": "t14",
+      "outcome": "wrong",
+      "ms": 1797
+    },
+    {
+      "id": "t15",
+      "outcome": "wrong",
+      "ms": 1912
+    },
+    {
+      "id": "t16",
+      "outcome": "right",
+      "ms": 2709
+    },
+    {
+      "id": "t17",
+      "outcome": "right",
+      "ms": 2163
+    },
+    {
+      "id": "t18",
+      "outcome": "wrong",
+      "ms": 1909
+    },
+    {
+      "id": "t19",
+      "outcome": "wrong",
+      "ms": 2486
+    },
+    {
+      "id": "t20",
+      "outcome": "right",
+      "ms": 2527
+    }
+  ]
+}

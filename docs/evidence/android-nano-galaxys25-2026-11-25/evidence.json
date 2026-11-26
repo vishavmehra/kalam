@@ -1,0 +1,50 @@
+{
+  "kind": "android-on-device-nano-check",
+  "recordedAt": "2026-11-25T04:49:50Z",
+  "service": "Firebase Test Lab, physical device, Robo test with a Robo script",
+  "testLab": {
+    "matrixId": "matrix-15u5rgb4wav7c",
+    "deviceAxis": "pa1q-36-en_US-portrait",
+    "outcome": "Passed",
+    "roboSeconds": 755,
+    "note": "The script's WAIT_FOR_ELEMENT never matched the 'nano-check-finished' label (it was below the fold, and Robo only matches on-screen elements), so the session idled on the result screen until the 12-minute wait ran out. Fixed in src/app/nano-check.tsx in the main working tree (label moved into the top card)."
+  },
+  "build": {
+    "apk": "android-release-apk artifact of GitHub Actions run 45609966736 (branch ci/mobile-smoke, commit a33c7a7)",
+    "type": "release, signed with the debug key from expo prebuild",
+    "routeOpened": "kalam://nano-check"
+  },
+  "device": {
+    "brand": "samsung",
+    "model": "SM-S931U1 (Galaxy S25)",
+    "android": "16",
+    "apiLevel": 36
+  },
+  "result": {
+    "nativeModuleLinked": true,
+    "availability": "unavailable",
+    "availabilityDetail": null,
+    "aicoreReason": "AICore gave no usable model. The Firebase on-device SDK returned UNAVAILABLE in about 8 ms with no bind attempt logged; the system logged 'PlatformConfigurator: Retried propagating for com.google.android.platform.aicore 5 times without succeeding'.",
+    "download": "not offered (status was unavailable, not downloadable)",
+    "availabilityAfter": "unavailable",
+    "prompt": {
+      "mode": "only_on_device",
+      "taskType": "classify",
+      "success": false,
+      "errorCode": "model_unavailable",
+      "errorMessage": "On-device AI is not ready on this device (unavailable).",
+      "sourceLabel": "on_device (intended leg; the orchestrator refused, no model ran)",
+      "latencyMs": 4,
+      "outputValid": false,
+      "cloudFallback": "none: the orchestrator did not send the only_on_device request to the cloud"
+    },
+    "appCheck": "not_configured: Firebase was never initialised because the orchestrator refused before the provider, so no App Check token was requested",
+    "totalCheckMs": 5159
+  },
+  "files": {
+    "logcat-kalam-nano-check.txt": "the KALAM_NANO_CHECK lines (logcat tag ReactNativeJS)",
+    "logcat-aicore.txt": "every logcat line that mentions AICore in the same session",
+    "nano-check-screen.png": "Robo screenshot 'nano_check_final': the check screen with the result",
+    "testlab-session.mp4": "Test Lab screen recording of the whole session (about 12.7 min, mostly the result screen)"
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { backupFileName, formatBytes, passphraseStrength } from './helpers';
+import { archivedApps, backupFileName, formatBytes, passphraseStrength } from './helpers';
 
 describe('storage helpers', () => {
   it('formats sizes in plain units', () => {
@@ -24,5 +24,13 @@ describe('storage helpers', () => {
 
   it('names backup files by date', () => {
     expect(backupFileName(new Date(2026, 10, 18, 9).getTime())).toBe('kalam-backup-2026-11-18.kalambackup');
+  });
+
+  it('lists archived apps, newest change first, and leaves the rest of the shelf out (D11-026)', () => {
+    const app = (id: string, name: string, updatedAt: number, archived?: boolean) => ({ id, spec: { name }, updatedAt, ...(archived === undefined ? {} : { archived }) });
+    const rows = archivedApps([app('a', 'Rent', 10, true), app('b', 'Milk', 30, true), app('c', 'Fees', 20), app('d', 'Zoo', 5, false), app('e', 'Atta', 30, true)]);
+    expect(rows.map((r) => r.id)).toEqual(['e', 'b', 'a']);
+    expect(rows[0]).toEqual({ id: 'e', name: 'Atta', changedAt: 30 });
+    expect(archivedApps([])).toEqual([]);
   });
 });

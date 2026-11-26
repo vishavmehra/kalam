@@ -1,10 +1,11 @@
 /**
  * Shared Firebase Auth service (docs/04 §15.4, docs/11 §9). Platform files only decide how the
- * Auth instance is created and whether Google sign-in is possible. Accounts are optional:
- * nothing here is needed to create or use apps.
+ * Auth instance is created and whether Google sign-in is possible. Signing in is required to use Kalam
+ * (ADR-040); the saved session works offline. There is no guest sign-in: an anonymous session left by an
+ * older build is upgraded in place when the person signs in.
  */
 import {
-  createUserWithEmailAndPassword, EmailAuthProvider, linkWithCredential, onAuthStateChanged, signInAnonymously,
+  createUserWithEmailAndPassword, EmailAuthProvider, linkWithCredential, onAuthStateChanged,
   signInWithEmailAndPassword, signOut as fbSignOut, updateProfile, type Auth, type User,
 } from 'firebase/auth';
 import type { AuthErrorCode, AuthResult, AuthService, KalamUser } from '@/core/contracts';
@@ -47,7 +48,7 @@ const CODES: Record<string, AuthErrorCode> = {
 };
 
 export const AUTH_MESSAGES: Record<AuthErrorCode, string> = {
-  not_configured: 'Accounts are not set up in this build of Kalam. Your apps still work without one.',
+  not_configured: 'Accounts are not set up in this build of Kalam.',
   offline: 'You are offline. Connect to the internet to sign in.',
   cancelled: 'Sign-in was cancelled.',
   invalid_credentials: 'That email and password do not match.',
@@ -55,7 +56,7 @@ export const AUTH_MESSAGES: Record<AuthErrorCode, string> = {
   weak_password: 'Use a password with at least 6 characters.',
   invalid_email: 'Check the email address.',
   popup_blocked: 'Your browser blocked the sign-in window. Allow pop-ups for Kalam and try again.',
-  unsupported: 'Google sign-in is not available in the Android app yet. Use email and password instead.',
+  unsupported: 'Google sign-in is not available in this version of Kalam. Use email instead.',
   too_many_requests: 'Too many attempts. Wait a few minutes and try again.',
   not_allowed: 'This way of signing in is turned off for Kalam.',
   unauthorized_domain: 'Sign-in does not work from this web address yet.',
@@ -73,7 +74,7 @@ export const fail = (code: AuthErrorCode): AuthResult => ({ ok: false, errorCode
 export interface AuthCoreOptions {
   /** Lazily creates the Auth instance (undefined when Firebase is not configured). */
   getAuth: () => Auth | undefined;
-  /** Platform Google sign-in. Receives the current guest user to link when present. */
+  /** Platform Google sign-in. Receives the saved anonymous user from an older build to link when present. */
   google?: (auth: Auth, guest: User | null) => Promise<User>;
 }
 
@@ -150,7 +151,6 @@ export function createAuthService(opts: AuthCoreOptions): AuthService {
         await user.reload().catch(() => {});
         return a.currentUser ?? user;
       }),
-    signInAsGuest: () => run(async (a) => (await signInAnonymously(a)).user),
     setDisplayName: (name) =>
       run(async (a) => {
         const user = a.currentUser;

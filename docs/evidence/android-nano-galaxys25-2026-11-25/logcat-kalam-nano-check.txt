@@ -1,0 +1,6 @@
+11-25 04:49:45.481 15017 15075 I ReactNativeJS: KALAM_NANO_CHECK {"step":"start","os":"android","brand":"samsung","model":"SM-S931U1","release":"16","apiLevel":"36"}
+11-25 04:49:45.489 15017 15075 I ReactNativeJS: KALAM_NANO_CHECK {"step":"status","availability":"unavailable","apiExposed":true}
+11-25 04:49:45.491 15017 15075 I ReactNativeJS: KALAM_NANO_CHECK {"step":"status_after","availability":"unavailable"}
+11-25 04:49:45.497 15017 15075 I ReactNativeJS: KALAM_NANO_CHECK {"step":"prompt","success":false,"source":"on_device","provider":"none","latencyMs":4,"matchesExpected":false,"errorCode":"model_unavailable","errorMessage":"On-device AI is not ready on this device (unavailable).","attempts":1}
+11-25 04:49:50.640 15017 15075 I ReactNativeJS: KALAM_NANO_CHECK {"step":"app_check","status":"not_configured"}
+11-25 04:49:50.640 15017 15075 I ReactNativeJS: KALAM_NANO_CHECK {"step":"done","device":{"os":"android","brand":"samsung","model":"SM-S931U1","release":"16","apiLevel":"36"},"availability":"unavailable","download":"not_needed","availabilityAfter":"unavailable","source":"on_device","latencyMs":4,"outputValid":false,"matchesExpected":false,"errorCode":"model_unavailable","errorMessage":"On-device AI is not ready on this device (unavailable).","appCheck":{"status":"not_configured"},"totalMs":5159}

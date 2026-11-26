@@ -144,7 +144,7 @@ export function extractFields(
     const raw = def.type === 'number' ? value.find((t) => toNumber(t.norm) !== undefined)?.norm
       : def.type === 'text' ? value.slice(0, 8).map((t) => t.raw).join(' ')
         : value.map((t) => t.norm).join(' ');
-    const v = raw === undefined ? undefined : coerceFieldValue(def, raw, now);
+    const v = raw === undefined ? undefined : coerceFieldValue(def, raw, now, { id: h.field });
     if (v !== undefined) out[h.field] = v;
   });
   for (const [id, def] of Object.entries(defs)) {
@@ -242,6 +242,7 @@ function describeAction(a: KalamAction): string {
     case 'speak': return 'read a message aloud';
     case 'feedback': return 'show a message';
     case 'clearForm': return 'clear the form';
+    case 'compute': return 'work out a result';
   }
 }
 

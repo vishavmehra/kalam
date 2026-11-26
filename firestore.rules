@@ -11,6 +11,12 @@ rules_version = '2';
 // Functions in the `kalam` codebase (functions/src/bazaar), which use the Admin SDK. Clients may move
 // counters only by +1/-1 steps (or a review's exact rating change) proven by a matching doc in the
 // same batch, and never read hidden listings or specs they are not entitled to.
+//
+// Cloud Storage: Kalam does not use it (decision 2026-11-26, checklist D11-033). A listing's icon is a glyph and two
+// colours inside its Firestore document, and people's own records stay on their device. So there is no storage.rules
+// file and no "storage" entry in firebase.json, on purpose: this Firebase project is shared with another app, and a
+// storage rules deploy would replace that app's rules. tests/unit/release-config.test.ts fails if Kalam starts
+// importing Cloud Storage. If it ever does, it needs its own bucket and a deny-by-default storage.rules first.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -41,14 +47,17 @@ service cloud.firestore {
         && (!('model' in s) || str(s.model, 0, 80));
     }
 
+    // `permissions` (KalamSpec 1.1: what the app asks the phone for, with its reason) is optional, so
+    // listings published before 1.1 and older clients that do not send it stay valid.
     function validDisclosure(d) {
       return d is map
-        && d.keys().hasOnly(['stores', 'usesPhotos', 'aiFeatures', 'cloudPossible'])
+        && d.keys().hasOnly(['stores', 'usesPhotos', 'aiFeatures', 'cloudPossible', 'permissions'])
         && d.keys().hasAll(['stores', 'usesPhotos', 'aiFeatures', 'cloudPossible'])
         && strList(d.stores, 10, 1300)
         && d.usesPhotos is bool
         && strList(d.aiFeatures, 15, 1300)
-        && d.cloudPossible is bool;
+        && d.cloudPossible is bool
+        && (!('permissions' in d) || strList(d.permissions, 4, 600));
     }
 
     function validIcon(d) {
@@ -412,6 +421,70 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
+    // ─── My apps in my account (docs/11 §9, §12; docs/14 §15) ───────────────────────────────────
+    // Opt-in per device. Only the signed-in owner, never a guest account, reads or writes their own
+    // users/{uid}/apps and users/{uid}/account documents; nobody can read or list another person's.
+    // App designs only (gzip of at most 100 KB of JSON); records travel only as the encrypted backup
+    // in backups/ above. A deleted app stays as a small tombstone so other devices learn about it.
+    function accountOwner(userId) {
+      return signedIn() && userId == me() && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    function hexColor(v) { return v is string && v.matches('^#[0-9a-fA-F]{6}$'); }
+    function validAccountIcon(i) {
+      return i == null || (i is map
+        && i.keys().hasOnly(['glyph', 'background', 'foreground'])
+        && str(i.glyph, 1, 40)
+        && (!('background' in i) || hexColor(i.background))
+        && (!('foreground' in i) || hexColor(i.foreground)));
+    }
+    function validBazaarSource(b) {
+      return b == null || (b is map
+        && b.keys().hasAll(['listingId', 'specVersion', 'specHash'])
+        && b.keys().hasOnly(['listingId', 'specVersion', 'specHash'])
+        && b.listingId is string && b.listingId.matches('^l[a-z0-9]{19}$')
+        && b.specVersion is int && b.specVersion >= 1
+        && sha(b.specHash));
+    }
+    function validAccountApp(d) {
+      let keys = ['name', 'icon', 'version', 'specGz', 'specHash', 'updatedAt', 'syncedAt', 'deleted', 'route', 'bazaar'];
+      return d.keys().hasAll(keys) && d.keys().hasOnly(keys)
+        && str(d.name, 0, 60)
+        && validAccountIcon(d.icon)
+        && d.version is int && d.version >= 0
+        && ts(d.updatedAt)
+        && d.syncedAt == request.time
+        && d.deleted is bool
+        && str(d.route, 0, 40)
+        && validBazaarSource(d.bazaar)
+        && (d.deleted
+          ? (d.specGz == null && d.specHash == null)
+          : (str(d.specGz, 24, 140000) && sha(d.specHash)));
+    }
+
+    match /users/{userId}/apps/{appId} {
+      allow read, delete: if accountOwner(userId);
+      allow create, update: if accountOwner(userId)
+        && appId.matches('^[A-Za-z0-9_-]{1,64}$')
+        && validAccountApp(request.resource.data);
+    }
+
+    // Pointer to the newest complete encrypted records backup (its parts live in backups/).
+    match /users/{userId}/account/{docId} {
+      allow read, delete: if accountOwner(userId) && docId == 'records';
+      allow create, update: if accountOwner(userId)
+        && docId == 'records'
+        && request.resource.data.keys().hasAll(['set', 'parts', 'chars', 'sha256', 'salt', 'appCount', 'recordCount', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['set', 'parts', 'chars', 'sha256', 'salt', 'appCount', 'recordCount', 'updatedAt'])
+        && request.resource.data.set is string && request.resource.data.set.matches('^[a-z0-9]{12}$')
+        && request.resource.data.parts is int && request.resource.data.parts >= 1 && request.resource.data.parts <= 40
+        && request.resource.data.chars is int && request.resource.data.chars >= 1 && request.resource.data.chars <= 36000000
+        && sha(request.resource.data.sha256)
+        && str(request.resource.data.salt, 16, 64) && request.resource.data.salt.matches('^[A-Za-z0-9+/]+=*$')
+        && request.resource.data.appCount is int && request.resource.data.appCount >= 0
+        && request.resource.data.recordCount is int && request.resource.data.recordCount >= 0
+        && request.resource.data.updatedAt == request.time;
+    }
+
     // Credits (docs/12 §12.4-12.5): read your own; every write goes through the trusted functions.
     match /wallets/{userId} {
       allow read: if signedIn() && userId == me();
@@ -440,6 +513,325 @@ service cloud.firestore {
     // Moderation audit log (docs/12 §14.5, §18.4): written by the trusted function only.
     match /moderationLog/{entryId} {
       allow read, write: if false;
+    }
+
+    // ─── Collaborative apps and Kalam for Teams (docs/14 §17, §21) ──────────────────────────────
+    // A shared app is here only because its owner chose to share it. Membership is checked on every
+    // read and write; signing in alone opens nothing. Ranks: viewer 1, editor 2, admin 3, owner 4.
+    // A team role carries over to the team's apps, capped at admin. Joining happens only through the
+    // trusted function kalamCollabJoin (functions/src/collab), never by a client writing its own row.
+    function collabAppPath(sid) { return /databases/$(database)/documents/collabApps/$(sid); }
+    function collabTeamPath(tid) { return /databases/$(database)/documents/collabTeams/$(tid); }
+    function collabMemberPath(sid, uid) { return /databases/$(database)/documents/collabApps/$(sid)/members/$(uid); }
+    function teamMemberPath(tid, uid) { return /databases/$(database)/documents/collabTeams/$(tid)/members/$(uid); }
+    function collabAuditPath(sid, eid) { return /databases/$(database)/documents/collabApps/$(sid)/audit/$(eid); }
+    function collabRecordPath(sid, rid) { return /databases/$(database)/documents/collabApps/$(sid)/records/$(rid); }
+
+    function roleRank(role) {
+      return role == 'owner' ? 4 : (role == 'admin' ? 3 : (role == 'editor' ? 2 : (role == 'viewer' ? 1 : 0)));
+    }
+    function teamRank(tid) {
+      return signedIn() && exists(teamMemberPath(tid, me())) && get(collabTeamPath(tid)).data.status == 'active'
+        ? roleRank(get(teamMemberPath(tid, me())).data.role) : 0;
+    }
+    function directRank(sid) {
+      return signedIn() && exists(collabMemberPath(sid, me())) ? roleRank(get(collabMemberPath(sid, me())).data.role) : 0;
+    }
+    // Rank in a shared app: own membership or the team's (capped at admin). Zero once sharing stopped.
+    function appRank(sid) {
+      let app = get(collabAppPath(sid)).data;
+      let d = directRank(sid);
+      let tr = app.teamId == null ? 0 : teamRank(app.teamId);
+      let t = tr > 3 ? 3 : tr;
+      return app.status != 'active' ? 0 : (d > t ? d : t);
+    }
+    function isAppOwner(sid) { return signedIn() && get(collabAppPath(sid)).data.ownerUid == me(); }
+    function appStopped(sid) { return get(collabAppPath(sid)).data.status == 'deleted'; }
+    function isTeamOwner(tid) { return signedIn() && get(collabTeamPath(tid)).data.ownerUid == me(); }
+    function teamStopped(tid) { return get(collabTeamPath(tid)).data.status == 'deleted'; }
+
+    function validCollabMember(d) {
+      return d.keys().hasAll(['role', 'name', 'joinedAt', 'addedBy', 'installedVersion'])
+        && d.keys().hasOnly(['role', 'name', 'joinedAt', 'addedBy', 'installedVersion'])
+        && d.role in ['owner', 'admin', 'editor', 'viewer']
+        && str(d.name, 0, 40) && noMarkup(d.name)
+        && d.joinedAt is timestamp
+        && str(d.addedBy, 1, 128)
+        && d.installedVersion is int && d.installedVersion >= 0;
+    }
+    // Invites store only the SHA-256 of their secret (the document id). Uses move only in kalamCollabJoin.
+    function validCollabInvite(d, rank) {
+      return d.keys().hasAll(['role', 'createdBy', 'createdAt', 'expiresAt', 'maxUses', 'uses'])
+        && d.keys().hasOnly(['role', 'createdBy', 'createdAt', 'expiresAt', 'maxUses', 'uses'])
+        && d.role in ['admin', 'editor', 'viewer'] && roleRank(d.role) < rank
+        && d.createdBy == me() && d.createdAt == request.time
+        && d.expiresAt is timestamp && d.expiresAt > request.time && d.expiresAt <= request.time + duration.value(31, 'd')
+        && d.maxUses is int && d.maxUses >= 1 && d.maxUses <= 50
+        && d.uses == 0;
+    }
+
+    match /collabApps/{sid} {
+      function validCollabApp(d) {
+        return d.keys().hasAll(['ownerUid', 'title', 'status', 'specGz', 'specHash', 'specVersion', 'teamId', 'createdAt', 'updatedAt'])
+          && d.keys().hasOnly(['ownerUid', 'title', 'status', 'specGz', 'specHash', 'specVersion', 'teamId', 'createdAt', 'updatedAt'])
+          && str(d.title, 1, 60) && noMarkup(d.title)
+          && d.status in ['active', 'deleted']
+          // gzip+base64 of at most 100 KB of JSON, like published specs.
+          && str(d.specGz, 24, 140000)
+          && sha(d.specHash)
+          && d.specVersion is int && d.specVersion >= 1
+          && (d.teamId == null || (d.teamId is string && d.teamId.matches('^t[a-z0-9]{19}$')))
+          && d.createdAt is timestamp
+          && d.updatedAt is timestamp;
+      }
+
+      // Members read it even after sharing stopped, so their device can tell and remove its copy.
+      allow get: if signedIn() && (resource.data.ownerUid == me() || directRank(sid) >= 1
+        || (resource.data.status == 'active' && resource.data.teamId != null && teamRank(resource.data.teamId) >= 1));
+      allow list: if false;
+
+      allow create: if signedIn()
+        && sid.matches('^s[a-z0-9]{19}$')
+        && validCollabApp(request.resource.data)
+        && request.resource.data.ownerUid == me()
+        && request.resource.data.status == 'active'
+        && request.resource.data.specVersion == 1
+        && request.resource.data.teamId == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && getAfter(collabMemberPath(sid, me())).data.role == 'owner';
+
+      // Only the owner changes the design (one version up, with its audit line), the team or the
+      // status (active to deleted, never back).
+      allow update: if signedIn()
+        && resource.data.ownerUid == me()
+        && resource.data.status == 'active'
+        && validCollabApp(request.resource.data)
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && (request.resource.data.teamId == resource.data.teamId || request.resource.data.teamId == null
+            || teamRank(request.resource.data.teamId) >= 3)
+        && ((request.resource.data.specVersion == resource.data.specVersion
+              && request.resource.data.specHash == resource.data.specHash
+              && request.resource.data.specGz == resource.data.specGz)
+          || (request.resource.data.specVersion == resource.data.specVersion + 1
+              && request.resource.data.status == 'active'
+              && getAfter(collabAuditPath(sid, 's_' + string(request.resource.data.specVersion))).data.actor == me()));
+
+      allow delete: if signedIn() && resource.data.ownerUid == me() && resource.data.status == 'deleted';
+
+      match /members/{uid} {
+        allow read: if signedIn() && (uid == me() || appRank(sid) >= 1 || isAppOwner(sid));
+
+        // Only the owner's own row, written with the shared app in one batch.
+        allow create: if signedIn() && uid == me()
+          && validCollabMember(request.resource.data)
+          && request.resource.data.role == 'owner'
+          && request.resource.data.addedBy == me()
+          && request.resource.data.joinedAt == request.time
+          && !exists(collabAppPath(sid))
+          && getAfter(collabAppPath(sid)).data.ownerUid == me();
+
+        // A member keeps their own public name and installed design version up to date.
+        allow update: if signedIn() && uid == me()
+          && appRank(sid) >= 1
+          && validCollabMember(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'installedVersion']);
+
+        // A manager changes the role of someone ranked below them, never to or from owner.
+        allow update: if signedIn() && uid != me()
+          && appRank(sid) >= 3
+          && validCollabMember(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
+          && request.resource.data.role != 'owner'
+          && roleRank(resource.data.role) < appRank(sid)
+          && roleRank(request.resource.data.role) < appRank(sid);
+
+        // Leaving (not the owner), removal by someone ranked above, or the owner's clean-up after stopping.
+        allow delete: if signedIn() && (
+          (uid == me() && resource.data.role != 'owner')
+          || (appRank(sid) >= 3 && roleRank(resource.data.role) < appRank(sid))
+          || (isAppOwner(sid) && appStopped(sid)));
+      }
+
+      // One entry. Writes need editor or above, must move the version up by exactly one (so a stale
+      // device cannot overwrite a newer change), and must write the matching audit line.
+      match /records/{rid} {
+        function validCollabRecord(d) {
+          return d.keys().hasAll(['collectionId', 'values', 'version', 'deleted', 'createdBy', 'updatedBy', 'updatedAt'])
+            && d.keys().hasOnly(['collectionId', 'values', 'version', 'deleted', 'createdBy', 'updatedBy', 'updatedAt'])
+            && d.collectionId is string && d.collectionId.matches('^[a-z][a-z0-9_]{0,47}$')
+            && d.values is map && d.values.size() <= 30
+            && d.version is int
+            && d.deleted is bool
+            && (!d.deleted || d.values.size() == 0)
+            && d.createdBy is string
+            && d.updatedBy == me()
+            && d.updatedAt == request.time;
+        }
+        function auditFollows(v) {
+          return getAfter(collabAuditPath(sid, 'r_' + rid + '_' + string(v))).data.actor == me();
+        }
+
+        allow read: if signedIn() && (appRank(sid) >= 1 || isAppOwner(sid));
+        allow create: if signedIn()
+          && rid.matches('^[A-Za-z0-9_-]{1,64}$')
+          && appRank(sid) >= 2
+          && validCollabRecord(request.resource.data)
+          && request.resource.data.version == 1
+          && request.resource.data.createdBy == me()
+          && auditFollows(1);
+        allow update: if signedIn()
+          && appRank(sid) >= 2
+          && validCollabRecord(request.resource.data)
+          && request.resource.data.version == resource.data.version + 1
+          && request.resource.data.collectionId == resource.data.collectionId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && auditFollows(request.resource.data.version);
+        allow delete: if signedIn() && isAppOwner(sid) && appStopped(sid);
+      }
+
+      // Who did what and when (docs/14 §17.7). Never record values. Append-only.
+      match /audit/{eid} {
+        function validCollabAudit(d) {
+          return d.keys().hasAll(['actor', 'kind', 'at'])
+            && d.keys().hasOnly(['actor', 'kind', 'at', 'target', 'collectionId', 'version', 'role'])
+            && d.actor == me()
+            && d.at == request.time
+            && (!('target' in d) || str(d.target, 1, 128))
+            && (!('collectionId' in d) || str(d.collectionId, 1, 48))
+            && (!('version' in d) || d.version is int)
+            && (!('role' in d) || d.role in ['owner', 'admin', 'editor', 'viewer']);
+        }
+        function eventId() { return eid.matches('^e_[0-9]{1,15}_[a-z0-9]{6}$'); }
+
+        allow read: if signedIn() && (appRank(sid) >= 1 || isAppOwner(sid));
+        allow create: if signedIn() && validCollabAudit(request.resource.data) && (
+          // An entry change: written with the entry, one line per version.
+          (request.resource.data.kind in ['record_created', 'record_updated', 'record_deleted']
+            && 'target' in request.resource.data && 'version' in request.resource.data
+            && eid == 'r_' + request.resource.data.target + '_' + string(request.resource.data.version)
+            && getAfter(collabRecordPath(sid, request.resource.data.target)).data.version == request.resource.data.version
+            && getAfter(collabRecordPath(sid, request.resource.data.target)).data.updatedBy == me())
+          // A new design version, written with the app by its owner.
+          || (request.resource.data.kind == 'spec_updated'
+            && 'version' in request.resource.data
+            && eid == 's_' + string(request.resource.data.version)
+            && getAfter(collabAppPath(sid)).data.ownerUid == me()
+            && getAfter(collabAppPath(sid)).data.specVersion == request.resource.data.version)
+          // Sharing starts: written with the app.
+          || (request.resource.data.kind == 'shared' && eid == 'shared'
+            && !exists(collabAppPath(sid)) && getAfter(collabAppPath(sid)).data.ownerUid == me())
+          // Membership, invite and team changes by a manager.
+          || (request.resource.data.kind in ['member_role_changed', 'member_removed', 'invite_created', 'invite_revoked', 'team_app_added', 'team_app_removed', 'stopped']
+            && eventId() && (appRank(sid) >= 3 || isAppOwner(sid)))
+          // Leaving: written while removing one's own row.
+          || (request.resource.data.kind == 'member_left' && eventId()
+            && exists(collabMemberPath(sid, me())) && !existsAfter(collabMemberPath(sid, me()))));
+        allow update: if false;
+        allow delete: if signedIn() && isAppOwner(sid) && appStopped(sid);
+      }
+
+      match /invites/{hash} {
+        allow read: if signedIn() && (appRank(sid) >= 3 || isAppOwner(sid));
+        allow create: if signedIn()
+          && hash.matches('^[0-9a-f]{64}$')
+          && appRank(sid) >= 3
+          && validCollabInvite(request.resource.data, appRank(sid));
+        allow update: if false;
+        allow delete: if signedIn() && (appRank(sid) >= 3 || isAppOwner(sid));
+      }
+
+      // Which design version each person has (docs/14 §21.2 deployment status), for people invited directly
+      // and people who get the app through its team alike. Each person writes only their own; the owner and
+      // admins read them. Nothing else about a person is kept here.
+      match /installs/{uid} {
+        allow read: if signedIn() && (uid == me() || appRank(sid) >= 3 || isAppOwner(sid));
+        allow create, update: if signedIn() && uid == me()
+          && appRank(sid) >= 1
+          && request.resource.data.keys().hasAll(['version', 'at'])
+          && request.resource.data.keys().hasOnly(['version', 'at'])
+          && request.resource.data.version is int && request.resource.data.version >= 1
+          && request.resource.data.at == request.time;
+        allow delete: if signedIn() && isAppOwner(sid) && appStopped(sid);
+      }
+    }
+
+    // Teams: a group of people and a directory of shared apps. The directory is only a list; access to
+    // each app is checked on the app itself (its teamId), so a wrong directory entry opens nothing.
+    match /collabTeams/{tid} {
+      function validTeam(d) {
+        return d.keys().hasAll(['name', 'ownerUid', 'status', 'apps', 'createdAt', 'updatedAt'])
+          && d.keys().hasOnly(['name', 'ownerUid', 'status', 'apps', 'createdAt', 'updatedAt'])
+          && str(d.name, 1, 60) && noMarkup(d.name)
+          && d.status in ['active', 'deleted']
+          && d.apps is list && d.apps.size() <= 30
+          && d.createdAt is timestamp
+          && d.updatedAt is timestamp;
+      }
+
+      allow get: if signedIn() && (resource.data.ownerUid == me() || teamRank(tid) >= 1);
+      allow list: if false;
+      allow create: if signedIn()
+        && tid.matches('^t[a-z0-9]{19}$')
+        && validTeam(request.resource.data)
+        && request.resource.data.ownerUid == me()
+        && request.resource.data.status == 'active'
+        && request.resource.data.apps.size() == 0
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && getAfter(teamMemberPath(tid, me())).data.role == 'owner';
+      // The owner renames or deletes the team (active to deleted, never back).
+      allow update: if signedIn()
+        && resource.data.ownerUid == me()
+        && resource.data.status == 'active'
+        && validTeam(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'status', 'apps', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time;
+      // Admins keep the app directory up to date.
+      allow update: if signedIn()
+        && teamRank(tid) >= 3
+        && validTeam(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['apps', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if signedIn() && resource.data.ownerUid == me() && resource.data.status == 'deleted';
+
+      match /members/{uid} {
+        allow read: if signedIn() && (uid == me() || teamRank(tid) >= 1 || isTeamOwner(tid));
+        allow create: if signedIn() && uid == me()
+          && validCollabMember(request.resource.data)
+          && request.resource.data.role == 'owner'
+          && request.resource.data.addedBy == me()
+          && request.resource.data.joinedAt == request.time
+          && !exists(collabTeamPath(tid))
+          && getAfter(collabTeamPath(tid)).data.ownerUid == me();
+        allow update: if signedIn() && uid == me()
+          && teamRank(tid) >= 1
+          && validCollabMember(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'installedVersion']);
+        allow update: if signedIn() && uid != me()
+          && teamRank(tid) >= 3
+          && validCollabMember(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
+          && request.resource.data.role != 'owner'
+          && roleRank(resource.data.role) < teamRank(tid)
+          && roleRank(request.resource.data.role) < teamRank(tid);
+        allow delete: if signedIn() && (
+          (uid == me() && resource.data.role != 'owner')
+          || (teamRank(tid) >= 3 && roleRank(resource.data.role) < teamRank(tid))
+          || (isTeamOwner(tid) && teamStopped(tid)));
+      }
+
+      match /invites/{hash} {
+        allow read: if signedIn() && (teamRank(tid) >= 3 || isTeamOwner(tid));
+        allow create: if signedIn()
+          && hash.matches('^[0-9a-f]{64}$')
+          && teamRank(tid) >= 3
+          && validCollabInvite(request.resource.data, teamRank(tid));
+        allow update: if false;
+        allow delete: if signedIn() && (teamRank(tid) >= 3 || isTeamOwner(tid));
+      }
     }
   }
 }

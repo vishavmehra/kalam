@@ -1,0 +1,12 @@
+# The flows added after the first six (restart, offline, drawing, cloud-only request, back and keyboard), in order, in one
+# session. They start from the state flows 01 to 06 leave behind: one saved expense app with one record of 250.
+# Run locally with `maestro test .maestro/extended.yaml` after `maestro test .maestro/smoke.yaml`. CI runs every file in
+# .maestro/flows one at a time, so these are picked up there without being listed.
+appId: com.kalam.app
+name: Kalam extended smoke
+---
+- runFlow: flows/07-restart-keeps-data.yaml
+- runFlow: flows/08-offline.yaml
+- runFlow: flows/09-drawing.yaml
+- runFlow: flows/10-cloud-needed-without-cloud.yaml
+- runFlow: flows/11-back-and-keyboard.yaml

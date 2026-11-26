@@ -3,10 +3,13 @@
  * live stages → result. Cancelling aborts the request and keeps every input.
  */
 import { useCallback } from 'react';
+
+import type { CreationResult } from '@/core/contracts';
+import { reportError } from '@/core/telemetry';
+import { createBlocker, mediaEvent, prepareCreation } from '@/features/media';
+import { t } from '@/i18n/active';
 import { getServices } from '@/services';
 import { selectDraft, useCreationStore } from '@/state/creation-store';
-import { buildNormalizedInput, draftBlocker } from '@/features/input/normalize';
-import type { CreationResult } from '@/core/contracts';
 
 let controller: AbortController | undefined;
 
@@ -20,20 +23,24 @@ export function useCreateRun() {
     const state = useCreationStore.getState();
     if (state.run.status === 'running') return undefined;
     const draft = selectDraft(state);
-    if (draftBlocker(draft)) return undefined;
+    if (createBlocker(draft)) return undefined;
     // Snapshot: store updates replace arrays/objects immutably, so later edits never mutate this request.
-    const input = buildNormalizedInput(draft);
+    // The media session's notes, answers, video steps and recordings ride along (docs/06 §13).
+    const input = prepareCreation(draft).input;
     controller?.abort();
     const ac = new AbortController();
     controller = ac;
     startRun();
+    mediaEvent('compile_started');
     try {
       const result = await getServices().createApplication(input, { signal: ac.signal, onStage });
       if (ac.signal.aborted) return undefined;
       finishRun(result, draft);
+      mediaEvent(result.ok ? 'compile_succeeded' : 'compile_failed');
       return result;
     } catch (e) {
       if (ac.signal.aborted) return undefined;
+      reportError(e); // an error code only, never the message (it may quote the person's input)
       const failed: CreationResult = {
         ok: false,
         classification: {
@@ -41,10 +48,12 @@ export function useCreateRun() {
           requiresMultimodalReasoning: false, requiresCloudReasoning: false, confidence: 0, method: 'deterministic', reasons: [],
         },
         route: 'manual', provider: 'none', warnings: [], errors: [],
-        message: e instanceof Error && e.message.length < 200 ? e.message : 'Something went wrong while building. Your input is kept.',
+        // Plain words in the UI language; a raw error text (TypeError, fetch) is never shown.
+        message: t('create.error.generic'),
         latencyMs: 0,
       };
       finishRun(failed, draft);
+      mediaEvent('compile_failed');
       return failed;
     } finally {
       if (controller === ac) controller = undefined;
@@ -55,6 +64,7 @@ export function useCreateRun() {
     controller?.abort();
     controller = undefined;
     cancelRun();
+    mediaEvent('cancelled');
   }, [cancelRun]);
 
   return { run, cancel };

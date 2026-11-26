@@ -9,6 +9,7 @@
  */
 import type {
   CreateApplication,
+  CreationResult,
   DrawingDocument,
   DrawingSummary,
   NormalizedImage,
@@ -26,8 +27,17 @@ import {
   toClassificationResult,
 } from './expectations';
 import { buildSketchDocument, expectedExtraction } from './sketch-builder';
+import {
+  builtDetail,
+  modalityReviewInput,
+  notBuiltDetail,
+  sketchReviewInput,
+  textReviewInput,
+  titleOf,
+} from './review';
 import type {
   BuildResult,
+  CaseDetail,
   CaseResult,
   Dataset,
   EvalMode,
@@ -64,6 +74,8 @@ export interface EvalOptions {
   beforeCloud?: () => string | undefined;
   /** Live only. Total model requests made so far, to attribute calls to cases. */
   httpCalls?: () => number;
+  /** Keep the built spec, its plain-language summary and the automatic checks on each case, for the scoring page. */
+  captureDetail?: boolean;
 }
 
 const ms = (n: number): number => Math.round(n * 100) / 100;
@@ -79,6 +91,8 @@ interface CaseInput {
   input: NormalizedInput;
   expected: GoldenExpected;
   extraction?: ExtractionResult;
+  /** What the scoring page shows about the request. Used only when opts.captureDetail is set. */
+  detailBase?: Pick<CaseDetail, 'title' | 'tags' | 'input' | 'expected' | 'goldenNote'>;
 }
 
 function describeOk(spec: KalamSpec, describe: EvalDeps['describe']): boolean {
@@ -117,6 +131,7 @@ async function runCase(c: CaseInput, deps: EvalDeps, opts: EvalOptions): Promise
 
   let build: BuildResult;
   let spec: KalamSpec | undefined;
+  let created: CreationResult | undefined;
   let offline: CaseResult['offline'];
   const tb = deps.now();
   if (cls.route === 'template' || opts.mode === 'live') {
@@ -133,6 +148,7 @@ async function runCase(c: CaseInput, deps: EvalDeps, opts: EvalOptions): Promise
     } else {
       const callsBefore = opts.httpCalls?.() ?? 0;
       const res = await deps.createApplication(c.input);
+      created = res;
       spec = res.spec;
       const check = spec ? deps.validate(spec) : undefined;
       const errors = res.ok
@@ -154,6 +170,7 @@ async function runCase(c: CaseInput, deps: EvalDeps, opts: EvalOptions): Promise
         ...(opts.httpCalls ? { httpCalls: opts.httpCalls() - callsBefore } : {}),
         errors,
         warnings: res.warnings.length,
+        ...(res.compileAttempts?.length ? { attempts: res.compileAttempts } : {}),
       };
     }
   } else {
@@ -182,7 +199,12 @@ async function runCase(c: CaseInput, deps: EvalDeps, opts: EvalOptions): Promise
     if (x.stamps.missing.length) failures.push(`extraction.stamps: ${x.stamps.missing.join(', ')}`);
   }
   if (build.stage !== 'skipped') {
-    if (!build.ok) failures.push(`build (${build.stage}): ${build.errors[0] ?? 'failed'}`);
+    if (!build.ok) {
+      // Name the pass and stage that stopped it, and its first codes, not only the person-facing message.
+      const last = build.attempts?.[build.attempts.length - 1];
+      const where = last ? ` [${last.pass} pass, ${last.stage}${last.issues.length ? `: ${last.issues.slice(0, 3).join('; ')}` : ''}]` : '';
+      failures.push(`build (${build.stage}): ${build.errors[0] ?? 'failed'}${where}`);
+    }
     else if (!build.valid) failures.push('build: final spec failed validateSpec');
     else if (!build.describeOk) failures.push('build: describeSpec did not produce a usable summary');
   }
@@ -203,6 +225,45 @@ async function runCase(c: CaseInput, deps: EvalDeps, opts: EvalOptions): Promise
   }
   if (runtime && !runtime.ok) failures.push(`runtime: ${runtime.failed.slice(0, 3).join('; ')}`);
 
+  let detail: CaseDetail | undefined;
+  if (opts.captureDetail && c.detailBase) {
+    if (spec && created && build.ok) {
+      detail = builtDetail(
+        c.detailBase,
+        {
+          spec,
+          ...(created.understanding ? { understanding: created.understanding } : {}),
+          clarifications: created.clarifications ?? [],
+        },
+        {
+          expected: c.expected,
+          valid: build.valid,
+          warnings: created.warnings,
+          route: created.route,
+          semantic,
+          runtime,
+          classificationRoute: cls.route,
+          describeOk: build.describeOk,
+        },
+      );
+    } else {
+      const vague = checks.lowConfidence;
+      detail = notBuiltDetail(
+        c.detailBase,
+        build.skippedReason ?? offline?.message ?? build.errors[0] ?? 'No app was built.',
+        vague
+          ? [
+              {
+                id: 'vague',
+                label: 'Kalam noticed the request is too vague to build from, so it should ask first',
+                status: vague.ok ? 'pass' : 'fail',
+              },
+            ]
+          : [],
+      );
+    }
+  }
+
   return {
     id: c.id,
     dataset: c.dataset,
@@ -220,6 +281,7 @@ async function runCase(c: CaseInput, deps: EvalDeps, opts: EvalOptions): Promise
     ...(c.needsAssets ? { needsAssets: c.needsAssets } : {}),
     latencyMs: { classify: ms(t1 - t0), build: ms(t2 - tb), total: ms(t2 - t0) },
     failures,
+    ...(detail ? { detail } : {}),
   };
 }
 
@@ -241,6 +303,13 @@ export function evaluateTextCase(c: GoldenTextCase, deps: EvalDeps, opts: EvalOp
       ...(c.needsAssets ? { needsAssets: c.needsAssets } : {}),
       input: textCaseInput(c),
       expected: c.expected,
+      detailBase: {
+        title: titleOf(c),
+        tags: c.tags,
+        input: textReviewInput(c),
+        expected: c.expected,
+        ...(c.notes ? { goldenNote: c.notes } : {}),
+      },
     },
     deps,
     opts,
@@ -253,7 +322,41 @@ export function sketchCaseInput(summary: DrawingSummary): NormalizedInput {
   return { text: '', modalities: ['drawing'], images: [], drawing: summary, language: 'en' };
 }
 
-export function evaluateSketchCase(c: GoldenSketchCase, deps: EvalDeps, opts: EvalOptions): Promise<CaseResult> {
+/** A real photo of a hand-drawn sketch, read from disk by scripts/eval.mjs (never stored in the report). */
+export interface SketchPhoto {
+  file: string;
+  bytes: number;
+  mimeType: 'image/jpeg' | 'image/png';
+  base64: string;
+  width: number;
+  height: number;
+}
+
+/** What the app does with a photographed sketch: one photo, no drawing summary. */
+export function photoCaseInput(id: string, photo: SketchPhoto): NormalizedInput {
+  return {
+    text: '',
+    modalities: ['image'],
+    images: [
+      {
+        id: `img_${id}_photo`,
+        mimeType: photo.mimeType,
+        base64: photo.base64,
+        width: photo.width,
+        height: photo.height,
+        source: 'photo',
+      },
+    ],
+    language: 'en',
+  };
+}
+
+export function evaluateSketchCase(
+  c: GoldenSketchCase,
+  deps: EvalDeps,
+  opts: EvalOptions,
+  photo?: SketchPhoto,
+): Promise<CaseResult> {
   const summary = deps.summarizeDrawing(buildSketchDocument(c));
   return runCase(
     {
@@ -263,9 +366,17 @@ export function evaluateSketchCase(c: GoldenSketchCase, deps: EvalDeps, opts: Ev
       ambiguous: !!c.ambiguous,
       review: reviewOf(c),
       ...(c.needsAssets ? { needsAssets: c.needsAssets } : {}),
-      input: sketchCaseInput(summary),
+      input: photo ? photoCaseInput(c.id, photo) : sketchCaseInput(summary),
       expected: c.expected,
-      extraction: checkExtraction(summary, c.pages.length, expectedExtraction(c)),
+      // A photo has no stamps to count, so the drawing-summary checks only apply to the layout version.
+      ...(photo ? {} : { extraction: checkExtraction(summary, c.pages.length, expectedExtraction(c)) }),
+      detailBase: {
+        title: c.title,
+        tags: [...c.tags, ...(photo ? ['real-photo'] : [])],
+        input: sketchReviewInput(c, photo ? { file: photo.file, bytes: photo.bytes } : undefined),
+        expected: c.expected,
+        ...(c.notes ? { goldenNote: c.notes } : {}),
+      },
     },
     deps,
     opts,
@@ -286,7 +397,7 @@ const placeholder = (id: string, i: number, source: NormalizedImage['source']): 
   source,
 });
 
-export function modalityCaseInput(c: GoldenModalityCase, sketchSummary?: DrawingSummary): NormalizedInput {
+export function modalityCaseInput(c: GoldenModalityCase, sketchSummary?: DrawingSummary, frames?: readonly NormalizedImage[]): NormalizedInput {
   const modalities: NormalizedInput['modalities'] = [];
   const input: NormalizedInput = {
     text: c.text ?? '',
@@ -305,7 +416,7 @@ export function modalityCaseInput(c: GoldenModalityCase, sketchSummary?: Drawing
   }
   if (c.video) {
     input.video = {
-      frames: Array.from({ length: c.video.frames }, (_, i) => placeholder(c.id, i, 'video_frame')),
+      frames: frames ? [...frames] : Array.from({ length: c.video.frames }, (_, i) => placeholder(c.id, i, 'video_frame')),
       durationSec: c.video.durationSec,
       ...(c.video.summary ? { summary: c.video.summary } : {}),
     };
@@ -323,6 +434,8 @@ export function evaluateModalityCase(
   sketches: readonly GoldenSketchCase[],
   deps: EvalDeps,
   opts: EvalOptions,
+  /** Real image frames for a video case (stills standing in for a decoded video). The case then runs live instead of being skipped. */
+  frames?: readonly NormalizedImage[],
 ): Promise<CaseResult> {
   const sketch = c.sketch ? sketches.find((s) => s.id === c.sketch) : undefined;
   if (c.sketch && !sketch) throw new Error(`${c.id}: unknown sketch "${c.sketch}"`);
@@ -334,9 +447,16 @@ export function evaluateModalityCase(
       language: c.language,
       ambiguous: !!c.ambiguous,
       review: reviewOf(c),
-      ...(c.needsAssets ? { needsAssets: c.needsAssets } : {}),
-      input: modalityCaseInput(c, summary),
+      ...(c.needsAssets && !frames ? { needsAssets: c.needsAssets } : {}),
+      input: modalityCaseInput(c, summary, frames),
       expected: c.expected,
+      detailBase: {
+        title: titleOf(c),
+        tags: c.tags,
+        input: modalityReviewInput(c, sketch),
+        expected: c.expected,
+        ...(c.notes ? { goldenNote: c.notes } : {}),
+      },
     },
     deps,
     opts,

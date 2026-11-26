@@ -108,11 +108,15 @@ describe('making and ending links', () => {
     await controller.refresh();
     // The phone field of the order app becomes a number after the draft was made.
     const drift = specWith(APP_O, 'Order Book', { orders: { ...orders, fields: { ...orders.fields, phone: { type: 'number', label: 'Phone' } } } });
-    const draft = { ...sendDraft(), mapping: { phone: 'phone' } };
+    const draft = { ...sendDraft(), mapping: { name: 'customer_name', phone: 'phone' } };
     r.apps.set(APP_O, { ...r.apps.get(APP_O)!, spec: drift });
     await controller.refresh();
     const result = await controller.create(draft, customerSpec);
-    expect(result.ok).toBe(false);
+    // The required customer name is filled, so the type of the phone field is the only reason.
+    expect(result).toMatchObject({ ok: false, reason: 'bad_fields' });
+    if (result.ok) throw new Error('expected a refusal');
+    expect(result.problems?.map((p) => p.code)).toEqual(['destination_type_changed']);
+    expect(result.problems?.[0].message).toBe('The field "Phone" in Order Book is a number and cannot hold text.');
     expect(await r.store.list()).toEqual([]);
   });
 });

@@ -2,6 +2,8 @@ import type { LucideIcon } from 'lucide-react-native';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 
+import { useT } from '@/i18n/react';
+
 import { usePresence } from './presence';
 import { Sheet } from './Sheet';
 import { Text } from './Text';
@@ -45,6 +47,7 @@ export function Menu({ visible, onClose, items, title, anchor }: MenuProps) {
 
 function Popover({ visible, onClose, items, title, anchor }: Required<Omit<MenuProps, 'anchor'>> & { anchor: MenuAnchor }) {
   const theme = useKalamTheme();
+  const tr = useT(theme.uiLanguage);
   const { width, height } = useBreakpoint();
   const reduced = theme.reducedMotion;
   const { mounted, progress } = usePresence(visible, reduced ? 80 : 150, 100);
@@ -59,7 +62,7 @@ function Popover({ visible, onClose, items, title, anchor }: Required<Omit<MenuP
   const left = Math.min(Math.max(12, anchor.x + anchor.width - menuW), width - menuW - 12);
   return (
     <Modal transparent visible={mounted} onRequestClose={onClose} animationType="none">
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} tabIndex={-1} accessibilityLabel="Close menu" />
+      <Pressable role="button" style={StyleSheet.absoluteFill} onPress={onClose} tabIndex={-1} accessibilityLabel={tr('common.close')} />
       <Animated.View
         role="menu"
         aria-label={title}

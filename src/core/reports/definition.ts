@@ -14,7 +14,8 @@ export const reportMetricSchema = z
     operation: z.enum(METRIC_OPERATIONS),
     /** Number field for sum and average. Count takes none. */
     field: idSchema.optional(),
-    label: z.string().min(1).max(60),
+    /** Same limit as a spec label, so a chart's label always fits. */
+    label: z.string().min(1).max(120),
   })
   .strict()
   .refine((m) => (m.operation === 'count') === (m.field === undefined), {
@@ -64,7 +65,7 @@ export function chartToReport(c: ChartComponent): ReportDefinition {
     // A time chart with no range shows the last 8 periods; a split by field covers all entries.
     range: c.range ?? (c.period ? { last: 8, unit: c.period } : 'all'),
     groupBy: c.period ? { kind: 'time', unit: c.period } : { kind: 'field', field: c.groupBy ?? '' },
-    metrics: [{ operation: c.metric, field: c.field, label: c.label }],
+    metrics: [{ operation: c.metric, field: c.valueField, label: c.label }],
     view: c.chart,
   };
 }

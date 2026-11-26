@@ -6,7 +6,7 @@
  * Usage: node scripts/build-pwa.mjs [distDir]
  */
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -24,8 +24,9 @@ const ICONS = [
 ];
 /** iOS Safari ignores manifest icons for "Add to Home Screen" and wants this one (180 px, opaque, full bleed). */
 const TOUCH_ICON = 'apple-touch-icon.png';
-const THEME = '#315C4C';
-const BACKGROUND = '#F8F7F2';
+/** Paper canvas (iconColors.paper in src/design/tokens.ts): the install splash and the title bar match the app splash. brand-assets.test.ts checks it. */
+const THEME = '#F4F5F0';
+const BACKGROUND = '#F4F5F0';
 /** Not needed at runtime (source maps, Expo export metadata) or must never be precached (the worker). */
 const SKIP = /(^|\/)(sw\.js|metadata\.json|.*\.map)$/;
 
@@ -55,6 +56,40 @@ function writeIcons() {
   };
 }
 
+/**
+ * Install-menu shortcuts (docs/14 §18.3), shown on a long press or right click of the installed icon. These two
+ * are fixed and point at routes in src/app. The apps a person pinned on the shelf are added at run time by the
+ * service worker, only after they switch that on in widget settings (src/features/widgets).
+ */
+export const SHORTCUTS = [
+  { name: 'New app', short_name: 'New app', description: 'Describe or draw a new app', url: '/create' },
+  { name: 'Draw an app', short_name: 'Draw', description: 'Open the Drawing Studio', url: '/create/draw' },
+];
+
+/** The fixed shortcuts for the manifest, each with the 192 px icon when there is one. */
+export function manifestShortcuts(icons = []) {
+  const icon = icons.find((i) => i.sizes === '192x192' && i.purpose === 'any');
+  return SHORTCUTS.map((s) => ({ ...s, ...(icon ? { icons: [{ src: icon.src, sizes: icon.sizes, type: icon.type }] } : {}) }));
+}
+
+/**
+ * Turns the list the page keeps for the worker into manifest shortcuts. The page is trusted no further than
+ * this: only same-origin /app/<id> paths, short names, at most `max`. The worker source contains this very
+ * function (Function.prototype.toString), so what the tests check is what runs. Self-contained on purpose.
+ */
+export function pinnedShortcutEntries(list, max) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const item of list) {
+    if (out.length >= max) break;
+    if (!item || typeof item.name !== 'string' || typeof item.url !== 'string') continue;
+    const name = item.name.trim().slice(0, 30);
+    if (!name || !/^\/app\/[a-z][a-z0-9_-]{2,63}$/.test(item.url)) continue;
+    out.push({ name, short_name: name, url: item.url });
+  }
+  return out;
+}
+
 function writeManifest(icons) {
   const manifest = {
     name: 'Kalam',
@@ -67,6 +102,7 @@ function writeManifest(icons) {
     theme_color: THEME,
     background_color: BACKGROUND,
     icons,
+    shortcuts: manifestShortcuts(icons),
   };
   writeFileSync(join(DIST, 'manifest.webmanifest'), `${JSON.stringify(manifest, null, 2)}\n`);
 }
@@ -92,6 +128,12 @@ const PRECACHE = ${JSON.stringify(precache)};
 // Matches entry-<hash>.js, name.<hash>.ttf and scale variants like name.<hash>@2x.png.
 const HASHED = /[.-][0-9a-f]{8,}(@\\d+(\\.\\d+)?x)?\\.[a-z0-9]+$/i;
 const NAV_TIMEOUT_MS = 4000;
+// Pinned-app shortcuts (docs/14 §18.3): the page writes them to this cache when the person opts in. The name must not
+// start with "kalam-", or activate() below would delete it.
+const PINNED_CACHE = 'pinned-shortcuts';
+const PINNED_URL = '/__kalam/pinned.json';
+const MAX_PINNED = 4;
+const pinnedShortcutEntries = ${pinnedShortcutEntries.toString()};
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -126,6 +168,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   // Never touch cross-origin traffic (Firebase, Google APIs, AI providers) or Firebase Hosting's /__/ paths.
   if (url.origin !== self.location.origin || url.pathname.startsWith('/__/')) return;
+  if (url.pathname === '/manifest.webmanifest') return event.respondWith(manifestWithPinned(request));
   event.respondWith(request.mode === 'navigate' ? networkFirst(request) : cacheFirst(request));
 });
 
@@ -151,6 +194,22 @@ async function cacheFirst(request) {
     caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
   }
   return response;
+}
+
+/** The built manifest, plus the person's pinned apps as shortcuts. Any trouble reading them leaves the manifest as built. */
+async function manifestWithPinned(request) {
+  const base = (await caches.match(request, { cacheName: CACHE })) || (await fetch(request));
+  try {
+    const stored = await (await caches.open(PINNED_CACHE)).match(PINNED_URL);
+    if (!stored) return base;
+    const extra = pinnedShortcutEntries(await stored.json(), MAX_PINNED);
+    if (!extra.length) return base;
+    const manifest = await base.clone().json();
+    manifest.shortcuts = (manifest.shortcuts || []).concat(extra);
+    return new Response(JSON.stringify(manifest), { headers: { 'Content-Type': 'application/manifest+json' } });
+  } catch (_) {
+    return base;
+  }
 }
 `;
 }
@@ -181,4 +240,18 @@ function main() {
   console.log(`build-pwa: ${precache.length} files (${(bytes / 1024 / 1024).toFixed(2)} MB) precached as ${cacheName}`);
 }
 
-main();
+/**
+ * True when this file is the script being run, not a module a test imports. Compares real paths: Node does not resolve a
+ * symlink in argv[1] but does in import.meta.url, so a repo reached through a link (macOS /tmp, some CI mounts) would
+ * otherwise build nothing and still exit 0.
+ */
+export function isDirectRun(argv1, metaUrl) {
+  if (!argv1) return false;
+  try {
+    return realpathSync(argv1) === realpathSync(fileURLToPath(metaUrl));
+  } catch {
+    return false;
+  }
+}
+
+if (isDirectRun(process.argv[1], import.meta.url)) main();

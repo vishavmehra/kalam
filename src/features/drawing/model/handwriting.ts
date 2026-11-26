@@ -66,11 +66,27 @@ const CONTROL = new RegExp('[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u200b\
 
 const NEWLINE = new RegExp('\r?\n');
 
-/** Tidies a reading before the person sees it: one tidy block of text, control characters and runs of blanks removed. */
+/** The lines of `raw` with control characters and runs of blanks removed. Nothing is cut off. */
+function tidyLines(raw: string): string[] {
+  return raw.normalize('NFC').replace(CONTROL, '').split(NEWLINE).map((l) => l.replace(/[ \t]+/g, ' ').trim()).filter(Boolean);
+}
+
+/**
+ * Tidies text the person typed or edited: control characters and runs of blanks removed, nothing cut off.
+ * The box they type in has its own length limit, so what they see is what is used.
+ */
+export function tidyText(raw: string): string {
+  return tidyLines(raw).join('\n');
+}
+
+/** Tidies a model's reading before the person sees it: at most 6 lines and HANDWRITING_MAX_CHARS characters. */
 export function cleanReading(raw: string): string {
-  const lines = raw.normalize('NFC').replace(CONTROL, '').split(NEWLINE);
-  const kept = lines.map((l) => l.replace(/[ \t]+/g, ' ').trim()).filter(Boolean).slice(0, 6);
-  return kept.join('\n').slice(0, HANDWRITING_MAX_CHARS);
+  return tidyLines(raw).slice(0, 6).join('\n').slice(0, HANDWRITING_MAX_CHARS);
+}
+
+/** True when `cleanReading` had to cut some of the model's reading off, so the screen can say so. */
+export function readingWasShortened(raw: string): boolean {
+  return tidyText(raw).length > cleanReading(raw).length;
 }
 
 // ── AI step: request and reply shapes ──────────────────────────────────────────────────────────────

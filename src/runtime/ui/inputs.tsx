@@ -7,6 +7,7 @@ import type { ComponentOf } from '@/core/spec/schema';
 import type { RuntimeTheme } from '../engine/theme';
 import type { FieldDef } from '../engine/types';
 import { useComponentBounds } from '../layout';
+import { useAppT } from '../use-app-t';
 import { useOptionLabel } from '../translation/option-labels';
 import { DateInput } from './DateInput';
 import { font, Pressy } from './kit';
@@ -26,11 +27,12 @@ export function FieldShell({ t, componentId, label, required, error, nativeID, c
   t: RuntimeTheme; componentId: string; label: string; required?: boolean; error?: string; nativeID: string; children: ReactNode;
 }) {
   const bounds = useComponentBounds(componentId);
+  const tr = useAppT();
   return (
     <View {...bounds} style={{ gap: 6 }}>
       <Text nativeID={nativeID} style={[font(t, 14, '500'), { color: t.colors.text }]}>
         {label}
-        {required ? <Text style={{ color: t.colors.textMuted }}> (required)</Text> : null}
+        {required ? <Text style={{ color: t.colors.textMuted }}> {tr('runtime.chrome.required')}</Text> : null}
       </Text>
       {children}
       {error ? (
@@ -85,6 +87,7 @@ export const NumberField = memo(function NumberField({ c, t, def, value, error, 
           {...handlers}
           accessibilityLabel={c.a11yLabel ?? c.label}
           accessibilityLabelledBy={id}
+          accessibilityHint={c.a11yDescription}
           {...invalidProps(id, error, def?.required)}
           value={display(value)}
           onChangeText={onChange}
@@ -110,6 +113,7 @@ export const TextField = memo(function TextField({ c, t, def, value, error, onCh
           {...handlers}
           accessibilityLabel={c.a11yLabel ?? c.label}
           accessibilityLabelledBy={id}
+          accessibilityHint={c.a11yDescription}
           {...invalidProps(id, error, def?.required)}
           value={display(value)}
           onChangeText={onChange}
@@ -136,6 +140,7 @@ export const DateField = memo(function DateField({ c, t, def, value, error, onCh
         value={display(value)}
         onChange={onChange}
         boxStyle={fieldBox(t, focused, error)}
+        hint={c.a11yDescription}
         {...handlers}
       />
     </FieldShell>
@@ -149,7 +154,7 @@ export const ChoiceField = memo(function ChoiceField({ c, t, def, value, error, 
   const id = `lbl_${c.id}`;
   return (
     <FieldShell t={t} componentId={c.id} label={c.label} required={def?.required} error={error} nativeID={id}>
-      <View accessibilityRole="radiogroup" accessibilityLabelledBy={id} style={styles.chips}>
+      <View accessibilityRole="radiogroup" accessibilityLabelledBy={id} accessibilityHint={c.a11yDescription} style={styles.chips}>
         {options.map((o) => {
           const on = value === o;
           return (
@@ -195,6 +200,7 @@ export const ToggleField = memo(function ToggleField({ c, t, value, onChange, on
         onChange(v);
       }}
       accessibilityLabel={c.a11yLabel ?? c.label}
+      accessibilityHint={c.a11yDescription}
       trackColor={{ true: t.colors.primary, false: t.colors.border }}
       thumbColor={t.colors.surface}
     />

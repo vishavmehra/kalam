@@ -5,14 +5,17 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { RecordValue } from '@/core/contracts';
 import type { ComponentOf } from '@/core/spec/schema';
 import { EMPTY_STAT, evaluate, formatStat, formulaContext, formulaReads, type CollectionValues } from '../engine/data';
+import { formulaHint } from '../engine/formula-hint';
 import type { RuntimeTheme } from '../engine/theme';
 import { useComponentBounds } from '../layout';
+import { useOptionalRuntimeContext } from '../RuntimeContext';
+import { useAppT } from '../use-app-t';
 import { font, Pressy, tabular } from './kit';
 
 export const TextBlock = memo(function TextBlock({ c, t }: { c: ComponentOf<'text'>; t: RuntimeTheme }) {
   const bounds = useComponentBounds(c.id);
   return (
-    <Text {...bounds} accessibilityLabel={c.a11yLabel} style={[font(t, 16, '400', 1.5), { color: t.colors.text }]}>
+    <Text {...bounds} accessibilityLabel={c.a11yLabel} accessibilityHint={c.a11yDescription} style={[font(t, 16, '400', 1.5), { color: t.colors.text }]}>
       {c.label}
     </Text>
   );
@@ -25,6 +28,7 @@ export const Heading = memo(function Heading({ c, t }: { c: ComponentOf<'heading
       {...bounds}
       accessibilityRole="header"
       accessibilityLabel={c.a11yLabel}
+      accessibilityHint={c.a11yDescription}
       style={[font(t, 20, '600', 1.3), { color: t.colors.text, marginTop: t.space * 0.5 }]}
     >
       {c.label}
@@ -36,23 +40,36 @@ export const Heading = memo(function Heading({ c, t }: { c: ComponentOf<'heading
  * Stat. Re-evaluates only when its inputs change: records always; the form or app state only if
  * the expression actually reads them (so typing elsewhere doesn't recompute every stat).
  */
-export const Stat = memo(function Stat({ c, t, lang, collections, form, state }: {
+export const Stat = memo(function Stat({ c, t, lang, collections, form, state, selected = null, currency }: {
   c: ComponentOf<'stat'>; t: RuntimeTheme; lang: string; collections: CollectionValues;
   form: Record<string, RecordValue>; state: Record<string, RecordValue>;
+  /** Id of the entry the screen is about (`selected` in the formula). */
+  selected?: string | null;
+  /** Resolved currency (statCurrency). */
+  currency?: string;
 }) {
   const bounds = useComponentBounds(c.id);
   const reads = formulaReads(c.expr);
   const formDep = reads.form ? form : null;
   const stateDep = reads.state ? state : null;
-  const text = useMemo(
-    () => formatStat(c, evaluate(c.expr, formulaContext(collections, formDep ?? {}, stateDep ?? {}, new Date())), lang),
-    [c, collections, formDep, stateDep, lang],
-  );
+  const selectedDep = reads.selected ? selected : null;
+  const tr = useAppT(lang);
+  // Through the app's formula cache (docs/09 §8.6) when a running app provides one: a result is reused only while
+  // everything the formula reads is unchanged.
+  const cache = useOptionalRuntimeContext()?.formulas();
+  const result = useMemo(() => {
+    const fc = formulaContext(collections, formDep ?? {}, stateDep ?? {}, new Date(), selectedDep);
+    return cache ? cache.evaluate(c.expr, fc, lang) : evaluate(c.expr, fc, lang);
+  }, [c.expr, cache, collections, formDep, stateDep, selectedDep, lang]);
+  const text = useMemo(() => formatStat(c, result, lang, currency), [c, result, lang, currency]);
+  // A formula that cannot be worked out shows a dash and says why and what to do (docs/09 §8.7).
+  const hint = useMemo(() => formulaHint(result, lang), [result, lang]);
   return (
     <View
       {...bounds}
       accessible
-      accessibilityLabel={`${c.a11yLabel ?? c.label}: ${text === EMPTY_STAT ? 'not available' : text}`}
+      accessibilityLabel={`${c.a11yLabel ?? c.label}: ${text === EMPTY_STAT ? tr('runtime.stat.unavailable') : text}`}
+      accessibilityHint={[c.a11yDescription, hint?.message].filter(Boolean).join(' ') || undefined}
       // Larger text → wider minimum, so stats reflow to one column instead of truncating.
       style={[styles.stat, { flexBasis: Math.round(150 * t.fontScale), backgroundColor: t.colors.surface, borderColor: t.colors.border, borderWidth: t.borderWidth, borderRadius: t.radius, padding: t.space }]}
     >
@@ -60,6 +77,7 @@ export const Stat = memo(function Stat({ c, t, lang, collections, form, state }:
       <Text style={[font(t, 30, '600', 1.15), tabular, { color: t.colors.text, letterSpacing: -0.5 }]}>
         {text}
       </Text>
+      {hint ? <Text style={[font(t, 12, '400', 1.35), { color: t.colors.textMuted }]}>{hint.message}</Text> : null}
     </View>
   );
 });
@@ -76,6 +94,7 @@ export const BigButton = memo(function BigButton({ c, t, busy, onPress }: {
       {...bounds}
       accessibilityRole="button"
       accessibilityLabel={c.a11yLabel ?? c.label}
+      accessibilityHint={c.a11yDescription}
       accessibilityState={{ busy, disabled: busy }}
       disabled={busy}
       onPress={onPress}
@@ -99,6 +118,7 @@ export const Counter = memo(function Counter({ c, t, value, onStep }: {
   c: ComponentOf<'counter'>; t: RuntimeTheme; value: number; onStep(op: 'increment' | 'decrement'): void;
 }) {
   const bounds = useComponentBounds(c.id);
+  const tr = useAppT();
   const atMin = c.min !== undefined && value <= c.min;
   const atMax = c.max !== undefined && value >= c.max;
   const size = Math.max(t.target, 52);
@@ -106,7 +126,7 @@ export const Counter = memo(function Counter({ c, t, value, onStep }: {
     <Pressy
       key={op}
       accessibilityRole="button"
-      accessibilityLabel={`${label} ${c.label}`}
+      accessibilityLabel={label}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={() => onStep(op)}
@@ -117,16 +137,19 @@ export const Counter = memo(function Counter({ c, t, value, onStep }: {
         : <Minus size={22 * t.fontScale} color={t.colors.primaryText} strokeWidth={2.5} />}
     </Pressy>
   );
+  const up = tr('inputs.number.increase', { label: c.label });
+  const down = tr('inputs.number.decrease', { label: c.label });
   // Left-handed: the frequent action (+) sits on the leading edge. Reading order is unchanged.
   const controls = t.mirror
-    ? [step('increment', atMax, 'Increase'), step('decrement', atMin, 'Decrease')]
-    : [step('decrement', atMin, 'Decrease'), step('increment', atMax, 'Increase')];
+    ? [step('increment', atMax, up), step('decrement', atMin, down)]
+    : [step('decrement', atMin, down), step('increment', atMax, up)];
   return (
     <View
       {...bounds}
       accessible
       accessibilityRole="adjustable"
       accessibilityLabel={c.a11yLabel ?? c.label}
+      accessibilityHint={c.a11yDescription}
       accessibilityValue={{ now: value, min: c.min, max: c.max }}
       accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
       onAccessibilityAction={(e) => {

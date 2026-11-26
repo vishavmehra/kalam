@@ -12,6 +12,7 @@ import { normalizeImageUri } from './image';
 import type { KeyframeResult } from './media';
 
 export class VideoTooLongError extends Error {
+  readonly code = 'video_too_long';
   constructor(public readonly durationSec: number) {
     super(`This video is ${Math.round(durationSec)} seconds long. Choose one that is ${MAX_VIDEO_SECONDS} seconds or shorter.`);
   }

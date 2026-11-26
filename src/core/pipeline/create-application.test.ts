@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createFakeAI } from '../../../tests/fixtures/compiler/fake-ai';
+import { AI_COPY } from '../ai/copy';
 import type { CreationStage, NormalizedInput } from '../contracts';
+import { installTelemetry, type Telemetry } from '../telemetry';
 import { createApplicationPipeline, generateId } from './create-application';
 
 const tailorIR = JSON.parse(readFileSync(new URL('../../../tests/fixtures/compiler/tailor-shop.ir.json', import.meta.url), 'utf8'));
@@ -136,6 +138,16 @@ describe('createApplicationPipeline — cloud route', () => {
     expect(res.understanding?.assumptions).toContain('Measurements are in inches.');
   });
 
+  it('hands the compiler a typed request whose session id every model call carries (D06-037)', async () => {
+    const ai = createFakeAI({ respond: () => ({ raw: tailorIR }) });
+    await createApplicationPipeline({ ai })(text(tailor), { sessionId: 'media_sess_1' });
+    expect(ai.calls.length).toBeGreaterThan(0);
+    expect(ai.calls.every((c) => c.ctx.sessionId === 'media_sess_1')).toBe(true);
+    const made = createFakeAI({ respond: () => ({ raw: tailorIR }) });
+    await createApplicationPipeline({ ai: made })(text(tailor));
+    expect(made.calls[0]!.ctx.sessionId).toMatch(/^create_[a-z0-9]{8}$/);
+  });
+
   it('fails offline in plain language and preserves the input', async () => {
     const ai = createFakeAI({ online: false, respond: () => ({ raw: tailorIR }) });
     const input = text(tailor);
@@ -156,6 +168,31 @@ describe('createApplicationPipeline — cloud route', () => {
     expect(res.ok).toBe(false);
     expect(res.message).toMatch(/Settings/);
     expect(ai.calls).toHaveLength(1);
+  });
+
+  it('says the cloud notice needs an OK, not that cloud AI is off in Settings', async () => {
+    const ai = createFakeAI({ respond: () => ({ error: 'consent_denied', message: AI_COPY.needsCloudOk }) });
+    const res = await createApplicationPipeline({ ai })(text(tailor));
+    expect(res.ok).toBe(false);
+    expect(res.message).toBe(AI_COPY.needsCloudOk);
+    expect(res.message).not.toMatch(/Settings/);
+  });
+
+  it('counts a build that failed, and not empty input or a cancel (opt-in counters)', async () => {
+    const counted: string[] = [];
+    installTelemetry({ count: async (event: string, dimension: unknown) => { counted.push(`${event}:${String(dimension)}`); } } as unknown as Telemetry);
+    try {
+      await createApplicationPipeline({ ai: createFakeAI({ online: false, respond: () => ({ raw: tailorIR }) }) })(text(tailor));
+      expect(counted).toEqual(['flow:compilation_failed']);
+      counted.length = 0;
+      await createApplicationPipeline({ ai: createFakeAI() })(text('   '));
+      const stopped = new AbortController();
+      stopped.abort();
+      await createApplicationPipeline({ ai: createFakeAI({ respond: () => ({ raw: tailorIR }) }) })(text(tailor), { signal: stopped.signal });
+      expect(counted).toEqual([]);
+    } finally {
+      installTelemetry(undefined);
+    }
   });
 
   it('asks for input when nothing was given', async () => {

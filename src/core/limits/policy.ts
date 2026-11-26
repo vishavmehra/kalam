@@ -2,10 +2,13 @@
  * The one versioned limits policy (docs/04 §6.6: "configurable through versioned application policy",
  * "the compiler and runtime must enforce the same limits"; docs/11 §11.1 spec under 100 KB).
  *
- * Every number here was copied, unchanged, from the constant that enforces it today. Until those
- * files read from this object, `policy.test.ts` checks that both sides still agree, so a limit
- * cannot be raised in one place and forgotten in another. Bump `LIMITS_POLICY_VERSION` whenever a
- * value changes, so an old app or backup can say which limits it was made under.
+ * The spec schema, the validator, the formula parser and the edit patcher read their limits from this object
+ * (`LIMITS` in core/spec/schema.ts IS `limitsPolicy.spec`). The other numbers were copied, unchanged, from the
+ * constant that enforces them; `policy.test.ts` checks that both sides still agree, so a limit cannot be raised in
+ * one place and forgotten in another. Bump `LIMITS_POLICY_VERSION` whenever a
+ * value changes, so an old app or backup can say which limits it was made under: `policy.test.ts`
+ * holds a fingerprint of the values for each version and fails until the version is bumped. The
+ * version is printed in the problem report (features/diagnostics).
  *
  * Left out on purpose: sizes that only shape the screen (card widths, chip and list lengths), the
  * formula parse cache (an internal speed-up, not a rule), and ranges that are not whole numbers
@@ -18,12 +21,12 @@ const KB = 1024;
 const MB = 1024 * KB;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export const LIMITS_POLICY_VERSION = '1.0.0';
+export const LIMITS_POLICY_VERSION = '1.1.0';
 
 const policy = {
   version: LIMITS_POLICY_VERSION,
 
-  /** KalamSpec resource limits (docs/05 §13.2). Same keys as `LIMITS` in src/core/spec/schema.ts. */
+  /** KalamSpec resource limits (docs/05 §13.2). `LIMITS` in src/core/spec/schema.ts is this object. */
   spec: {
     screens: 8,
     componentsPerScreen: 40,
@@ -41,6 +44,17 @@ const policy = {
     formulaSteps: 10_000,
     classifyLabels: 12,
     tags: 8,
+    /** KalamSpec 1.1 (docs/05 §15.2). Layout groups on one screen, counting nested ones. */
+    layoutNodesPerScreen: 16,
+    /** A group inside a group inside a group, no deeper. */
+    layoutDepth: 3,
+    layoutChildren: 12,
+    /** Reminder components per app; the Smart Reminders scheduler allows 4 rules per app. */
+    reminders: 4,
+    terminology: 40,
+    timerSeconds: 86_400,
+    /** Characters a stored signature may take in its text field. */
+    signatureLength: 4000,
     /** Largest spec as UTF-8 JSON (docs/11 §11.1, lead decision 6). Same as the Bazaar listing cap. */
     specBytes: 100_000,
     /** Deepest nesting the validator walks (validate.ts MAX_DEPTH). */
@@ -149,6 +163,8 @@ const policy = {
     linksPerApp: 20,
     fieldsPerLink: 30,
     sendBatch: 100,
+    /** Entries the send screen lists at once. */
+    sendWindow: 200,
     sentLedger: 500,
     auditPerLink: 50,
   },

@@ -38,6 +38,11 @@ export interface RuntimeState {
   /** Validation messages for the current screen, keyed by field id. */
   errors: Record<string, string>;
   selection: Selection | null;
+  /**
+   * The entry each screen on the stack was opened with, by screen id. Going back to a page restores its
+   * entry as the selection, so a customer's page still totals that customer after an entry's page was open.
+   */
+  opened?: Record<string, Selection>;
 }
 
 export interface DataSnapshot {
@@ -55,6 +60,10 @@ export interface AIProposal {
   values: FormValues;
   /** Fields the model returned that failed validation (never applied). */
   rejected: Array<{ field: string; reason: string }>;
+  /** Filled fields the model was unsure of (low confidence or smudged), docs/16 R-016. The review should mark these, never present them as confirmed. */
+  uncertain?: string[];
+  /** The model's own confidence and rough place on the page for each filled field (docs/14 §9.4). Its estimate, not a measurement. */
+  readings?: Record<string, { confidence?: 'high' | 'medium' | 'low'; area?: string }>;
   source: InferenceSource;
   provider: string;
   model?: string;
@@ -72,7 +81,7 @@ export type RuntimeEffect =
 
 export type RuntimeErrorCode =
   | 'unknown_action' | 'missing_collection' | 'invalid_screen' | 'validation_failed' | 'no_selection'
-  | 'record_not_found' | 'storage_failed' | 'cancelled' | 'ai_unavailable' | 'ai_failed' | 'missing_input';
+  | 'record_not_found' | 'storage_failed' | 'cancelled' | 'ai_unavailable' | 'ai_failed' | 'missing_input' | 'formula_failed';
 
 export interface ActionResult {
   ok: boolean;

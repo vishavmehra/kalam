@@ -30,3 +30,8 @@ export function canvasFontStack(text: string, weight: ScriptFontWeight, latinFam
   const extra = rest.map((s) => `"${scriptFontFamily(s, weight)}"`);
   return extra.length ? base.replace(', "Noto Sans", ', `, ${extra.join(', ')}, "Noto Sans", `) : base;
 }
+
+/** Everything a page draws as text, so its fonts can be loaded before it is exported. */
+export function pageTextOf(page: { elements: ReadonlyArray<{ kind: string; text?: string; label?: string }> }): string {
+  return page.elements.map((e) => (e.kind === 'text' ? e.text : e.kind === 'stamp' ? e.label : undefined) ?? '').filter(Boolean).join('\n');
+}

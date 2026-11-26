@@ -1,0 +1,46 @@
+{
+  "id": "bad_components",
+  "schemaVersion": "1.1.0",
+  "version": 1,
+  "name": "Bad parts",
+  "lang": "en",
+  "theme": { "primary": "#315C4C", "radius": 12, "fontScale": 1 },
+  "collections": {
+    "tasks": {
+      "fields": {
+        "title": { "type": "text", "label": "Title" },
+        "due": { "type": "text", "label": "Due" },
+        "done": { "type": "enum", "label": "Done", "options": ["yes", "no"] },
+        "minutes": { "type": "text", "label": "Minutes" },
+        "amount": { "type": "number", "label": "Amount" }
+      }
+    }
+  },
+  "screens": [
+    {
+      "id": "home",
+      "title": "Tasks",
+      "form": "tasks",
+      "children": [
+        { "id": "both_splits", "type": "chart", "label": "Split twice", "chart": "bar", "source": "tasks", "metric": "count", "groupBy": "done", "period": "week" },
+        { "id": "sum_no_field", "type": "chart", "label": "Sum of nothing", "chart": "bar", "source": "tasks", "metric": "sum", "groupBy": "done" },
+        { "id": "no_length", "type": "timer", "label": "Countdown", "mode": "countdown" },
+        { "id": "text_timer", "type": "timer", "label": "Time it", "mode": "stopwatch", "field": "minutes" },
+        { "id": "bad_reminder", "type": "reminder", "label": "Remind", "source": "tasks", "dateField": "due", "doneField": "done" },
+        { "id": "ghost_reminder", "type": "reminder", "label": "Remind", "source": "projects", "dateField": "due" },
+        { "id": "number_signature", "type": "signature", "label": "Sign", "field": "amount" }
+      ],
+      "layout": [
+        { "type": "row", "columns": 3, "children": ["both_splits", "ghost"] },
+        { "type": "grid", "title": "Grid", "children": ["both_splits", { "type": "card", "children": [{ "type": "row", "children": [{ "type": "card", "children": ["no_length"] }] }] }] }
+      ]
+    }
+  ],
+  "initialScreen": "home",
+  "actions": {},
+  "aiBlocks": {},
+  "intents": {},
+  "meta": { "createdAt": 1763500000000 },
+  "permissions": [{ "kind": "camera", "reason": "Photos" }, { "kind": "camera", "reason": "Photos again" }],
+  "localization": { "terminology": [{ "term": "Task", "keep": true, "translations": { "hi": "काम" } }, { "term": "Done" }, { "term": "task", "keep": true }] }
+}

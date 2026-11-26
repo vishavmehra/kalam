@@ -134,6 +134,15 @@ function pageNotes(page: DrawingPage, no: number): string[] {
   for (const g of repeats(items, 'column')) notes.push(`Page ${no}: ${g.length} similar items are stacked in a column, which looks like a list.`);
   for (const g of repeats(items, 'row')) notes.push(`Page ${no}: ${g.length} similar items sit side by side in a row, like tabs or buttons.`);
 
+  // Objects the person grouped belong to one part of the screen. That is their own choice, not a guess.
+  const grouped = new Map<string, DrawingElement[]>();
+  for (const el of page.elements) if (!el.hidden && el.groupId) grouped.set(el.groupId, [...(grouped.get(el.groupId) ?? []), el]);
+  for (const members of grouped.values()) {
+    if (members.length < 2) continue;
+    const names = [...new Set(members.map(nameOf).filter(Boolean))].slice(0, 4).join('", "');
+    notes.push(`Page ${no}: the person grouped ${members.length} objects together ("${names}"), so they belong to one part of the screen.`);
+  }
+
   const top = items.filter((i) => i.b.y + i.b.h <= 110 && i.label).sort((a, b) => a.b.y - b.b.y)[0];
   if (top && (top.el.kind === 'text' || top.el.kind === 'stamp')) notes.push(`Page ${no}: "${top.label}" sits at the top, like a screen title.`);
 

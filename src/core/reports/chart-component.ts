@@ -47,8 +47,11 @@ export const chartComponentSchema = z
     /** Collection the chart reads. */
     source: id,
     metric: z.enum(METRIC_OPERATIONS),
-    /** Number field for sum and average. Count takes none. */
-    field: id.optional(),
+    /**
+     * Number field of `source` for sum and average. Count takes none. Not called `field`: across
+     * the codebase a component's `field` is a binding to the screen form, and a chart binds nothing.
+     */
+    valueField: id.optional(),
     /** Enum or yes/no field to split by. Use this or `period`, not both. */
     groupBy: id.optional(),
     /** Time bucket to split by. */
@@ -63,9 +66,9 @@ export const chartComponentSchema = z
     message: 'A chart is split by a field or by a period, not both and not neither.',
     path: ['groupBy'],
   })
-  .refine((c) => (c.metric === 'count') === (c.field === undefined), {
+  .refine((c) => (c.metric === 'count') === (c.valueField === undefined), {
     message: 'Count takes no field. Sum and average need a number field.',
-    path: ['field'],
+    path: ['valueField'],
   });
 
 export type ChartComponent = z.infer<typeof chartComponentSchema>;

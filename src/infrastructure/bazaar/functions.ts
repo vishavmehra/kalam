@@ -26,7 +26,11 @@ function instance(): Functions | undefined {
 export type CallResult<T> = { ok: true; data: T } | { ok: false; message: string; code?: string };
 
 /** Calls a trusted function and turns errors into plain sentences (the server sends safe messages). */
-export async function callBazaar<Req, Res>(name: 'kalamBazaarWallet' | 'kalamBazaarPurchase', data: Req): Promise<CallResult<Res>> {
+export type BazaarFunctionName =
+  | 'kalamBazaarWallet' | 'kalamBazaarPurchase'
+  | 'kalamBazaarModerate' | 'kalamBazaarModerationList' | 'kalamBazaarCount' | 'kalamBazaarStats';
+
+export async function callBazaar<Req, Res>(name: BazaarFunctionName, data: Req): Promise<CallResult<Res>> {
   const f = instance();
   if (!f) return { ok: false, message: 'Kalam Bazaar is not set up in this build.' };
   try {

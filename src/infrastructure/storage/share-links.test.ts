@@ -154,6 +154,18 @@ describe.each(backends)('share links store on %s', (_name, open) => {
     expect((await db.shareLinks.list()).map((l) => l.id)).toEqual(['lnk_integration02']);
   });
 
+  it('a turned off link stays off, even when an older copy of it is saved later', async () => {
+    const { db } = open();
+    await seed(db);
+    await db.shareLinks.put(link());
+    await db.shareLinks.put(link({ status: 'revoked', revokedAt: 9 }));
+    await expect(db.shareLinks.put(link())).rejects.toBeInstanceOf(ShareStoreError);
+    expect(await db.shareLinks.get('lnk_integration01')).toMatchObject({ status: 'revoked', revokedAt: 9 });
+    // Records about a turned off link can still be added to it.
+    await db.shareLinks.put(link({ status: 'revoked', revokedAt: 9, audit: [{ at: 5, kind: 'created' }, { at: 10, kind: 'sent', count: 1, updated: 0 }] }));
+    expect((await db.shareLinks.get('lnk_integration01'))?.audit).toHaveLength(2);
+  });
+
   it('a duplicate of an app starts with no links', async () => {
     const { db } = open();
     await seed(db);

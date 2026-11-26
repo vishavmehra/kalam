@@ -3,32 +3,56 @@
  * All formula evaluation goes through the whitelisted engine in src/core/formula.
  */
 import type { FormulaContext, FormulaResult, FormulaValue, KalamRecord, RecordValue } from '@/core/contracts';
-import { evaluateFormula } from '@/core/formula';
+import { evaluateFormula, formulaDependencies } from '@/core/formula';
 import type { ComponentOf, KalamSpec } from '@/core/spec/schema';
+import { statCurrency } from '@/core/spec/v11';
 import { engineText } from '@/i18n/engine-messages';
 import type { FieldDef } from './types';
 
 export type CollectionValues = Record<string, ReadonlyArray<Readonly<Record<string, RecordValue>>>>;
 
+/**
+ * What a formula sees of one entry: its values plus `id`, its own id, so `filter(customers, id == selected)`
+ * is the opened customer (eval 2026-11-25 s23). A field the app itself named `id` wins.
+ */
+const formulaRecord = (r: KalamRecord): Readonly<Record<string, RecordValue>> =>
+  Object.prototype.hasOwnProperty.call(r.values, 'id') ? r.values : { ...r.values, id: r.id };
+
 /** Record values per collection — build once per records snapshot and reuse (memoisation key). */
 export function collectionValues(spec: KalamSpec, records: Record<string, KalamRecord[]>): CollectionValues {
-  const out: Record<string, Array<Record<string, RecordValue>>> = {};
-  for (const id of Object.keys(spec.collections)) out[id] = (records[id] ?? []).map((r) => r.values);
+  const out: Record<string, Array<Readonly<Record<string, RecordValue>>>> = {};
+  for (const id of Object.keys(spec.collections)) out[id] = (records[id] ?? []).map(formulaRecord);
   return out;
 }
 
+/** `selected`: id of the entry the screen is about (state.selectedId), so a customer's page totals only that customer. */
 export function formulaContext(
   collections: CollectionValues,
   form: Record<string, RecordValue>,
   state: Record<string, RecordValue>,
   now: Date,
+  selected: string | null = null,
 ): FormulaContext {
-  return { collections, form, state, now };
+  return { collections, form, state, now, selected };
 }
 
-/** Which mutable inputs a formula reads — lets the UI skip re-evaluating on every keystroke. */
-export function formulaReads(expr: string): { form: boolean; state: boolean } {
-  return { form: /\bform\s*\./.test(expr), state: /\bstate\s*\./.test(expr) };
+type Reads = { form: boolean; state: boolean; selected: boolean };
+const readsMemo = new Map<string, Reads>();
+
+/**
+ * Which mutable inputs a formula reads, so the UI can skip re-evaluating on every keystroke. Read from the parsed
+ * formula (formulaDependencies), not from its text, so a quoted "form." in a string does not count. Memoised per
+ * expression; the cap is a ceiling, a spec has far fewer formulas (ponytail: clear-all instead of LRU).
+ */
+export function formulaReads(expr: string): Reads {
+  let r = readsMemo.get(expr);
+  if (!r) {
+    const d = formulaDependencies(expr);
+    r = { form: d.form.length > 0, state: d.state.length > 0, selected: /\bselected\b/.test(expr) };
+    if (readsMemo.size >= 500) readsMemo.clear();
+    readsMemo.set(expr, r);
+  }
+  return r;
 }
 
 export function evaluate(expr: string, ctx: FormulaContext, lang?: string): FormulaResult {
@@ -56,13 +80,13 @@ export interface ListQuery {
 }
 
 /** Filters (record predicate), sorts (default newest first) and limits a list's records. */
-export function queryList(list: ComponentOf<'list'>, records: KalamRecord[], ctx: FormulaContext): ListQuery {
+export function queryList(list: ComponentOf<'list'>, records: KalamRecord[], ctx: FormulaContext, lang?: string): ListQuery {
   let rows = records;
   let filterError: string | undefined;
   if (list.filter) {
     const kept: KalamRecord[] = [];
     for (const r of records) {
-      const res = evaluate(list.filter, { ...ctx, record: r.values });
+      const res = evaluate(list.filter, { ...ctx, record: formulaRecord(r) }, lang);
       if (!res.ok) {
         filterError = res.error;
         break;
@@ -125,8 +149,11 @@ export function formatFieldValue(def: FieldDef | undefined, value: RecordValue |
 /** Shown for a stat with no value. Compare against it instead of the literal. */
 export const EMPTY_STAT = '—';
 
-/** Formats a stat result. Errors and non-finite values render as EMPTY_STAT, never "NaN". */
-export function formatStat(stat: ComponentOf<'stat'>, result: FormulaResult, lang: string): string {
+/**
+ * Formats a stat result. Errors and non-finite values render as EMPTY_STAT, never "NaN". `currency` is the
+ * resolved one (statCurrency: the stat's, else the app's setting, else INR).
+ */
+export function formatStat(stat: ComponentOf<'stat'>, result: FormulaResult, lang: string, currency: string = statCurrency({}, stat)): string {
   if (!result.ok) return EMPTY_STAT;
   const v: FormulaValue = result.value;
   if (v === null) return EMPTY_STAT;
@@ -140,7 +167,7 @@ export function formatStat(stat: ComponentOf<'stat'>, result: FormulaResult, lan
         body = safeNumberFormat(lang, { maximumFractionDigits: 0 }).format(Math.round(v));
         break;
       case 'currency':
-        body = safeNumberFormat(lang, { style: 'currency', currency: stat.currency ?? 'USD' }).format(v);
+        body = safeNumberFormat(lang, { style: 'currency', currency }).format(v);
         break;
       case 'percent':
         body = safeNumberFormat(lang, { style: 'percent', maximumFractionDigits: 1 }).format(v);

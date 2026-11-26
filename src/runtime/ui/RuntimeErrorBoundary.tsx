@@ -2,18 +2,22 @@
  * Catches a render error inside a generated app so one broken screen never takes Kalam down
  * (docs/04 §3.7, docs/09). Shows a calm recovery card: try again, or leave the app. Saved
  * records are untouched because rendering never writes data.
+ *
+ * The card is Kalam's, drawn in Kalam's own paper and ink (src/design), never in the app's theme:
+ * the app's theme may be what failed.
  */
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { View } from 'react-native';
 
-import { fontFamilies } from '@/design/tokens';
+import { Button, Surface, Text, useKalamTheme } from '@/design';
+import { useT } from '@/i18n/react';
 
 interface Props {
   appName: string;
   /** Remounts the app (the parent bumps a key). */
   onRetry: () => void;
   onExit?: () => void;
-  children: ReactNode;
+  children?: ReactNode;
 }
 
 interface State { failed: boolean }
@@ -37,42 +41,26 @@ export class RuntimeErrorBoundary extends Component<Props, State> {
 
   render() {
     if (!this.state.failed) return this.props.children;
-    const { appName, onExit } = this.props;
-    return (
-      <View style={styles.root} accessibilityRole="alert">
-        <View style={styles.card}>
-          <Text style={styles.title} accessibilityRole="header">{appName} stopped on this screen</Text>
-          <Text style={styles.body}>
-            Something in this screen could not be shown. Your saved records are safe. Try again, or go back and
-            restore an earlier version from Edit.
-          </Text>
-          <View style={styles.row}>
-            <Pressable accessibilityRole="button" onPress={this.retry} style={[styles.button, styles.primary]}>
-              <Text style={[styles.label, { color: '#FFFFFF' }]}>Try again</Text>
-            </Pressable>
-            {onExit ? (
-              <Pressable accessibilityRole="button" onPress={onExit} style={[styles.button, styles.outline]}>
-                <Text style={[styles.label, { color: '#161A3D' }]}>Go back</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      </View>
-    );
+    return <FailureCard appName={this.props.appName} onRetry={this.retry} onExit={this.props.onExit} />;
   }
 }
 
-// Neutral, self-contained colours: the app's own theme may be what failed.
-const styles = StyleSheet.create({
-  root: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#F7F7F4' },
-  card: {
-    width: '100%', maxWidth: 420, gap: 12, padding: 24, borderRadius: 16, borderWidth: 1, borderColor: '#DCDEEA', backgroundColor: '#FFFFFF',
-  },
-  title: { fontFamily: fontFamilies.uiSemibold, fontSize: 20, lineHeight: 26, color: '#161A3D' },
-  body: { fontFamily: fontFamilies.ui, fontSize: 15, lineHeight: 22, color: '#454B6E' },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  button: { minHeight: 48, paddingHorizontal: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  primary: { backgroundColor: '#283080' },
-  outline: { borderWidth: 1, borderColor: '#858AAB' },
-  label: { fontFamily: fontFamilies.uiSemibold, fontSize: 15 },
-});
+function FailureCard({ appName, onRetry, onExit }: { appName: string; onRetry: () => void; onExit?: () => void }) {
+  const theme = useKalamTheme();
+  const t = useT();
+  return (
+    <View
+      accessibilityRole="alert"
+      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.space[6], backgroundColor: theme.colors.background }}
+    >
+      <Surface padded={theme.space[6]} elevation={2} style={{ width: '100%', maxWidth: 420, gap: theme.space[3] }}>
+        <Text variant="h4" accessibilityRole="header">{t('runtime.failed.title', { name: appName })}</Text>
+        <Text tone="secondary">{t('runtime.failed.body')}</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space[2], marginTop: theme.space[1] }}>
+          <Button label={t('runtime.failed.retry')} onPress={onRetry} />
+          {onExit ? <Button label={t('runtime.failed.back')} variant="outline" onPress={onExit} /> : null}
+        </View>
+      </Surface>
+    </View>
+  );
+}

@@ -5,7 +5,7 @@
 import type { KalamRecord, RecordValue } from '@/core/contracts';
 import type { ComponentOf, KalamScreen, KalamSpec } from '@/core/spec/schema';
 import { defaultForm, screenFieldDefs } from './fields';
-import type { FormValues, RuntimeState } from './types';
+import type { FormValues, RuntimeState, Selection } from './types';
 
 export function createRuntimeState(spec: KalamSpec): RuntimeState {
   const first = spec.screens.some((s) => s.id === spec.initialScreen) ? spec.initialScreen : spec.screens[0].id;
@@ -23,7 +23,48 @@ export function currentScreen(spec: KalamSpec, state: RuntimeState): KalamScreen
 }
 
 export function getForm(spec: KalamSpec, state: RuntimeState, screen: KalamScreen, now: Date): FormValues {
-  return state.forms[screen.id] ?? defaultForm(spec, screen, now);
+  const form = state.forms[screen.id] ?? defaultForm(spec, screen, now);
+  return screen.form ? linkToOpened(spec, state, screen.form, form) : form;
+}
+
+/**
+ * Id of the entry the current screen is about: `selected` in formulas. The entry this screen was opened
+ * with, else the selection when it is of the screen's own collection, else null (nothing is open).
+ */
+export function selectedId(spec: KalamSpec, state: RuntimeState): string | null {
+  const screen = currentScreen(spec, state);
+  const opened = state.opened?.[screen.id];
+  if (opened) return opened.recordId;
+  return state.selection && state.selection.collection === screen.form ? state.selection.recordId : null;
+}
+
+/**
+ * v1.1 relations: an entry added from its parent's page (that page still open, or this screen opened from
+ * the parent's list) is linked to the parent the person opened, so a credit entry made on Ramesh's page
+ * belongs to Ramesh. An empty link only; a link the person chose is kept. Never links an entry to itself.
+ */
+export function linkToOpened(spec: KalamSpec, state: RuntimeState, collection: string, form: FormValues): FormValues {
+  const own = Object.prototype.hasOwnProperty.call(spec.collections, collection) ? spec.collections[collection] : undefined;
+  if (!own) return form;
+  const current = state.stack[state.stack.length - 1];
+  // The entry this screen itself shows is never its own parent.
+  const opened = [...state.stack].reverse().flatMap((id) => {
+    const o = state.opened?.[id];
+    return o && !(id === current && o.collection === collection) ? [o] : [];
+  });
+  const sel = state.selection;
+  if (sel && state.stack.some((id) => id !== current && findScreen(spec, id)?.form === sel.collection)) opened.push(sel);
+  let out = form;
+  for (const [fid, f] of Object.entries(own.fields)) {
+    if (f.type !== 'text' || !f.ref) continue;
+    const empty = out[fid] === undefined || out[fid] === null || out[fid] === '';
+    const parent = opened.find((o) => o.collection === f.ref?.collection);
+    if (parent && empty) {
+      if (out === form) out = { ...form };
+      out[fid] = parent.recordId;
+    }
+  }
+  return out;
 }
 
 export function setFieldValue(
@@ -59,12 +100,27 @@ export function navigate(spec: KalamSpec, state: RuntimeState, screenId: string)
   if (!findScreen(spec, screenId)) return undefined;
   const at = state.stack.indexOf(screenId);
   const stack = at >= 0 ? state.stack.slice(0, at + 1) : [...state.stack, screenId];
-  return { ...state, stack, errors: {} };
+  return withStack(state, stack);
 }
 
 export function goBack(state: RuntimeState): RuntimeState {
   if (state.stack.length <= 1) return state;
-  return { ...state, stack: state.stack.slice(0, -1), errors: {} };
+  return withStack(state, state.stack.slice(0, -1));
+}
+
+/**
+ * New stack. Entries opened by screens that left the stack are forgotten, and coming back to a page
+ * selects the entry it was opened with again (customer page, then an entry's page, then Back).
+ */
+function withStack(state: RuntimeState, stack: string[]): RuntimeState {
+  const next: RuntimeState = { ...state, stack, errors: {} };
+  if (!state.opened) return next;
+  const opened: Record<string, Selection> = {};
+  for (const id of stack) if (state.opened[id]) opened[id] = state.opened[id];
+  next.opened = opened;
+  const back = opened[stack[stack.length - 1]];
+  if (back) next.selection = back;
+  return next;
 }
 
 /** Opens a list's detail screen with `record` selected and its values pre-filled for editing. */
@@ -80,9 +136,11 @@ export function openRecord(
   for (const field of Object.keys(screenFieldDefs(spec, target))) {
     if (field in record.values) prefill[field] = record.values[field];
   }
+  const selection: Selection = { collection: list.source, recordId: record.id };
   return {
     ...nav,
-    selection: { collection: list.source, recordId: record.id },
+    selection,
+    opened: { ...nav.opened, [target.id]: selection },
     forms: { ...nav.forms, [target.id]: { ...defaultForm(spec, target, now), ...prefill } },
   };
 }

@@ -4,6 +4,7 @@
  * collections, form/state keys) live in `validateFormula` (./validate.ts).
  */
 import jsep from 'jsep';
+import { limitsPolicy } from '../limits/policy';
 import { LIMITS } from '../spec/schema';
 
 export type Node = jsep.Expression;
@@ -16,7 +17,7 @@ export type Un = jsep.UnaryExpression;
 export type Cond = jsep.ConditionalExpression;
 
 export const FORMULA_FUNCTIONS = [
-  'sum', 'count', 'avg', 'min', 'max', 'filter', 'if', 'round', 'abs', 'len', 'concat', 'month',
+  'sum', 'count', 'avg', 'min', 'max', 'filter', 'if', 'round', 'abs', 'len', 'concat', 'month', 'week', 'streak',
 ] as const;
 export type FormulaFunction = (typeof FORMULA_FUNCTIONS)[number];
 const FUNCTION_SET: ReadonlySet<string> = new Set(FORMULA_FUNCTIONS);
@@ -35,10 +36,10 @@ const FORBIDDEN_NAMES: ReadonlySet<string> = new Set([
 
 const ARITY: Record<FormulaFunction, [number, number]> = {
   sum: [1, 50], count: [1, 50], avg: [1, 50], min: [1, 50], max: [1, 50], concat: [1, 50],
-  filter: [2, 2], if: [3, 3], round: [1, 2], abs: [1, 1], len: [1, 1], month: [1, 1],
+  filter: [2, 2], if: [3, 3], round: [1, 2], abs: [1, 1], len: [1, 1], month: [1, 1], week: [1, 1], streak: [1, 1],
 };
 
-const MAX_DEPTH = 32;
+const MAX_DEPTH = limitsPolicy.spec.formulaDepth;
 
 export function isForbiddenName(name: string): boolean {
   return name.startsWith('_') || FORBIDDEN_NAMES.has(name);

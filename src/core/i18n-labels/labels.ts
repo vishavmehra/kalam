@@ -28,12 +28,13 @@ export interface TranslatableLabel {
 }
 
 /** Bump when key naming or collection rules change, so old cached translations are not reused. */
-export const TRANSLATION_ENGINE_VERSION = 'tr1';
+// tr2: a saved translation is checked once more against the app's terminology rules (the key used to ignore them).
+export const TRANSLATION_ENGINE_VERSION = 'tr2';
 
 const COMPONENT_WHERE: Record<KalamComponent['type'], string> = {
   text: 'Text', heading: 'Heading', number: 'Number box', textInput: 'Text box', date: 'Date box',
   choice: 'Choice', toggle: 'Switch', counter: 'Counter', bigButton: 'Button', list: 'List', stat: 'Figure',
-  photo: 'Photo',
+  photo: 'Photo', chart: 'Chart', timer: 'Timer', reminder: 'Reminder', signature: 'Signature',
 };
 
 /** Component properties that hold display text: [property, kind, suffix for the "where" note]. */

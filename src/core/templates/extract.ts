@@ -37,7 +37,7 @@ function tidyName(raw: string): string | undefined {
 /** "called X", "named X", "titled X", quoted "X", Hinglish "X naam ka/ki/se", "naam X rakho". */
 export function extractAppName(text: string): string | undefined {
   const patterns = [
-    /\b(?:called|named|titled|name it|name)\s+["“'‘]?([^"”'’.,!?;:\n]{2,60})/i,
+    /\b(?:called|named|titled|name it|call it|call the app|name)\s+["“'‘]?([^"”'’.,!?;:\n]{2,60})/i,
     /["“]([^"”\n]{2,40})["”]/,
     /([A-Za-zऀ-ॿ][A-Za-z0-9ऀ-ॿ' ]{1,40}?)\s+naam\s+(?:ka|ki|ke|se|wala|wali)\b/i,
     /\bnaam\s+["“']?([A-Za-zऀ-ॿ][^"”'.,!?;:\n]{1,40}?)\s+(?:rakho|rakh do|hai|ho)\b/i,
@@ -75,6 +75,9 @@ export function extractUnit(text: string): 'cm' | 'in' | undefined {
 
 const LIST_STOP = /\s+(?:with|for|to|that|which|where|so|and also|also|in (?:rupees|inr|dollars|cm|inches))\b.*$/i;
 
+/** "drinking water every day" is the habit "Drinking water" (eval ma05): how often belongs to the app, not the entry. */
+const TRAILING_PERIOD = /\s+(?:every ?day|each day|daily|every morning|every night|every week|weekly|roz(?:ana)?|har din)\s*$/i;
+
 /** Words that describe the app itself, never a list entry. */
 const META_ITEM = /\b(?:app|application|tracker|list|me|it|this|that|something|stuff|things)\b/i;
 
@@ -91,7 +94,7 @@ export function extractList(text: string, keywords: readonly string[], max = 12)
     const items = body
       .replace(LIST_STOP, '')
       .split(/,|\band\b|&|\/|\bor\b|\baur\b|\+/i)
-      .map((s) => s.replace(/^\s*(?:etc|the|a|an|my)\b/i, '').replace(/\betc\b\.?/i, '').trim())
+      .map((s) => s.replace(/^\s*(?:etc|the|a|an|my)\b/i, '').replace(/\betc\b\.?/i, '').replace(TRAILING_PERIOD, '').trim())
       .filter((s) => s.length >= 2 && s.length <= 40 && !/^\d+$/.test(s) && !META_ITEM.test(s));
     const seen = new Set<string>();
     const out: string[] = [];

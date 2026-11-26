@@ -8,6 +8,13 @@ import type { Operation } from 'fast-json-patch';
 import type {
   KalamAIBlock, KalamCollection, KalamComponent, KalamField, KalamScreen, KalamSpec, KalamAction, ThemePreset,
 } from '../spec/schema';
+import type {
+  BazaarListing, BazaarPage, BazaarQuery, Entitlement, ListingStatus, ReportReason, Wallet, WalletTransaction,
+} from '../bazaar/model';
+import type { InstallMode } from '../bazaar/install';
+import type { Screenshot } from '../bazaar/media';
+import type { PublishForm } from '../bazaar/publish';
+import type { BazaarReview } from '../bazaar/reviews';
 
 // ═══ Validation (docs/05 §13) ═════════════════════════════════════════════════
 export interface SpecIssue {
@@ -50,6 +57,8 @@ export interface FormulaContext {
   now: Date;
   /** Current record when evaluating list predicates. */
   record?: Readonly<Record<string, unknown>>;
+  /** Id of the entry opened from a list (`selected` in formulas), so a page can show only that entry's links. */
+  selected?: string | null;
 }
 export interface FormulaScope {
   /** collection id → field ids */
@@ -90,6 +99,8 @@ export interface StoredApp {
   creationInput?: { text: string; modalities: InputModality[]; drawingId?: string };
   /** Latest AI-step check per block id (docs/13 §8.2), kept on this device beside the spec. Never published. */
   aiVerification?: Record<string, AIBlockVerificationReport>;
+  /** The person archived this app: hidden from the main shelf, nothing deleted (docs/11 §6.5). */
+  archived?: boolean;
 }
 export interface AppVersion {
   appId: string;
@@ -101,12 +112,14 @@ export interface AppVersion {
   patch?: Operation[];
   summary: string;
   source: 'create' | 'edit' | 'restore' | 'import';
+  /** Who made the change, for the history timeline (docs/14 §11.3). Absent on older versions. */
+  origin?: 'user' | 'ai' | 'import' | 'marketplace';
 }
 export interface AppRepository {
   list(): Promise<StoredApp[]>;
   get(id: string): Promise<StoredApp | undefined>;
   /** Persists the app and appends a version entry atomically. */
-  save(app: StoredApp, change: { summary: string; source: AppVersion['source'] }): Promise<StoredApp>;
+  save(app: StoredApp, change: { summary: string; source: AppVersion['source']; origin?: AppVersion['origin'] }): Promise<StoredApp>;
   /** Deletes app, its versions, records and state. */
   remove(id: string): Promise<void>;
   touch(id: string): Promise<void>;
@@ -122,9 +135,20 @@ export interface RecordRepository {
   insert(appId: string, collectionId: string, values: Record<string, RecordValue>): Promise<KalamRecord>;
   update(appId: string, collectionId: string, id: string, values: Record<string, RecordValue>): Promise<KalamRecord>;
   remove(appId: string, collectionId: string, id: string): Promise<void>;
+  /**
+   * Optional (docs/09 §7.3): applies several writes of one app as ONE transaction. Either every write is made or
+   * none is, and listeners hear about it once. Absent on a repository that cannot do this; callers then use
+   * `applyOps` (runtime/engine/transaction.ts), which undoes what it did if a later write fails.
+   */
+  batch?(appId: string, ops: RecordOp[]): Promise<void>;
   /** Called after any change to the app's records; returns unsubscribe. */
   subscribe(appId: string, listener: () => void): () => void;
 }
+/** One write inside `RecordRepository.batch`. Values are checked exactly like the single-write calls. */
+export type RecordOp =
+  | { op: 'insert'; collection: string; values: Record<string, RecordValue> }
+  | { op: 'update'; collection: string; id: string; values: Record<string, RecordValue> }
+  | { op: 'remove'; collection: string; id: string };
 export interface KeyValueRepository {
   all(appId: string): Promise<Record<string, RecordValue>>;
   set(appId: string, key: string, value: RecordValue): Promise<void>;
@@ -239,6 +263,12 @@ export interface TranslationCacheEntry {
   source: InferenceSource;
   /** User corrected or approved this translation. */
   reviewed?: boolean;
+  /** Which translate-service build made it, so a newer engine can offer to redo it. */
+  engineVersion?: string;
+  /** Model that produced the strings (never a secret). */
+  model?: string;
+  /** The person's own fixes, by label key. They win over `strings` and survive a retranslation. */
+  corrected?: Record<string, string>;
 }
 export interface TranslationCacheRepository {
   get(appId: string, lang: string): Promise<TranslationCacheEntry | undefined>;
@@ -265,7 +295,12 @@ export interface BlobRepository {
 }
 export interface AICacheRepository {
   get<T = unknown>(key: string): Promise<T | undefined>;
-  set(key: string, value: unknown, meta: { taskType: TaskType; source: InferenceSource }): Promise<void>;
+  /** `appId` marks the owning app, so deleting the app can drop its answers (docs/11 data deletion). */
+  set(key: string, value: unknown, meta: { taskType: TaskType; source: InferenceSource; appId?: string }): Promise<void>;
+  /** Drops one stored answer, for example a stale or unreadable one. */
+  remove?(key: string): Promise<void>;
+  /** Drops every stored answer that belongs to one app. */
+  removeForApp?(appId: string): Promise<void>;
   clear(): Promise<void>;
   size(): Promise<number>;
 }
@@ -282,6 +317,8 @@ export interface CreationSession {
   preferences?: NormalizedInput['preferences'];
   lastError?: string;
   resultAppId?: string;
+  /** Stored extras of the session: the creation draft and the media session (see StoredSession). */
+  draft?: Record<string, unknown>;
 }
 export interface CreationSessionRepository {
   save(session: CreationSession): Promise<void>;
@@ -318,6 +355,16 @@ export interface DrawingElementCommon {
   hint?: string;
   /** Group membership (docs/08 later phase). */
   groupId?: string;
+  /** rect, ellipse: fill colour as a hex string. Absent means no fill. */
+  fill?: string;
+  /** rect: corner radius in document px, 0 to 400. */
+  radius?: number;
+  /** arrow: head length in document px, 6 to 80. */
+  headSize?: number;
+  /** text: typeface. Absent means sans. */
+  font?: 'sans' | 'serif' | 'mono';
+  /** text: bold. Absent means regular. */
+  bold?: boolean;
 }
 export type DrawingElement = DrawingElementCommon & (
   | { id: string; kind: 'stroke'; points: DrawingPoint[]; color: string; size: number; tool: 'pen' | 'marker' | 'highlighter' }
@@ -370,6 +417,8 @@ export interface TaskClassification {
   requiresMultimodalReasoning: boolean;
   requiresCloudReasoning: boolean;
   matchingTemplate?: TemplateId;
+  /** A close call: the one other level the evidence also supports. Only the small-model tie-break reads it (docs/07 §3.4). */
+  alternative?: ComplexityLevel;
   confidence: number;
   method: 'deterministic' | 'on_device' | 'cloud';
   reasons: string[];
@@ -388,11 +437,21 @@ export interface AIExecutionContext {
 
 export type InferenceMode = 'only_on_device' | 'prefer_on_device' | 'only_in_cloud' | 'prefer_in_cloud';
 export interface AIImage { mimeType: 'image/jpeg' | 'image/png' | 'image/webp'; base64: string }
+/**
+ * A recording sent to the cloud model as inline data (docs/06 §8.3). Cloud only: the on-device models are not assumed
+ * to hear audio (capabilities.ts), so a request with audio never runs on the device.
+ */
+export interface AIAudio {
+  mimeType: 'audio/wav' | 'audio/mpeg' | 'audio/mp3' | 'audio/mp4' | 'audio/m4a' | 'audio/aac' | 'audio/ogg' | 'audio/flac' | 'audio/webm';
+  base64: string;
+}
 export interface StructuredRequest<T> {
   taskType: TaskType;
   system?: string;
   prompt: string;
   images?: AIImage[];
+  /** Recordings for the cloud model to hear (transcription). Never sent to a device model. */
+  audio?: AIAudio[];
   /** JSON Schema (draft 2020-12 subset) describing the expected output. */
   jsonSchema: Record<string, unknown>;
   /** Final authority: Zod-backed parser. Output is rejected unless this succeeds. */
@@ -401,6 +460,11 @@ export interface StructuredRequest<T> {
   temperature?: number;
   maxOutputTokens?: number;
   timeoutMs?: number;
+  /**
+   * Overrides how many extra attempts one error code gets (the defaults are RETRY_LIMITS in src/core/ai/limits.ts). Compile and repair calls
+   * set `{ timeout: 0 }`: a retry would repeat a wait of minutes and the repair pass is already the second try.
+   */
+  maxRetries?: Partial<Record<AIErrorCode, number>>;
   /** Named logical role → model resolved from central config (docs/07 §5.5). */
   role?: ModelRole;
   /**
@@ -432,15 +496,31 @@ export interface AIExecutionResult<T> {
   eventId?: string;
   /** Fields the model read but marked as unsure, e.g. smudged handwriting (docs/16 R-016). Photo AI steps only. */
   uncertainFields?: string[];
+  /** Per field read from a photo: the model's own confidence and rough place on the page (docs/14 §9.4). Photo AI steps only. */
+  fieldReadings?: Record<string, { confidence?: 'high' | 'medium' | 'low'; area?: string }>;
+  /** Text the model read for a field that does not fit it (wrong type, out of range, or a date with no year), by field id. Photo AI steps only. */
+  unreadFields?: Record<string, string>;
 }
 
+/**
+ * Why on-device AI cannot run right now, where the platform can tell (Android: AICore through ML Kit, reported by
+ * modules/kalam-nano). `detail` says the same in plain English.
+ */
+export type OnDeviceReason =
+  | 'aicore_missing' | 'binding_failure' | 'aicore_not_ready' | 'needs_system_update' | 'device_not_supported'
+  | 'model_downloadable' | 'model_downloading' | 'low_storage' | 'battery_or_network_conditions' | 'unknown';
+
 export interface OnDeviceStatus {
-  platform: 'web' | 'android' | 'other';
+  platform: 'web' | 'android' | 'ios' | 'other';
   /** Prompt API / native on-device bridge exists on this platform. */
   apiExposed: boolean;
   availability: 'unavailable' | 'downloadable' | 'downloading' | 'available' | 'unknown';
   progress?: number;
   detail?: string;
+  /** Set when the model cannot run now and the platform said why. */
+  reason?: OnDeviceReason;
+  /** The AICore or ML Kit error code behind `reason`, for example 601 (AICore could not be bound). */
+  reasonCode?: number;
   /**
    * Model is loaded in memory (a session exists), so a prompt answers in about a second instead of
    * waiting for the first-load cost. Only reported where the platform can tell (web Prompt API).
@@ -471,11 +551,13 @@ export interface InferenceEvent {
   promptVersion?: string;
   retries?: number;
   tokens?: { input?: number; output?: number };
-  platform?: 'web' | 'android' | 'other';
+  platform?: 'web' | 'android' | 'ios' | 'other';
   cacheHit?: boolean;
   classificationConfidence?: number;
   /** KalamSpec schema version in force for this run (docs/04 §20.2). */
   schemaVersion?: string;
+  /** The creation session the run belongs to, so one create can be followed through its calls (docs/06 §13.2). */
+  sessionId?: string;
 }
 
 export interface AIProvider {
@@ -495,6 +577,8 @@ export interface AIOrchestrator {
     req: StructuredRequest<T>,
     ctx: {
       taskType: TaskType; complexity?: ComplexityLevel; appId?: string; escalationReason?: string;
+      /** The creation session this run belongs to (docs/06 §13.2); recorded on the event, never content. */
+      sessionId?: string;
       /** How the request was classified, recorded on the event (docs/07 §3.5). */
       classification?: Pick<TaskClassification, 'method' | 'confidence'>;
     },
@@ -600,11 +684,62 @@ export interface CreationResult {
   latencyMs: number;
   /** Build-time AI-step checks, one per AI block (docs/00 §10 step 8, docs/04 §8.12). */
   verification?: AIBlockVerificationReport[];
+  /** Cloud compile passes in order, so a failure is attributable to its stage (docs/13 §6.1, §21). */
+  compileAttempts?: CompileAttempt[];
+}
+/** One cloud compile pass: where it stopped and the exact validator codes (docs/13 §6.1, §21). */
+export interface CompileAttempt {
+  pass: 'first' | 'repair';
+  /** The model call, the IR schema check (structured output), KalamSpec validation, or done. */
+  stage: 'model' | 'structured_output' | 'validation' | 'ok';
+  /** docs/13 §21 category when the pass failed. */
+  category?: 'INFERENCE_FAILED' | 'INFERENCE_TIMEOUT' | 'NETWORK_UNAVAILABLE' | 'RATE_LIMITED' | 'OUTPUT_INVALID' | 'REPAIR_FAILED';
+  errorCode?: AIErrorCode;
+  /** "CODE path" per problem, e.g. "UNKNOWN_FIELD screens[1].children[2].field"; IR problems as "IR path: message". At most 20. */
+  issues: string[];
+  /** Deterministic clean-ups made before validation: IR normalisation and the compiler's repair notes. At most 40. */
+  repairs: string[];
+}
+/**
+ * What the compiler is handed (docs/06 §13.2): the creation session, the request in words and the things attached,
+ * by id. Pictures and frames travel separately as image parts of the model call (docs/06 §13.2: media transport
+ * separately from metadata), so no base64 sits in this object. Built by `buildCompilerRequest` in
+ * src/core/compiler/request.ts.
+ */
+export interface CompilerRequest {
+  /** The creation session; recorded on every model call of the build (InferenceEvent.sessionId). Not content. */
+  sessionId: string;
+  context: {
+    text: string;
+    modalities: InputModality[];
+    audioTranscript?: string;
+    language?: string;
+    preferences?: NormalizedInput['preferences'];
+    /** The build edits an existing app instead of making a new one. */
+    editsExisting: boolean;
+  };
+  attachments: Array<{ id: string; type: 'image' | 'audio' | 'video'; preparedAssetIds: string[] }>;
+  drawingDocuments: Array<{
+    id: string;
+    pageCount: number;
+    /** Elements, texts and layout cues the Drawing Studio read (no pixels). */
+    structuredRepresentation: Pick<DrawingSummary, 'elements' | 'texts' | 'notes'>;
+    exportedPageAssetIds: string[];
+  }>;
+  /** KalamSpec schema version the build targets. */
+  schemaVersion: string;
+  /** Compiler prompt version in force when the request was made (Remote Config may choose it, docs/04 §11.6). */
+  promptVersion: string;
 }
 /** Implemented by `src/core/pipeline/create-application.ts` → `createApplicationPipeline(deps)`. */
 export type CreateApplication = (
   input: NormalizedInput,
-  opts?: { signal?: AbortSignal; onStage?: (stage: CreationStage, detail?: string) => void },
+  opts?: {
+    signal?: AbortSignal;
+    onStage?: (stage: CreationStage, detail?: string) => void;
+    /** The media session this build comes from (docs/06 §13.2). A new id is made when absent. */
+    sessionId?: string;
+  },
 ) => Promise<CreationResult>;
 
 // ═══ Editing (docs/07 §15) ════════════════════════════════════════════════════
@@ -644,6 +779,8 @@ export interface AIBlockRunInput {
   spec: KalamSpec;
   image?: AIImage;
   formValues: Record<string, RecordValue>;
+  /** Stops the model call, for a batch the person cancels (docs/14 §9.6). */
+  signal?: AbortSignal;
 }
 // ═══ Application services (composed in src/services/index.ts) ═════════════════
 export interface EditOutcome {
@@ -662,13 +799,13 @@ export interface EditOutcome {
 /** Implemented by `src/core/tasks/edit-service.ts` → `createEditService(deps)`. */
 export interface EditService {
   /** Small edits: deterministic parser → Nano patch. Structural: Firebase cloud. Never mutates input. */
-  applyInstruction(spec: KalamSpec, instruction: string, opts?: { signal?: AbortSignal }): Promise<EditOutcome>;
+  applyInstruction(spec: KalamSpec, instruction: string, opts?: { signal?: AbortSignal; image?: AIImage }): Promise<EditOutcome>;
   applyOps(spec: KalamSpec, ops: SpecPatchOp[], summary: string): EditOutcome;
 }
 /** Why an AI-step check gave no final answer (docs/13 §8.2). */
 export type AIBlockVerificationReason =
   | 'needs_samples' | 'device_unsupported' | 'device_not_ready' | 'device_loading' | 'offline' | 'cloud_off'
-  | 'not_configured' | 'timeout' | 'cancelled' | 'failed';
+  | 'needs_cloud_ok' | 'not_configured' | 'timeout' | 'cancelled' | 'failed';
 export interface AIBlockVerificationOutcome {
   status: 'onDevice' | 'cloudPreferred' | 'unverified';
   testCount: number;
@@ -735,10 +872,20 @@ export interface VoiceActionResult {
 export interface VoiceService {
   interpret(spec: KalamSpec, screenId: string, transcript: string): Promise<VoiceActionResult>;
 }
+/** What the cloud model heard in a recording (docs/06 §8.3). `text` is the transcript, untrusted like any model output. */
+export type TranscribeOutcome =
+  | { ok: true; text: string; language?: string; source: InferenceSource; model?: string }
+  | { ok: false; code: AIErrorCode; message: string };
+/** Implemented by `src/core/tasks/transcribe-service.ts` → `createTranscribeService(deps)`. Cloud only, behind the cloud notice. */
+export interface TranscribeService {
+  transcribe(audio: AIAudio, opts?: { language?: string; signal?: AbortSignal; sessionId?: string }): Promise<TranscribeOutcome>;
+}
 /** Implemented by `src/infrastructure/platform/network(.web|.native).ts` → `getNetworkMonitor()`. */
 export interface NetworkMonitor {
   online(): boolean;
   subscribe(listener: (online: boolean) => void): () => void;
+  /** Connectivity (docs/09 §13.4) adds this: cloud work also waits out a recent network failure. Absent means `online()`. */
+  can?(kind: 'local' | 'cloud'): boolean;
 }
 export interface KalamServices {
   db: KalamDatabase;
@@ -748,7 +895,9 @@ export interface KalamServices {
   edit: EditService;
   aiBlocks: AIBlockService;
   voice: VoiceService;
-  /** Optional account (Firebase Auth). Never required to create or use apps (docs/04 §15.4). */
+  /** Cloud transcription of a recording (docs/06 §8.3). Optional until wired. */
+  transcribe?: TranscribeService;
+  /** The signed-in account (Firebase Auth). Signing in is required to use Kalam (ADR-040), and the saved session works offline (docs/04 §15.4). */
   auth: AuthService;
   /** Kalam Bazaar marketplace over the named Firestore database `kalam` (docs/12). */
   bazaar: BazaarService;
@@ -794,11 +943,25 @@ export interface BackupManifest {
   checksum: string;
 }
 /** Implemented by `src/core/backup/` → `createBackupService(deps)`. AES-GCM + PBKDF2 (@noble). */
+export interface BackupExportOptions {
+  /** Back up only these apps. Default: all. */
+  appIds?: string[];
+  /** Include preferences. Default true. */
+  includeSettings?: boolean;
+}
+export interface BackupImportOptions {
+  /** true: replace local apps that are also in the backup. false: keep the local ones. */
+  overwrite?: boolean;
+  /** Bring back preferences. Default true when the backup has them. */
+  restoreSettings?: boolean;
+  /** Restore only these apps from the backup. Default: all. */
+  appIds?: string[];
+}
 export interface BackupService {
-  exportEncrypted(passphrase: string): Promise<{ bytes: Uint8Array; manifest: BackupManifest }>;
+  exportEncrypted(passphrase: string, opts?: BackupExportOptions): Promise<{ bytes: Uint8Array; manifest: BackupManifest }>;
   /** Reads the manifest without importing (preview before overwrite). Throws on wrong passphrase. */
   preview(bytes: Uint8Array, passphrase: string): Promise<BackupManifest>;
-  importEncrypted(bytes: Uint8Array, passphrase: string, opts?: { overwrite?: boolean }): Promise<ImportSummary>;
+  importEncrypted(bytes: Uint8Array, passphrase: string, opts?: BackupImportOptions): Promise<ImportSummary>;
 }
 
 export interface RuntimeServices {
@@ -841,24 +1004,16 @@ export interface AuthService {
   subscribe(listener: (user: KalamUser | null) => void): () => void;
   /** Google sign-in needs a browser popup; the Android app needs the native SDK (not wired yet). */
   supportsGoogle(): boolean;
-  /** Links to the current guest account when there is one, so the uid (likes, listings) is kept. */
+  /** Signs in with Google. A saved anonymous session from an older build is linked, so its uid (likes, listings) is kept. */
   signInWithGoogle(): Promise<AuthResult>;
   signInWithEmail(email: string, password: string): Promise<AuthResult>;
-  /** Upgrades a guest account in place when signed in as a guest. */
+  /** Creates an account. A saved anonymous session from an older build is upgraded in place. */
   signUpWithEmail(email: string, password: string, displayName?: string): Promise<AuthResult>;
-  signInAsGuest(): Promise<AuthResult>;
   setDisplayName(name: string): Promise<AuthResult>;
   signOut(): Promise<void>;
 }
 
 // ═══ Kalam Bazaar (docs/12) ═══════════════════════════════════════════════════
-import type {
-  BazaarListing, BazaarPage, BazaarQuery, Entitlement, ListingStatus, ReportReason, Wallet, WalletTransaction,
-} from '../bazaar/model';
-import type { InstallMode } from '../bazaar/install';
-import type { Screenshot } from '../bazaar/media';
-import type { PublishForm } from '../bazaar/publish';
-import type { BazaarReview } from '../bazaar/reviews';
 
 export type BazaarPublishStage = 'validating' | 'checking' | 'saving';
 export interface BazaarPublishOutcome {

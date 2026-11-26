@@ -16,6 +16,8 @@ export interface NameContext {
   was?: string;
   now?: string;
   choices?: string;
+  /** The link is being made now, so nothing "is now" different from before. */
+  creating?: boolean;
 }
 
 export const TYPE_NAME: Record<KalamFieldType, string> = {
@@ -24,6 +26,7 @@ export const TYPE_NAME: Record<KalamFieldType, string> = {
   date: 'a date',
   boolean: 'yes or no',
   enum: 'a choice',
+  image: 'a photo',
 };
 
 export const SHARE_COPY = {
@@ -36,9 +39,12 @@ export const SHARE_COPY = {
     source_field_missing: (c: NameContext) => `${c.source} no longer has the field "${c.field}".`,
     destination_field_missing: (c: NameContext) => `${c.destination} no longer has the field "${c.field}".`,
     source_type_changed: (c: NameContext) => `The field "${c.field}" in ${c.source} is now ${c.now}, but the link was made for ${c.was}.`,
-    destination_type_changed: (c: NameContext) => `The field "${c.field}" in ${c.destination} is now ${c.now} and cannot hold ${c.was}.`,
+    destination_type_changed: (c: NameContext) =>
+      `The field "${c.field}" in ${c.destination} is ${c.creating ? '' : 'now '}${c.now} and cannot hold ${c.was}.`,
     destination_choices_missing: (c: NameContext) =>
       `The field "${c.field}" in ${c.destination} does not have these choices from ${c.source}: ${c.choices}.`,
+    destination_required_missing: (c: NameContext) =>
+      `${c.destination} needs "${c.field}" on every entry, and this link does not fill it. ${c.destination} would not take the entries.`,
   },
   /** Shown once under the problems of a link that is on but cannot pass anything right now. */
   pausedNote: 'The link is paused. Nothing passes through it until this is fixed.',
@@ -80,6 +86,8 @@ export const SHARE_COPY = {
       return parts.length ? `Sent to ${destination}: ${parts.join(' and ')}.` : `Nothing new was sent to ${destination}.`;
     },
     skipped: (n: number) => `${n} ${n === 1 ? 'entry was' : 'entries were'} left out.`,
+    turnedOffMidway: 'The link was turned off while sending, so the rest were not sent.',
+    notRecorded: 'The history of this send could not be saved. Sending the same entries again may add them twice.',
     failed: (n: number, destination: string) => `${destination} would not take ${n} ${n === 1 ? 'entry' : 'entries'}.`,
   },
 
@@ -94,6 +102,19 @@ export const SHARE_COPY = {
   },
 
   readOnlyEntry: 'This entry comes from another app. Change it there.',
+
+  /**
+   * Words for screens that belong to other features and end links as a side effect (docs/11 §6.3: say what
+   * happens to the data). Add them to the text those screens already show.
+   */
+  elsewhere: {
+    /** After the delete app question. */
+    deleteApp:
+      'Links with other apps are removed too. An app that was showing its entries stops showing them. Entries already sent to another app stay there.',
+    /** After the "replace with backup" question. */
+    replaceApps:
+      'Links with other apps are removed for the apps that are replaced. The backup does not hold links, so make them again if you still want them.',
+  },
 } as const;
 
 /** "A", "A and B", "A, B and C". */

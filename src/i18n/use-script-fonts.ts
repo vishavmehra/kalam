@@ -12,6 +12,8 @@ import { scriptFontAssets } from './font-assets';
 import { createScriptFontLoader } from './font-loader';
 import { runtimeFont, type RuntimeFont } from './runtime-font';
 import { detectScripts, fontScriptsForLanguages, scriptForLanguage, type Script } from './scripts';
+import { shellFontAssets } from './shell-font-assets';
+import { shellFontFamilies } from './shell-fonts';
 
 const loader = createScriptFontLoader({ loadAsync: Font.loadAsync, isLoaded: Font.isLoaded }, scriptFontAssets);
 
@@ -75,6 +77,36 @@ export function useScriptFonts(languages?: string | readonly string[]): ScriptFo
   else if (loader.isLoaded(primary)) lastGood.current = primary;
 
   return { ready: error !== null || wanted.every((s) => loader.isLoaded(s)), script: lastGood.current, error };
+}
+
+const shellLoader = createScriptFontLoader({ loadAsync: Font.loadAsync, isLoaded: Font.isLoaded }, shellFontAssets, shellFontFamilies);
+
+/**
+ * Anek and Tiro for the script of the language Kalam's screens are shown in (Settings), and nothing else.
+ * The root loads Latin and Devanagari display. `script` stays on the last loaded script while a new one
+ * downloads, so the screen never goes blank; it falls back to Latin if loading fails.
+ */
+export function useShellFonts(): ScriptFontsState {
+  const language = useSettingsStore((s) => s.settings.language);
+  const script = scriptForLanguage(language);
+  useSyncExternalStore(shellLoader.subscribe, shellLoader.getVersion, shellLoader.getVersion);
+  const [failure, setFailure] = useState<{ script: Script; error: Error } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    shellLoader.load(script).catch((e: unknown) => {
+      if (alive) setFailure({ script, error: e instanceof Error ? e : new Error(String(e)) });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [script]);
+
+  const error = failure?.script === script ? failure.error : null;
+  const lastGood = useRef<Script>('latin');
+  if (error) lastGood.current = 'latin';
+  else if (shellLoader.isLoaded(script)) lastGood.current = script;
+  return { ready: error !== null || shellLoader.isLoaded(script), script: lastGood.current, error };
 }
 
 /**

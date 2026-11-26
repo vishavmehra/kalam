@@ -11,6 +11,9 @@
  * - a token bucket per task limits cloud calls, and retriable cloud failures (429, 5xx, network,
  *   timeout) get at most two retries with exponential backoff and full jitter, on the same provider.
  *   The on-device leg and a provider that threw are never retried (limits.ts, docs/04 §11.9);
+ * - the one-time cloud notice: while settings.cloudNoticeSeen is not true, the first call that would reach
+ *   Firebase (a cloud-only task, a device model that is not ready, or the single cloud fallback) asks
+ *   `askCloudNotice`. No OK, no call: the result says Kalam needs the person's OK (AI_COPY.needsCloudOk);
  * - no provider cascades: a failed specialist does NOT go to Firebase or back, and on-device-first
  *   tasks may make one Firebase cloud fallback (lead decision 2). The failed device attempt and the
  *   fallback are two events with one taskId, so on-device metrics count the failure;
@@ -20,16 +23,18 @@
  */
 import type {
   AICacheRepository, AIErrorCode, AIExecutionResult, AIOrchestrator, AIProvider, InferenceEvent, InferenceEventRepository,
-  ModelRole, NetworkMonitor, OnDeviceStatus, SettingsRepository, StructuredRequest,
+  KalamSettings, ModelRole, NetworkMonitor, OnDeviceStatus, SettingsRepository, StructuredRequest, TaskType,
 } from '../contracts';
 import { SCHEMA_VERSION } from '../spec/schema';
+import { reportError, track } from '../telemetry';
 import { CACHEABLE_TASKS, createInflight, createResultCache, requestKey } from './cache';
-import { AI_COPY } from './copy';
+import { AI_COPY, CLOUD_NOTICE_NOTE } from './copy';
 import {
   backoffDelay, createTokenBuckets, DEFAULT_TIMEOUT_MS, inputTooLarge, MIN_ATTEMPT_MS, RETRY_LIMITS, RUN_BUDGET_FACTOR, sleep,
 } from './limits';
 import { modelForRole, outputTokensFor, promptVersionFor } from './model-config';
-import { deviceGap, isFallback, planRoute, TASK_POLICIES } from './routing';
+import { localStatus, localTaskFor, type LocalStatus, type LocalTask } from './local-ready';
+import { deviceGap, isFallback, onDeviceEligible, planRoute, TASK_POLICIES } from './routing';
 
 export interface OrchestratorDeps {
   firebase: AIProvider;
@@ -57,6 +62,17 @@ export interface OrchestratorDeps {
    * pass it from Platform.OS: detection cannot tell iOS from Android.
    */
   platform?: OnDeviceStatus['platform'];
+  /**
+   * The UI's answer to the one-time cloud notice (docs/03 §23, docs/11 §8.3). Asked, one question at a time,
+   * before the first cloud-bound call while settings.cloudNoticeSeen is not true. Resolve true only when the
+   * person accepted (the callback also saves cloudNoticeSeen), false for "Not now". It gets the task name and
+   * app id, never content. Without it nothing is asked, for scripts and evaluations that have no screen;
+   * the app's composition root always passes it.
+   */
+  /** true: allowed. false: the person said "Not now" (starts a short pause before asking again). undefined: nobody could be asked (no pause). */
+  askCloudNotice?: (ask: { taskType: TaskType; appId?: string }) => Promise<boolean | undefined>;
+  /** The per-task local-ready gate (docs/07 §6.7). Default: the recorded benchmarks in local-ready.ts. */
+  localReady?: (task: LocalTask, platform: OnDeviceStatus['platform']) => LocalStatus;
 }
 
 type RunCtx = Parameters<AIOrchestrator['run']>[1];
@@ -76,6 +92,8 @@ interface Execution {
 const UNKNOWN_DEVICE: OnDeviceStatus = { platform: 'other', apiExposed: false, availability: 'unknown' };
 /** Chrome answers `availability()` in milliseconds; anything slower must not hold up the UI or a run. */
 const STATUS_BUDGET_MS = 1_500;
+/** After "Not now" the notice is not asked again for this long, so a run of voice commands is not a run of prompts. */
+export const NOTICE_COOLDOWN_MS = 10 * 60_000;
 
 /** Resolves `fallback` if `p` has not settled within `ms` (or rejects). */
 export async function withBudget<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -160,10 +178,33 @@ const sizeOf = (v: unknown) => (v === undefined ? undefined : JSON.stringify(v)?
 export function createOrchestrator(deps: OrchestratorDeps): AIOrchestrator {
   const now = deps.now ?? Date.now;
   const platform = deps.platform ?? detectPlatform();
+  // The platform says online; Connectivity's `can('cloud')` also holds cloud work back briefly after a network failure.
+  const cloudOnline = () => (deps.network.can ? deps.network.can('cloud') : deps.network.online());
+  // A slow or failed status check still names this platform (iOS showed "other" in Settings, CI run 45615319769).
+  const unknownDevice: OnDeviceStatus = { ...UNKNOWN_DEVICE, platform };
   const cache = deps.cacheResults === false ? undefined : createResultCache({ now, store: deps.aiCache });
   const buckets = deps.rateLimit === false ? undefined : createTokenBuckets(now);
   const inflight = createInflight<Execution>(() => ({ res: { ...CANCELLED } }));
   const retryDelay = deps.retryDelayMs ?? ((attempt: number) => backoffDelay(attempt));
+
+  let noticeAccepted = false;
+  let noticeDeclinedAt = -Infinity;
+  let noticeAsk: Promise<boolean | undefined> | undefined;
+  /** True when no notice is owed (seen, accepted, or nothing to ask). Runs that overlap share one question. */
+  async function noticeOk(settings: Pick<KalamSettings, 'cloudNoticeSeen'>, ctx: RunCtx): Promise<boolean> {
+    const ask = deps.askCloudNotice;
+    if (!ask || noticeAccepted || settings.cloudNoticeSeen) return true;
+    if (now() - noticeDeclinedAt < NOTICE_COOLDOWN_MS) return false;
+    noticeAsk ??= Promise.resolve()
+      .then(() => ask({ taskType: ctx.taskType, appId: ctx.appId }))
+      .catch(() => undefined)
+      .finally(() => { noticeAsk = undefined; });
+    const answer = await noticeAsk;
+    if (answer === true) noticeAccepted = true;
+    // Only a real "Not now" starts the pause. No screen to ask on, or no answer in time, asks again next time.
+    else if (answer === false) noticeDeclinedAt = now();
+    return answer === true;
+  }
 
   async function record(e: Omit<InferenceEvent, 'id' | 'at'>): Promise<string> {
     const id = newId();
@@ -172,6 +213,10 @@ export function createOrchestrator(deps: OrchestratorDeps): AIOrchestrator {
     } catch {
       // Observability must never break or fail an inference run.
     }
+    // Opt-in local counters (docs/14 §30): a reused answer or a refusal is not AI work, and cancelled
+    // or consent-denied runs are the person's own choice, so reportError drops them.
+    if (e.success && !e.cacheHit) track('ai_source', e.source);
+    else if (!e.success && e.errorCode) reportError(e.errorCode);
     return id;
   }
 
@@ -188,10 +233,10 @@ export function createOrchestrator(deps: OrchestratorDeps): AIOrchestrator {
   async function onDeviceStatus(): Promise<OnDeviceStatus> {
     try {
       return await withBudget(deps.firebase.onDeviceStatus(), deps.statusBudgetMs ?? STATUS_BUDGET_MS, {
-        ...UNKNOWN_DEVICE, detail: 'On-device status check timed out',
+        ...unknownDevice, detail: 'On-device status check timed out',
       });
     } catch {
-      return UNKNOWN_DEVICE; // a provider that throws synchronously
+      return unknownDevice; // a provider that throws synchronously
     }
   }
 
@@ -202,6 +247,7 @@ export function createOrchestrator(deps: OrchestratorDeps): AIOrchestrator {
       inputChars: req.prompt.length + (req.system?.length ?? 0),
       classificationMethod: ctx.classification?.method, classificationConfidence: ctx.classification?.confidence,
       promptVersion: info.promptVersion, schemaVersion: SCHEMA_VERSION, platform,
+      ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
     };
   }
 
@@ -244,18 +290,22 @@ export function createOrchestrator(deps: OrchestratorDeps): AIOrchestrator {
     if (tooLarge) return stop(req.mode === 'only_on_device' ? 'on_device' : 'cloud', 'bad_request', AI_COPY.inputTooLarge, tooLarge);
 
     const settings = await deps.settings.get();
-    const device = policy.onDevice ? (await onDeviceStatus()).availability : 'unavailable';
+    const localTask = localTaskFor(ctx.taskType, ctx.complexity);
+    const localReady = localTask ? (deps.localReady ?? localStatus)(localTask, platform) : undefined;
+    const deviceEligible = onDeviceEligible(ctx.taskType, ctx.complexity, localReady);
+    const device = deviceEligible ? (await onDeviceStatus()).availability : 'unavailable';
     const decision = planRoute({
       taskType: ctx.taskType,
       requestedMode: req.mode,
       complexity: ctx.complexity,
       escalationReason: ctx.escalationReason,
       settings,
-      online: deps.network.online(),
+      online: cloudOnline(),
       firebaseConfigured: deps.firebase.isConfigured(),
       specialistConfigured: deps.specialist.isConfigured(),
       onDevice: device,
-      deviceLacks: policy.onDevice ? deviceGap(platform, req) : undefined,
+      deviceLacks: deviceEligible ? deviceGap(platform, req) : undefined,
+      localReady,
     });
     if (decision.kind === 'fail') return stop(decision.intended, decision.code, decision.message);
 
@@ -272,6 +322,11 @@ export function createOrchestrator(deps: OrchestratorDeps): AIOrchestrator {
     const mode = decision.kind === 'firebase' ? decision.mode : 'only_in_cloud';
     const cloudBound = mode !== 'only_on_device' && !(mode === 'prefer_on_device' && device === 'available');
     if (cloudBound) {
+      if (!(await noticeOk(settings, ctx))) {
+        return req.signal?.aborted
+          ? stop('cloud', 'cancelled', AI_COPY.cancelled)
+          : stop('cloud', 'consent_denied', AI_COPY.needsCloudOk, CLOUD_NOTICE_NOTE);
+      }
       const held = await takeToken();
       if (held === 'quota') return stop('cloud', 'quota', AI_COPY.rateLimited, 'client rate limit reached');
       if (held === 'cancelled') return stop('cloud', 'cancelled', AI_COPY.cancelled);
@@ -317,15 +372,20 @@ export function createOrchestrator(deps: OrchestratorDeps): AIOrchestrator {
     let out = await attempt({ mode, timeoutMs });
     let retries = 0;
     const notes: string[] = [];
+    let needsOk = false;
     const first = out.res;
     const localFailure = !first.success && first.source === 'on_device' && first.errorCode !== 'cancelled' && !req.signal?.aborted;
-    if (localFailure && decision.kind === 'firebase' && mode === 'prefer_on_device' && policy.cloudFallback) {
+    if (localFailure && decision.kind === 'firebase' && mode === 'prefer_on_device' && (policy.cloudFallback || policy.localWhenReady)) {
       // planRoute keeps prefer_on_device only when cloud is allowed, so this is the one permitted
       // fallback (lead decision 2). Whatever the cloud answers is final: no retry, no cascade.
       const failed = `on-device failed (${first.errorCode ?? 'error'})`;
-      const held = await takeToken();
+      const noticeMissing = !(await noticeOk(settings, ctx));
+      const held = noticeMissing ? undefined : await takeToken();
       const left = timeLeft();
-      if (held === 'quota') {
+      if (noticeMissing) {
+        needsOk = !req.signal?.aborted;
+        notes.push(`${failed}; cloud fallback skipped, the cloud notice is not accepted`);
+      } else if (held === 'quota') {
         notes.push(`${failed}; cloud fallback skipped by the client rate limit`);
       } else if (held !== 'cancelled' && !left) {
         notes.push(`${failed}; no time left for the cloud fallback`);
@@ -345,7 +405,7 @@ export function createOrchestrator(deps: OrchestratorDeps): AIOrchestrator {
       for (;;) {
         const { res } = out;
         if (res.success || !res.errorCode || res.source === 'on_device' || THROWN.has(res) || req.signal?.aborted) break;
-        if (retries >= (RETRY_LIMITS[res.errorCode] ?? 0)) break;
+        if (retries >= (req.maxRetries?.[res.errorCode] ?? RETRY_LIMITS[res.errorCode] ?? 0)) break;
         const wait = retryDelay(retries);
         const left = timeLeft(wait);
         if (!left) {
@@ -386,7 +446,9 @@ export function createOrchestrator(deps: OrchestratorDeps): AIOrchestrator {
     if (info.cacheKey && raw && source !== 'deterministic' && (p === 'firebase' || p === 'claude' || p === 'nebius')) {
       cache?.set(info.cacheKey, { raw: raw.value, provider: p, source, ...(res.model ? { model: res.model } : {}) }, ctx.taskType, ctx.appId);
     }
-    return { res: { ...res, latencyMs: now() - started, fallbackUsed, eventId }, raw };
+    // The event keeps the real on-device failure; the caller is told what would help.
+    const answer = needsOk ? { ...res, errorCode: 'consent_denied' as const, errorMessage: AI_COPY.needsCloudOk } : res;
+    return { res: { ...answer, latencyMs: now() - started, fallbackUsed, eventId }, raw };
   }
 
   const orchestrator: AIOrchestrator = {
@@ -421,7 +483,7 @@ export function createOrchestrator(deps: OrchestratorDeps): AIOrchestrator {
       return {
         onDevice: await onDeviceStatus(),
         cloudConfigured: deps.firebase.isConfigured(),
-        online: deps.network.online(),
+        online: cloudOnline(),
         specialistConfigured: deps.specialist.isConfigured(),
       };
     },
@@ -434,7 +496,7 @@ export function createOrchestrator(deps: OrchestratorDeps): AIOrchestrator {
       try {
         return deps.firebase.warmUpOnDevice ? await deps.firebase.warmUpOnDevice() : await onDeviceStatus();
       } catch {
-        return UNKNOWN_DEVICE; // warm-up is best effort
+        return unknownDevice; // warm-up is best effort
       }
     },
   };

@@ -53,5 +53,8 @@ describe('engine messages', () => {
     expect(engineText('en', 'mustBeNumber', { label: 'Amount' })).toBe('Amount must be a number');
     expect(engineText('en', 'mustBeDate', { label: 'Due' })).toBe('Due must be a date (YYYY-MM-DD)');
     expect(engineText('en', 'chooseOption', { label: 'Size' })).toBe('Choose one of the options for Size');
+    expect(engineText('en', 'andMore', { first: 'Customer is required', count: 3 })).toBe('Customer is required (and 3 more)');
+    expect(engineText('en', 'noSelection')).toBe('Choose an item from the list first.');
+    expect(engineText('en', 'deleteFailed')).toBe("Couldn't delete. Nothing was changed.");
   });
 });

@@ -6,10 +6,13 @@ import type { TimingSummary } from '@/core/observability';
 import { TELEMETRY_EVENTS, type TelemetryEvent } from '@/core/telemetry';
 import { Button, ConfirmSheet, fontFamilies, Surface, SwitchRow, Text, useKalamTheme, useToast } from '@/design';
 
+import { SectionHeading } from '@/features/settings/Section';
+
 import { diagnosticsCopy } from './copy';
+import { errorLabel } from './labels';
 import { ReportProblemButton } from './ReportProblemSheet';
 import { copyText, shareText } from './share';
-import { useTelemetry, useTimingSummaries } from './use-diagnostics';
+import { exportInferenceEvidence, useTelemetry, useTimingSummaries } from './use-diagnostics';
 
 const copy = diagnosticsCopy;
 
@@ -28,7 +31,7 @@ function Row({ label, value }: { label: string; value: number }) {
 }
 
 function valueLabel(event: TelemetryEvent, dimension: string): string {
-  if (event === 'error') return dimension === 'other' ? copy.usage.otherError : dimension;
+  if (event === 'error') return errorLabel(dimension);
   return copy.usage.values[event]?.[dimension] ?? dimension;
 }
 
@@ -63,6 +66,8 @@ export function DiagnosticsPanel() {
   const timingRows = useTimingSummaries();
   const [showJson, setShowJson] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [evidence, setEvidence] = useState<{ json: string; runs: number } | null>(null);
+  const [showEvidence, setShowEvidence] = useState(false);
 
   const groups = TELEMETRY_EVENTS.map((event) => ({
     event,
@@ -71,32 +76,53 @@ export function DiagnosticsPanel() {
   const since = sinceText(snapshot.since);
 
   const toggle = async (on: boolean) => {
-    try {
-      await telemetry.setEnabled(on);
-      toast.show({ message: on ? copy.usage.toasts.on : copy.usage.toasts.off, tone: 'info' });
-    } catch {
-      toast.show({ message: copy.usage.toasts.saveFailed, tone: 'danger' });
-    }
+    // Resolves false when the choice could not be saved: it works until Kalam closes, so say so.
+    const saved = await telemetry.setEnabled(on);
+    if (saved) toast.show({ message: on ? copy.usage.toasts.on : copy.usage.toasts.off, tone: 'info' });
+    else toast.show({ message: copy.usage.toasts.saveFailed, tone: 'danger' });
   };
 
+  // The JSON is built when the person acts, so its export time is the time they copied or shared it.
   const copyJson = async () => {
-    const outcome = await copyText(json);
+    const outcome = await copyText(telemetry.exportJson());
     toast.show(outcome === 'copied' ? { message: copy.usage.toasts.copied, tone: 'success' } : { message: copy.usage.toasts.failed, tone: 'danger' });
   };
 
   const shareJson = async () => {
-    const outcome = await shareText(json, copy.usage.shareTitle);
+    const outcome = await shareText(telemetry.exportJson(), copy.usage.shareTitle);
     if (outcome === 'shared') toast.show({ message: copy.usage.toasts.shared, tone: 'success' });
     else if (outcome === 'copied') toast.show({ message: copy.usage.toasts.copied, tone: 'success' });
     else if (outcome === 'failed') toast.show({ message: copy.usage.toasts.failed, tone: 'danger' });
   };
 
+  // Built when the person acts, from the activity log, so the export holds every run up to that moment (D17-029).
+  const withEvidence = async (then: (e: { json: string; runs: number }) => Promise<void> | void) => {
+    try {
+      const built = await exportInferenceEvidence();
+      setEvidence(built);
+      await then(built);
+    } catch {
+      toast.show({ message: copy.evidence.toasts.unreadable, tone: 'danger' });
+    }
+  };
+  const copyEvidence = () => withEvidence(async (e) => {
+    const outcome = await copyText(e.json);
+    toast.show(outcome === 'copied' ? { message: copy.evidence.toasts.copied, tone: 'success' } : { message: copy.evidence.toasts.failed, tone: 'danger' });
+  });
+  const shareEvidence = () => withEvidence(async (e) => {
+    const outcome = await shareText(e.json, copy.evidence.shareTitle);
+    if (outcome === 'shared') toast.show({ message: copy.evidence.toasts.shared, tone: 'success' });
+    else if (outcome === 'copied') toast.show({ message: copy.evidence.toasts.copied, tone: 'success' });
+    else if (outcome === 'failed') toast.show({ message: copy.evidence.toasts.failed, tone: 'danger' });
+  });
+  const toggleEvidence = async () => {
+    if (showEvidence) return setShowEvidence(false);
+    await withEvidence(() => setShowEvidence(true));
+  };
+
   return (
     <View style={{ gap: 12 }}>
-      <View style={{ gap: 4 }}>
-        <Text variant="h3">{copy.section.title}</Text>
-        <Text tone="secondary">{copy.section.description}</Text>
-      </View>
+      <SectionHeading title={copy.section.title} description={copy.section.description} />
 
       <Surface padded={20} style={{ gap: 16 }}>
         <SwitchRow
@@ -159,6 +185,35 @@ export function DiagnosticsPanel() {
           ) : (
             <View style={{ marginTop: 6 }}>{timingRows.map((row) => <TimingRow key={row.name} row={row} />)}</View>
           )}
+        </View>
+
+        <Rule />
+
+        <View style={{ gap: 8 }}>
+          <Text variant="h4">{copy.evidence.heading}</Text>
+          <Text variant="bodySmall" tone="secondary">{copy.evidence.description}</Text>
+          {evidence ? (
+            <Text variant="bodySmall" tone="muted" accessibilityLiveRegion="polite">
+              {evidence.runs === 0 ? copy.evidence.empty : copy.evidence.count(evidence.runs)}
+            </Text>
+          ) : null}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            <Button label={copy.evidence.copy} icon={Copy} variant="outline" onPress={() => void copyEvidence()} />
+            <Button label={copy.evidence.share} icon={Share2} variant="outline" onPress={() => void shareEvidence()} />
+            <Button
+              label={showEvidence ? copy.evidence.hide : copy.evidence.show}
+              icon={showEvidence ? EyeOff : Eye}
+              variant="ghost"
+              onPress={() => void toggleEvidence()}
+            />
+          </View>
+          {showEvidence && evidence ? (
+            <Surface tone="alt" padded={14} accessibilityLabel={copy.evidence.jsonLabel} role="group">
+              <ScrollView style={{ maxHeight: 240 }} nestedScrollEnabled>
+                <Text variant="bodySmall" selectable style={{ fontFamily: fontFamilies.mono }}>{evidence.json}</Text>
+              </ScrollView>
+            </Surface>
+          ) : null}
         </View>
 
         <Rule />

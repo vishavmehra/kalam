@@ -3,8 +3,23 @@
  * Shown in the input tray and on the review screen so a mixed creation is obvious.
  */
 import type { CreationDraft } from '@/features/input/normalize';
+import type { TFunction } from '@/i18n/translator';
 
 type DraftLike = Pick<CreationDraft, 'text' | 'photos' | 'voice' | 'video' | 'drawing'>;
+
+/** `inputParts` in the UI language. Join with `useFormat().list`. */
+export function inputPartsT(d: DraftLike, t: TFunction): string[] {
+  const parts: string[] = [];
+  if (d.text.trim()) parts.push(t('create.parts.text'));
+  if (d.voice?.transcript.trim()) parts.push(t('create.parts.voice'));
+  if (d.photos.length) parts.push(t('create.parts.photos', { count: d.photos.length }));
+  if (d.video?.frames.length) parts.push(t('create.parts.video'));
+  if (d.drawing) parts.push(t('create.parts.drawing', { count: d.drawing.summary.pageCount }));
+  return parts;
+}
+
+/** First letter upper case; scripts without case are unchanged. */
+export const sentenceCase = (s: string): string => (s ? s[0]!.toUpperCase() + s.slice(1) : s);
 
 export function inputParts(d: DraftLike): string[] {
   const parts: string[] = [];

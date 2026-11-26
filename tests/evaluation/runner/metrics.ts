@@ -321,6 +321,16 @@ export function buildReport(input: ReportInput): EvalReport {
   const failuresByStage: Record<string, number> = {};
   for (const r of results)
     for (const f of r.failures) failuresByStage[stageOf(f)] = (failuresByStage[stageOf(f)] ?? 0) + 1;
+  const passes = results.flatMap((r) => r.build.attempts ?? []);
+  const failedPasses = passes.filter((a) => a.stage !== 'ok');
+  const tally = (keys: string[]) => keys.reduce<Record<string, number>>((m, k) => ({ ...m, [k]: (m[k] ?? 0) + 1 }), {});
+  const compileFailures = passes.length
+    ? {
+        passes: passes.length,
+        byStage: tally(failedPasses.map((a) => `${a.pass}:${a.stage}`)),
+        byCode: tally(failedPasses.flatMap((a) => (a.issues.length ? a.issues.map((i) => i.split(' ')[0]) : [a.errorCode ?? 'unknown']))),
+      }
+    : undefined;
 
   return {
     schema: 'kalam-eval-report/1',
@@ -353,6 +363,7 @@ export function buildReport(input: ReportInput): EvalReport {
       .filter((r) => r.failures.length > 0)
       .map((r) => ({ id: r.id, dataset: r.dataset, reasons: r.failures })),
     failuresByStage,
+    ...(compileFailures ? { compileFailures } : {}),
     hybrid,
     scenarios: scenarioStatuses(mode, results, hybrid),
     humanReview: summarizeHumanReview(results, input.handDrawnPhotos),

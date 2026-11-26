@@ -1,0 +1,11 @@
+11-25 04:49:23.694 22338 12972 I PhenotypeResourceReader: unable to find any Phenotype resource metadata for com.google.android.aicore
+11-25 04:49:26.205  2518  5001 V SettingsProvider: did not write settings for prefix 'aicore/' because sync is disabled
+11-25 04:49:31.208  2518  7179 V SettingsProvider: did not write settings for prefix 'aicore/' because sync is disabled
+11-25 04:49:32.876  7004  7142 I FASModelGlobal: verify : ignore com.google.android.aicore
+11-25 04:49:32.885  7004  7142 I FASModelGlobal: verify : ignore com.samsung.android.aicore
+11-25 04:49:36.210  2518  7179 V SettingsProvider: did not write settings for prefix 'aicore/' because sync is disabled
+11-25 04:49:41.212  2518  4987 V SettingsProvider: did not write settings for prefix 'aicore/' because sync is disabled
+11-25 04:49:46.215  2518  3561 V SettingsProvider: did not write settings for prefix 'aicore/' because sync is disabled
+11-25 04:49:46.215 22338 14082 W PlatformConfigurator: Retried propagating for com.google.android.platform.aicore 5 times without succeeding. Giving up. [CONTEXT service_id=204 ]
+11-25 05:02:15.558  7004  7142 I FASModelGlobal: verify : ignore com.google.android.aicore
+11-25 05:02:15.569  7004  7142 I FASModelGlobal: verify : ignore com.samsung.android.aicore

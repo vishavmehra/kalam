@@ -72,11 +72,15 @@ export function startOf(date: string, unit: TimeUnit): string {
   return addDays(date, -weekday);
 }
 
-/** Bucket starts from the bucket of `from` to the bucket of `to`, inclusive. */
-export function bucketsBetween(from: string, to: string, unit: TimeUnit): string[] {
+/**
+ * Bucket starts from the bucket of `from` to the bucket of `to`, inclusive, oldest first. At most
+ * `max` of them, the newest: the walk starts at `to`, so a far-away `from` costs nothing.
+ */
+export function bucketsBetween(from: string, to: string, unit: TimeUnit, max = Infinity): string[] {
+  const first = startOf(from, unit);
   const out: string[] = [];
-  for (let k = startOf(from, unit); k <= to; k = shift(k, unit, 1)) out.push(k);
-  return out;
+  for (let k = startOf(to, unit); k >= first && out.length < max; k = shift(k, unit, -1)) out.push(k);
+  return out.reverse();
 }
 
 const formatters = new Map<string, Intl.DateTimeFormat>();

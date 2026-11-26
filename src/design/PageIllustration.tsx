@@ -3,7 +3,7 @@ import Svg, { Line, Path, Rect } from 'react-native-svg';
 import { useKalamTheme } from './theme';
 
 /**
- * A blank notebook page with a folded corner and a pen loop: Kalam's illustration for "nothing
+ * A blank ledger page with a folded corner and a pen loop (no margin rule: owner, 2026-11-25): Kalam's illustration for "nothing
  * here" states (404, empty lists). Decorative; pair it with a heading that says what happened.
  */
 export function PageIllustration({ width = 132 }: { width?: number }) {
@@ -15,7 +15,6 @@ export function PageIllustration({ width = 132 }: { width?: number }) {
       {[40, 56, 72, 88, 104, 120, 136].map((y) => (
         <Line key={y} x1={8} x2={120} y1={y} y2={y} stroke={colors.ruleLine} strokeWidth={1.2} />
       ))}
-      <Line x1={24} x2={24} y1={8} y2={156} stroke={colors.marginLine} strokeWidth={1.4} />
       <Path d="M98 6v20a6 6 0 0 0 6 6h20" fill={colors.surfaceAlt} stroke={colors.border} strokeWidth={1.5} />
       <Path
         d="M46 78c4-12 22-14 26-3 3 9-9 13-11 21-1 4 0 7 2 9"

@@ -1,9 +1,9 @@
-import { completeOnboarding, expect, test } from './fixtures';
+import { completeOnboarding, expect, navTo, test } from './fixtures';
 
 test.describe('f. settings', () => {
-  test('switching AI mode to offline-only persists across a reload', async ({ page }) => {
+  test('switching AI mode to offline-only persists across a reload @core', async ({ page }) => {
     await completeOnboarding(page);
-    await page.getByRole('navigation', { name: 'Kalam' }).getByRole('link', { name: 'Settings' }).click();
+    await navTo(page, 'Settings');
     await expect(page).toHaveURL(/\/settings$/);
 
     const group = page.getByRole('radiogroup', { name: 'When Kalam builds or edits an app' });
@@ -16,8 +16,11 @@ test.describe('f. settings', () => {
     await expect(offlineOnly).toBeChecked();
     await expect(hybrid).not.toBeChecked();
     await expect(page.getByText('Kalam never goes online.')).toBeVisible();
-    // Cloud switches are forced off and cannot be toggled while offline-only.
-    await expect(page.getByRole('switch', { name: /Use cloud AI when needed/ })).toBeDisabled();
+    // Cloud switches are forced off and cannot be toggled while offline-only (the row is dimmed and ignores a press).
+    const cloud = page.getByRole('switch', { name: /Use cloud AI when needed/ });
+    await expect(cloud).toHaveAttribute('aria-checked', 'false');
+    await cloud.click({ force: true });
+    await expect(cloud).toHaveAttribute('aria-checked', 'false');
 
     await page.reload();
     await expect(page).toHaveURL(/\/settings$/);

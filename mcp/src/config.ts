@@ -24,7 +24,8 @@ export const USAGE = `Usage: kalam-mcp [options]
 
 Runs the Kalam MCP server. By default it talks over stdio and touches no files and no network.
 
-  --http                Serve Streamable HTTP on http://127.0.0.1:<port>/mcp instead of stdio
+  --http                Serve Streamable HTTP on http://127.0.0.1:<port>/mcp instead of stdio.
+                        No login, so it cannot be combined with --workspace or --firebase
   --port <n>            Port for --http (default ${DEFAULT_PORT})
   --workspace <dir>     Allow reading and writing *.kalam.json files in this folder only
   --app-url <url>       Your hosted Kalam web app, for web "Open in Kalam" links
@@ -68,6 +69,11 @@ export function parseOptions(argv: string[]): Options {
       version: { type: 'boolean' },
     },
   });
+  // The HTTP endpoint has no login: any program on this computer could reach it. Writing files and
+  // spending the cloud budget stay on stdio, where only the host that started the server can call.
+  if (values.http && (values.workspace !== undefined || values.firebase)) {
+    throw new Error('--http cannot be combined with --workspace or --firebase. The HTTP endpoint has no login, so any program on this computer could use those tools. Use stdio for them.');
+  }
   return {
     http: values.http ?? false,
     port: int(values.port, '--port', 1024, 65535, DEFAULT_PORT),

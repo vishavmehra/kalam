@@ -7,32 +7,29 @@
  * security checks. Objects are strict: unknown properties are rejected.
  */
 import { z } from 'zod';
+// The limits policy is pure data with no imports, so it cannot start a cycle.
+import { limitsPolicy } from '../limits/policy';
+// Imports only zod (no cycle). The chart is R1's v1.1 proposal; its parts are reused here unchanged.
+import {
+  CHART_KINDS, METRIC_OPERATIONS, reportFilterSchema, reportRangeSchema, timeUnitSchema,
+} from '../reports/chart-component';
 
 // Zod's JIT probes `new Function("")`, which our CSP (no unsafe-eval) blocks. Jitless parsing avoids the
 // probe entirely (security review R-03). Runs at import time, before any schema is used.
 z.config({ jitless: true });
 
-export const SCHEMA_VERSION = '1.0.0';
+/**
+ * 1.1 is additive (docs/05 §15.2): relations, layout groups, per-component style, chart, timer,
+ * reminder, signature and the permissions / accessibility / settings / localization sections. Every
+ * 1.0 document is still valid; `migrate.ts` raises its version number, nothing else.
+ */
+export const SCHEMA_VERSION = '1.1.0';
 
-/** Resource limits (docs/05 §13.2 plus Kalam implementation limits). */
-export const LIMITS = {
-  screens: 8,
-  componentsPerScreen: 40,
-  collections: 10,
-  fieldsPerCollection: 30,
-  aiBlocks: 15,
-  actions: 60,
-  intentPhrasesPerAction: 12,
-  enumOptions: 50,
-  nameLength: 60,
-  labelLength: 120,
-  descriptionLength: 280,
-  promptLength: 1200,
-  formulaLength: 300,
-  formulaSteps: 10_000,
-  classifyLabels: 12,
-  tags: 8,
-} as const;
+/**
+ * Resource limits (docs/05 §13.2 plus Kalam implementation limits). The numbers live in ONE place, the versioned
+ * limits policy (docs/04 §6.6), so the compiler, the validator and the runtime enforce the same ones. Read-only.
+ */
+export const LIMITS = limitsPolicy.spec;
 
 /** Stable identifier: lowercase letters, digits, underscores (docs/05 §2.3). */
 export const idSchema = z
@@ -49,6 +46,10 @@ export const RESERVED_IDS = [
   // Key the Smart Reminders feature uses in each app's key-value state (docs/14 §10). An app counter
   // with this id would overwrite the reminder rules.
   'kalam_reminders',
+  // Key that remembers "Not now" for an app's suggested Access Modes (core/spec/v11.ts).
+  'kalam_suggested_modes',
+  // Key the runtime keeps an unsent form draft under, so a killed process loses no typing (engine/draft.ts).
+  'kalam_draft',
 ] as const;
 
 export const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Colours must be #RRGGBB');
@@ -89,6 +90,16 @@ export const iconSchema = z
 // ─── Fields (docs/05 §4) ──────────────────────────────────────────────────────
 const fieldBase = { label, required: z.boolean().optional() };
 
+/**
+ * v1.1 relation (docs/00 §11.3): the text field stores the id of one record of `collection`.
+ * `display` is the field of that collection people see. `onDelete` decides what happens to this
+ * record when the other one is deleted; absent means `restrict` (the delete is refused).
+ */
+export const ON_DELETE_RULES = ['restrict', 'cascade', 'clear'] as const;
+export const relationSchema = z
+  .object({ collection: idSchema, display: idSchema.optional(), onDelete: z.enum(ON_DELETE_RULES).optional() })
+  .strict();
+
 export const textFieldSchema = z
   .object({
     type: z.literal('text'),
@@ -97,6 +108,7 @@ export const textFieldSchema = z
     placeholder: shortText.optional(),
     multiline: z.boolean().optional(),
     maxLength: z.number().int().min(1).max(5000).optional(),
+    ref: relationSchema.optional(),
   })
   .strict();
 export const numberFieldSchema = z
@@ -125,10 +137,17 @@ export const enumFieldSchema = z
   })
   .strict();
 
+/**
+ * v1.1 photo kept with an entry. The value is a reference to a picture stored on this device
+ * (LOCAL_MEDIA_REF), never a URL and never an upload. A photo component with `field` fills it.
+ */
+export const imageFieldSchema = z.object({ type: z.literal('image'), ...fieldBase }).strict();
+export const LOCAL_MEDIA_REF = /^local:[A-Za-z0-9_-]{1,64}$/;
+
 export const fieldSchema = z.discriminatedUnion('type', [
-  textFieldSchema, numberFieldSchema, dateFieldSchema, booleanFieldSchema, enumFieldSchema,
+  textFieldSchema, numberFieldSchema, dateFieldSchema, booleanFieldSchema, enumFieldSchema, imageFieldSchema,
 ]);
-export const FIELD_TYPES = ['text', 'number', 'date', 'boolean', 'enum'] as const;
+export const FIELD_TYPES = ['text', 'number', 'date', 'boolean', 'enum', 'image'] as const;
 
 export const collectionSchema = z
   .object({
@@ -137,15 +156,43 @@ export const collectionSchema = z
   })
   .strict();
 
+// ─── Per-component style (v1.1, docs/14 §4.4) ─────────────────────────────────
+/** Named choices only. Colours come from the app theme's palette, never from the spec. No CSS. */
+export const STYLE_SIZES = ['small', 'medium', 'large'] as const;
+export const STYLE_EMPHASIS = ['subtle', 'normal', 'strong'] as const;
+export const STYLE_TONES = ['neutral', 'primary', 'secondary', 'success', 'warning', 'danger'] as const;
+export const STYLE_ALIGN = ['start', 'center', 'end'] as const;
+export const componentStyleSchema = z
+  .object({
+    size: z.enum(STYLE_SIZES).optional(),
+    emphasis: z.enum(STYLE_EMPHASIS).optional(),
+    tone: z.enum(STYLE_TONES).optional(),
+    align: z.enum(STYLE_ALIGN).optional(),
+    fullWidth: z.boolean().optional(),
+  })
+  .strict();
+
 // ─── Components v1 (docs/05 §6) ───────────────────────────────────────────────
+/**
+ * How much a person who turned on Simple mode needs a component (docs/10 §4.3). Unset means standard.
+ * Essential is never folded away; standard stays; secondary is folded behind "Show more". Only a component
+ * marked secondary is ever hidden automatically, and nothing is deleted: turning Simple mode off, or
+ * "Show more", brings it back.
+ */
+export const IMPORTANCE_LEVELS = ['essential', 'standard', 'secondary'] as const;
 const componentBase = {
   id: idSchema,
   visible: z.boolean().optional(),
+  /** The 1.0 spelling of `importance: "secondary"` (a list uses this name for its second-line field instead). */
   secondary: z.boolean().optional(),
+  /** v1.1: the three Simple-mode levels. Wins over `secondary` when both are given. */
+  importance: z.enum(IMPORTANCE_LEVELS).optional(),
   a11yLabel: shortText.optional(),
   /** Accessibility description (docs/05 §11.1). */
   a11yDescription: z.string().max(300).optional(),
   readAloud: z.string().max(300).optional(),
+  /** v1.1 */
+  style: componentStyleSchema.optional(),
 };
 
 export const textComponentSchema = z.object({ ...componentBase, type: z.literal('text'), label }).strict();
@@ -243,21 +290,110 @@ export const statComponentSchema = z
     suffix: z.string().max(12).optional(),
   })
   .strict();
+/** With `field` (v1.1) the picture is kept in that image field of the screen form's entry. */
 export const photoComponentSchema = z
-  .object({ ...componentBase, type: z.literal('photo'), label, aiBlock: idSchema.optional() })
+  .object({ ...componentBase, type: z.literal('photo'), label, aiBlock: idSchema.optional(), field: idSchema.optional() })
+  .strict();
+
+// ─── Components v1.1 (docs/05 §6 "later components") ──────────────────────────
+/**
+ * Chart: R1's proposal (src/core/reports/chart-component.ts) plus `style`. Cross-field rules
+ * (split by a field or a period, count takes no field) are checked in validate.ts.
+ */
+export const chartComponentSchema = z
+  .object({
+    ...componentBase,
+    type: z.literal('chart'),
+    label,
+    chart: z.enum(CHART_KINDS),
+    source: idSchema,
+    metric: z.enum(METRIC_OPERATIONS),
+    valueField: idSchema.optional(),
+    groupBy: idSchema.optional(),
+    period: timeUnitSchema.optional(),
+    dateField: idSchema.optional(),
+    range: reportRangeSchema.optional(),
+    filters: z.array(reportFilterSchema).max(3).optional(),
+  })
+  .strict();
+/** Countdown or stopwatch. With `field` the time lands in that number field of the screen form. */
+export const timerComponentSchema = z
+  .object({
+    ...componentBase,
+    type: z.literal('timer'),
+    label,
+    mode: z.enum(['countdown', 'stopwatch']),
+    durationSec: z.number().int().min(1).max(LIMITS.timerSeconds).optional(),
+    field: idSchema.optional(),
+    unit: z.enum(['seconds', 'minutes']).optional(),
+  })
+  .strict();
+/**
+ * Reminder for dated entries of `source` (docs/14 §10). The person switches it on; nothing is
+ * scheduled before that. `doneField` (yes/no) skips finished entries. `{title}` in `message` is
+ * replaced by the entry's name.
+ */
+export const reminderComponentSchema = z
+  .object({
+    ...componentBase,
+    type: z.literal('reminder'),
+    label,
+    source: idSchema,
+    dateField: idSchema,
+    leadDays: z.number().int().min(0).max(30).optional(),
+    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Times are HH:MM, 24 hour').optional(),
+    doneField: idSchema.optional(),
+    titleField: idSchema.optional(),
+    message: z.string().min(1).max(120).optional(),
+  })
+  .strict();
+/** Signature pad. The drawing is stored as plain numbers in a text field, never as markup. */
+export const signatureComponentSchema = z
+  .object({ ...componentBase, type: z.literal('signature'), label, field: idSchema, required: z.boolean().optional() })
   .strict();
 
 export const componentSchema = z.discriminatedUnion('type', [
   textComponentSchema, headingComponentSchema, numberComponentSchema, textInputComponentSchema,
   dateComponentSchema, choiceComponentSchema, toggleComponentSchema, counterComponentSchema,
   bigButtonComponentSchema, listComponentSchema, statComponentSchema, photoComponentSchema,
+  chartComponentSchema, timerComponentSchema, reminderComponentSchema, signatureComponentSchema,
 ]);
+export const V11_COMPONENT_TYPES = ['chart', 'timer', 'reminder', 'signature'] as const;
 export const COMPONENT_TYPES = [
   'text', 'heading', 'number', 'textInput', 'date', 'choice', 'toggle', 'counter', 'bigButton', 'list',
-  'stat', 'photo',
+  'stat', 'photo', ...V11_COMPONENT_TYPES,
 ] as const;
 /** Input components bind `field` to the screen form. */
 export const INPUT_COMPONENT_TYPES = ['number', 'textInput', 'date', 'choice', 'toggle'] as const;
+
+// ─── Layout groups (v1.1, docs/05 §5.1 "layout configuration", docs/14 §4.4) ──
+/**
+ * Presentation only. Components stay in the flat `children` list (so every data, voice and history
+ * path keeps finding them); a group names the ids it arranges. A component sits in at most one
+ * group, groups nest at most LIMITS.layoutDepth deep. Unlisted components render as before.
+ */
+export const LAYOUT_TYPES = ['row', 'grid', 'card'] as const;
+export interface KalamLayoutNode {
+  type: (typeof LAYOUT_TYPES)[number];
+  /** Cards only. */
+  title?: string;
+  /** Grids only, 2 to 4. */
+  columns?: number;
+  style?: z.infer<typeof componentStyleSchema>;
+  /** Component ids on this screen, or nested groups. */
+  children: Array<string | KalamLayoutNode>;
+}
+export const layoutNodeSchema: z.ZodType<KalamLayoutNode> = z.lazy(() =>
+  z
+    .object({
+      type: z.enum(LAYOUT_TYPES),
+      title: shortText.optional(),
+      columns: z.number().int().min(2).max(4).optional(),
+      style: componentStyleSchema.optional(),
+      children: z.array(z.union([idSchema, layoutNodeSchema])).min(1).max(LIMITS.layoutChildren),
+    })
+    .strict(),
+);
 
 // ─── Screens (docs/05 §5) ─────────────────────────────────────────────────────
 export const screenSchema = z
@@ -272,6 +408,8 @@ export const screenSchema = z
      */
     form: idSchema.optional(),
     children: z.array(componentSchema).max(LIMITS.componentsPerScreen),
+    /** v1.1 */
+    layout: z.array(layoutNodeSchema).min(1).max(LIMITS.layoutNodesPerScreen).optional(),
   })
   .strict();
 
@@ -289,12 +427,16 @@ export const navigateActionSchema = z.object({ type: z.literal('navigate'), scre
 export const insertActionSchema = z
   .object({ type: z.literal('insert'), collection: idSchema, then: thenSchema.optional() })
   .strict();
+/** A fixed value an update writes: "Mark done" sets done = true without any input (v1.1). */
+export const setValueSchema = z.union([z.string().max(500), z.number().finite(), z.boolean()]);
 /** Updates the selected record (selected via list `detailScreen`) with current form values. */
 export const updateActionSchema = z
   .object({
     type: z.literal('update'),
     collection: idSchema,
     record: z.literal('selected'),
+    /** v1.1: field → fixed value, written together with the screen's inputs (keys are fields of `collection`). */
+    set: z.record(idSchema, setValueSchema).optional(),
     then: thenSchema.optional(),
   })
   .strict();
@@ -327,16 +469,26 @@ export const feedbackActionSchema = z
   })
   .strict();
 export const clearFormActionSchema = z.object({ type: z.literal('clearForm') }).strict();
+/**
+ * v1.1 (docs/05 §7.2 "execute an approved formula"): evaluates one formula with the whitelist engine and
+ * writes the result to `target`, a counter id (kept in app state) or a field of the current screen's form.
+ * The formula is the same language as a stat's `expr`, checked when the spec is validated. No code runs.
+ */
+export const computeActionSchema = z
+  .object({ type: z.literal('compute'), formula: z.string().min(1).max(LIMITS.formulaLength), target: idSchema, then: thenSchema.optional() })
+  .strict();
 
 export const actionSchema = z.discriminatedUnion('type', [
   navigateActionSchema, insertActionSchema, updateActionSchema, deleteActionSchema, incrementActionSchema,
   decrementActionSchema, resetActionSchema, runAIActionSchema, speakActionSchema, feedbackActionSchema,
-  clearFormActionSchema,
+  clearFormActionSchema, computeActionSchema,
 ]);
 export const ACTION_TYPES = [
   'navigate', 'insert', 'update', 'delete', 'increment', 'decrement', 'reset', 'runAI', 'speak', 'feedback',
   'clearForm',
 ] as const;
+/** Action types added in 1.1. Kept apart from ACTION_TYPES, which is what the compiler may write (hand-made and template specs may use these). */
+export const V11_ACTION_TYPES = ['compute'] as const;
 
 // ─── AI blocks (docs/05 §9, docs/07 §13) ──────────────────────────────────────
 export const verificationSchema = z
@@ -430,6 +582,48 @@ export const metaSchema = z
   })
   .strict();
 
+// ─── v1.1 sections (docs/00 §11.1) ────────────────────────────────────────────
+const langCode = z.string().regex(/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/);
+/** Device capabilities the app uses, each with a plain reason shown to the person. */
+export const PERMISSION_KINDS = ['camera', 'notifications'] as const;
+export const permissionsSchema = z
+  .array(z.object({ kind: z.enum(PERMISSION_KINDS), reason: label }).strict())
+  .max(PERMISSION_KINDS.length);
+/**
+ * Modes the app suggests. Only offered: nothing changes until the person taps "Turn on", and then
+ * they become the person's own modes (core/spec/v11.ts offeredAccessModes). Never removes a mode.
+ */
+export const SUGGESTED_MODES = ['large', 'highContrast', 'simple', 'readAloud'] as const;
+export const accessibilitySchema = z
+  .object({
+    /** One or two sentences a screen reader can say about the whole app. */
+    summary: z.string().min(1).max(300).optional(),
+    suggestedModes: z.array(z.enum(SUGGESTED_MODES)).max(SUGGESTED_MODES.length).optional(),
+  })
+  .strict();
+export const settingsSchema = z
+  .object({
+    /** Default currency for money values (ISO 4217). */
+    currency: z.string().regex(/^[A-Z]{3}$/).optional(),
+    timeFormat: z.enum(['12h', '24h']).optional(),
+  })
+  .strict();
+/**
+ * Terminology constraints for translation (docs/05 §9.7): `keep` never translates the term (names,
+ * brands, trade words); `translations` fixes the word per language. One or the other.
+ * The list of reviewed languages stays in `meta.supportedLanguages` (already used by the Bazaar).
+ */
+export const terminologySchema = z
+  .object({
+    term: z.string().min(1).max(60),
+    keep: z.boolean().optional(),
+    translations: z.record(langCode, z.string().min(1).max(60)).optional(),
+  })
+  .strict();
+export const localizationSchema = z
+  .object({ terminology: z.array(terminologySchema).max(LIMITS.terminology).optional() })
+  .strict();
+
 // ─── Top level (docs/05 §2.2) ─────────────────────────────────────────────────
 export const kalamSpecSchema = z
   .object({
@@ -449,6 +643,11 @@ export const kalamSpecSchema = z
     aiBlocks: z.record(idSchema, aiBlockSchema),
     intents: z.record(idSchema, z.array(z.string().min(1).max(60)).max(LIMITS.intentPhrasesPerAction)),
     meta: metaSchema,
+    // v1.1 sections, all optional.
+    permissions: permissionsSchema.optional(),
+    accessibility: accessibilitySchema.optional(),
+    settings: settingsSchema.optional(),
+    localization: localizationSchema.optional(),
   })
   .strict();
 
@@ -470,6 +669,20 @@ export type KalamVerification = z.infer<typeof verificationSchema>;
 export type KalamMeta = z.infer<typeof metaSchema>;
 export type ThemePreset = (typeof THEME_PRESETS)[number];
 export type IconGlyph = (typeof ICON_GLYPHS)[number];
+export type KalamRelation = z.infer<typeof relationSchema>;
+export type OnDeleteRule = (typeof ON_DELETE_RULES)[number];
+export type KalamComponentStyle = z.infer<typeof componentStyleSchema>;
+export type KalamImportance = (typeof IMPORTANCE_LEVELS)[number];
+export type StyleTone = (typeof STYLE_TONES)[number];
+export type LayoutType = (typeof LAYOUT_TYPES)[number];
+export type PermissionKind = (typeof PERMISSION_KINDS)[number];
+export type SuggestedMode = (typeof SUGGESTED_MODES)[number];
+export type KalamPermission = z.infer<typeof permissionsSchema>[number];
+export type KalamAccessibility = z.infer<typeof accessibilitySchema>;
+/** Named apart from contracts' KalamSettings (Kalam's own settings). */
+export type KalamAppSettings = z.infer<typeof settingsSchema>;
+export type KalamTerm = z.infer<typeof terminologySchema>;
+export type KalamLocalization = z.infer<typeof localizationSchema>;
 
 /** Narrow helper: component of a given type. */
 export type ComponentOf<T extends KalamComponentType> = Extract<KalamComponent, { type: T }>;

@@ -44,6 +44,9 @@ export async function getSpeechCapability(lang: string): Promise<SpeechCapabilit
   const SR = recognitionClass();
   const locale = speechLocale(lang);
   if (!SR) return { supported: false, onDevice: 'unavailable', locale };
+  // Bundled and headless Chromium (automated browsers set navigator.webdriver) crash the whole page
+  // on SpeechRecognition.available({ processLocally }). Skip the probe there; real Chrome is unaffected.
+  if ((globalThis as { navigator?: { webdriver?: boolean } }).navigator?.webdriver) return { supported: true, onDevice: 'unknown', locale };
   try {
     if (SR.available) return { supported: true, onDevice: asStatus(await SR.available({ langs: [locale], processLocally: true })), locale };
     if (SR.availableOnDevice) return { supported: true, onDevice: asStatus(await SR.availableOnDevice(locale)), locale };

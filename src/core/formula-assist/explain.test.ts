@@ -96,6 +96,10 @@ describe('coverage of the formula grammar', () => {
     expect(say('round(2.5)')).toBe('Shows 2.5, rounded to a whole number.');
     expect(say('round(2.55, 1)')).toBe('Shows 2.55, rounded to 1 decimal place.');
     expect(say('round(2.5, 0)')).toBe('Shows 2.5, rounded to a whole number.');
+    // The engine keeps the digits between 0 and 10, and the sentence says what the engine does.
+    expect(say('round(2.5, -1)')).toBe('Shows 2.5, rounded to a whole number.');
+    expect(say('round(2.5, 15)')).toBe('Shows 2.5, rounded to 10 decimal places.');
+    expect(say('round(2.5, 2.9)')).toBe('Shows 2.5, rounded to 2 decimal places.');
     expect(say('abs(5 - 8)')).toBe('Shows 5 minus 8, ignoring any minus sign.');
     expect(say('len(expenses)')).toBe('Shows the number of expenses.');
     expect(say("len(filter(expenses, date == today))")).toBe('Shows the number of expenses where date is today.');

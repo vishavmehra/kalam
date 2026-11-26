@@ -1,0 +1,296 @@
+{
+  "schema": "kalam-evidence-summary/1",
+  "note": "Summary of the 2026-11-25 evaluation runs against gemini-3.8-flash through Firebase AI Logic (Node, no on-device model). The full reports stay in tests/evaluation/reports (gitignored). Inputs are the synthetic golden set in tests/evaluation/golden (25 text, 25 sketch, 25 image, audio, video and mixed). First pass means valid KalamSpec before the repair pass; the denominator is the cloud-routed cases only. Valid does not mean correct: see the reviewer scores below.",
+  "runs": [
+    {
+      "label": "Run 1: before the compiler fixes",
+      "reportFile": "eval-2026-11-25T08-55-34-664Z-live.json (local, not committed)",
+      "createdAt": "2026-11-25T08:55:34.664Z",
+      "mode": "live",
+      "model": [
+        "gemini-3.8-flash"
+      ],
+      "promptVersion": "compiler-prompt@c0be149067e4",
+      "totalCases": 75,
+      "cloudRoutedCases": 42,
+      "firstPassValid": {
+        "count": 16,
+        "of": 42,
+        "rate": 0.381
+      },
+      "validAfterRepair": {
+        "count": 30,
+        "of": 42,
+        "rate": 0.714
+      },
+      "casesBuiltValid": 50,
+      "httpCalls": 68,
+      "tokens": {
+        "input": 307215,
+        "output": 187859
+      },
+      "latencyMs": {
+        "medianMs": 9069.21,
+        "p95Ms": 76103.68
+      },
+      "failuresByStage": {
+        "build": 12,
+        "semantic": 4,
+        "classifier": 17
+      }
+    },
+    {
+      "label": "Sketch photos only (synthetic photographs of the 25 sketches), before the compiler fixes",
+      "reportFile": "eval-2026-11-25T11-07-46-701Z-live.json (local, not committed)",
+      "createdAt": "2026-11-25T11:07:46.701Z",
+      "mode": "live",
+      "model": [
+        "gemini-3.8-flash"
+      ],
+      "promptVersion": "compiler-prompt@5133ec7b060d",
+      "totalCases": 25,
+      "cloudRoutedCases": 21,
+      "firstPassValid": {
+        "count": 11,
+        "of": 21,
+        "rate": 0.524
+      },
+      "validAfterRepair": {
+        "count": 18,
+        "of": 21,
+        "rate": 0.857
+      },
+      "casesBuiltValid": 18,
+      "httpCalls": 30,
+      "tokens": {
+        "input": 210185,
+        "output": 45998
+      },
+      "latencyMs": {
+        "medianMs": 18824.52,
+        "p95Ms": 28530.4
+      },
+      "failuresByStage": {
+        "classifier": 15,
+        "build": 3,
+        "semantic": 4
+      }
+    },
+    {
+      "label": "Run 2: after the compiler fixes (8 fixes from the run 1 findings)",
+      "reportFile": "eval-2026-11-25T14-53-06-271Z-live.json (local, not committed)",
+      "createdAt": "2026-11-25T14:53:06.271Z",
+      "mode": "live",
+      "model": [
+        "gemini-3.8-flash"
+      ],
+      "promptVersion": "compiler-prompt@7a912e8dcd4c",
+      "totalCases": 75,
+      "cloudRoutedCases": 42,
+      "firstPassValid": {
+        "count": 32,
+        "of": 42,
+        "rate": 0.762
+      },
+      "validAfterRepair": {
+        "count": 39,
+        "of": 42,
+        "rate": 0.929
+      },
+      "casesBuiltValid": 59,
+      "httpCalls": 56,
+      "tokens": {
+        "input": 365791,
+        "output": 111765
+      },
+      "latencyMs": {
+        "medianMs": 11150.64,
+        "p95Ms": 108193.92
+      },
+      "failuresByStage": {
+        "classifier": 17,
+        "semantic": 5,
+        "build": 3
+      },
+      "compileFailures": {
+        "passes": 51,
+        "byStage": {
+          "first:validation": 8,
+          "repair:validation": 1,
+          "first:structured_output": 1,
+          "repair:model": 1,
+          "first:model": 1
+        },
+        "byCode": {
+          "SCHEMA_INVALID": 5,
+          "UNKNOWN_SCREEN": 3,
+          "INVALID_FORMULA": 3,
+          "IR": 2,
+          "UNKNOWN_ACTION": 2,
+          "timeout": 2
+        }
+      }
+    }
+  ],
+  "hybridScenariosInRun2": [
+    {
+      "id": "A",
+      "title": "Local model available",
+      "status": "not_run"
+    },
+    {
+      "id": "B",
+      "title": "Local model unavailable, cloud fallback",
+      "status": "exercised"
+    },
+    {
+      "id": "C",
+      "title": "Local model failure, retry and fallback",
+      "status": "not_run"
+    },
+    {
+      "id": "D",
+      "title": "Local-only mode never routes to cloud",
+      "status": "not_run"
+    },
+    {
+      "id": "E",
+      "title": "Offline: saved apps work, AI fails gracefully",
+      "status": "not_run"
+    }
+  ],
+  "inferenceSourceInRun2": {
+    "events": 72,
+    "modelCalls": 51,
+    "bySource": {
+      "deterministic": {
+        "count": 21,
+        "success": 21,
+        "medianMs": 4,
+        "p95Ms": 16
+      },
+      "cloud": {
+        "count": 51,
+        "success": 48,
+        "medianMs": 13510,
+        "p95Ms": 114162
+      }
+    },
+    "sourceViolations": []
+  },
+  "deterministicRunAfterFixes": {
+    "reportFile": "eval-2026-11-25T15-48-45-339Z-deterministic.json (local, not committed)",
+    "modelCalls": 0,
+    "totalCases": 75,
+    "failuresByStage": {
+      "classifier": 17
+    },
+    "datasets": {
+      "text": {
+        "cases": 25,
+        "ambiguous": 2,
+        "complexityCorrect": {
+          "correct": 23,
+          "total": 25,
+          "rate": 0.92
+        },
+        "routeCorrect": {
+          "correct": 25,
+          "total": 25,
+          "rate": 1
+        }
+      },
+      "sketch": {
+        "cases": 25,
+        "ambiguous": 17,
+        "complexityCorrect": {
+          "correct": 12,
+          "total": 25,
+          "rate": 0.48
+        },
+        "routeCorrect": {
+          "correct": 25,
+          "total": 25,
+          "rate": 1
+        }
+      },
+      "image": {
+        "cases": 6,
+        "ambiguous": 1,
+        "complexityCorrect": {
+          "correct": 6,
+          "total": 6,
+          "rate": 1
+        },
+        "routeCorrect": {
+          "correct": 6,
+          "total": 6,
+          "rate": 1
+        }
+      },
+      "audio": {
+        "cases": 8,
+        "ambiguous": 0,
+        "complexityCorrect": {
+          "correct": 7,
+          "total": 8,
+          "rate": 0.875
+        },
+        "routeCorrect": {
+          "correct": 8,
+          "total": 8,
+          "rate": 1
+        }
+      },
+      "video": {
+        "cases": 5,
+        "ambiguous": 3,
+        "complexityCorrect": {
+          "correct": 4,
+          "total": 5,
+          "rate": 0.8
+        },
+        "routeCorrect": {
+          "correct": 5,
+          "total": 5,
+          "rate": 1
+        }
+      },
+      "mixed": {
+        "cases": 6,
+        "ambiguous": 2,
+        "complexityCorrect": {
+          "correct": 6,
+          "total": 6,
+          "rate": 1
+        },
+        "routeCorrect": {
+          "correct": 6,
+          "total": 6,
+          "rate": 1
+        }
+      }
+    }
+  },
+  "reviewer": {
+    "who": "AI reviewer (Claude), delegated by the owner on 2026-11-25; not a human",
+    "apps": 50,
+    "verdicts": {
+      "correct": 34,
+      "partly": 12,
+      "wrong": 4
+    },
+    "preScorerGemini": {
+      "correct": 45,
+      "partly": 4,
+      "wrong": 1
+    },
+    "semanticAccuracyByInput": {
+      "text": 0.74,
+      "sketch": 0.62,
+      "audio": 0.83,
+      "mixed": 0.5
+    },
+    "scope": "Scored the run 1 builds. The run 2 builds have not been re-scored."
+  }
+}

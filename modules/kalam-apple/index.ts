@@ -1,13 +1,18 @@
 /**
  * JS side of the kalam-apple native module (ios/KalamAppleModule.swift): Apple Foundation Models on the
  * device (SystemLanguageModel, iOS 26 or later with Apple Intelligence on), and App Check tokens from
- * App Attest, with DeviceCheck as fallback. Optional at runtime: Expo Go, Android, web, a build without the
+ * App Attest, with DeviceCheck as fallback, and a per-locale on-device speech check. Optional at runtime: Expo Go, Android, web, a build without the
  * module and Node unit tests all get `module: null`.
  */
 
-export type AppleAvailability = 'unavailable' | 'downloading' | 'available';
-/** SystemLanguageModel.Availability.UnavailableReason, plus 'osTooOld' below iOS 26. */
-export type AppleUnavailableReason = 'deviceNotEligible' | 'appleIntelligenceNotEnabled' | 'modelNotReady' | 'osTooOld' | 'unknown';
+/** No 'downloading': iOS does not say whether a model that is not ready is downloading (modelNotReady). */
+export type AppleAvailability = 'unavailable' | 'available';
+/**
+ * SystemLanguageModel.Availability.UnavailableReason, plus 'osTooOld' below iOS 26 and 'simulatorNoModel' for a
+ * simulator that says .available but cannot answer (its Mac has no Apple Intelligence, for example a CI runner).
+ */
+export type AppleUnavailableReason =
+  | 'deviceNotEligible' | 'appleIntelligenceNotEnabled' | 'modelNotReady' | 'osTooOld' | 'simulatorNoModel' | 'unknown';
 
 export interface AppleStatus {
   availability: AppleAvailability;
@@ -18,6 +23,8 @@ export interface AppleStatus {
 
 export interface AppleGenerateOptions {
   prompt: string;
+  /** System instructions, given to LanguageModelSession(model:instructions:) apart from the prompt. */
+  instructions?: string;
   /** Unset means greedy decoding. */
   temperature?: number;
   maxOutputTokens?: number;
@@ -28,6 +35,11 @@ export interface KalamAppleModule {
   /** Runs one prompt on SystemLanguageModel.default. `source` is always 'on_device': no cloud path here. */
   generate(requestId: string, options: AppleGenerateOptions): Promise<{ text: string; source: 'on_device' }>;
   cancel(requestId: string): boolean;
+  /**
+   * True when Apple's recognizer for this locale ("en-IN") runs on the device: the same
+   * SFSpeechRecognizer(locale:) that expo-speech-recognition starts dictation with.
+   */
+  supportsOnDeviceSpeech(locale: string): boolean;
   /** Sets the App Attest provider factory, then configures the native Firebase app. Safe to call twice. */
   installAppAttest(options: { apiKey: string; projectId: string; appId: string; gcmSenderId: string }): void;
   getAppCheckToken(forceRefresh: boolean): Promise<{ token: string; expireTimeMillis: number }>;

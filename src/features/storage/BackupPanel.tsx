@@ -10,11 +10,12 @@ import {
   createBackupService, isBackupError, localStamp, MAX_BACKUP_FILE_BYTES, type BackupPreview, type KalamBackupService,
 } from '@/core/backup';
 import {
-  Button, Chip, ConfirmSheet, SegmentedControl, Sheet, Surface, SwitchRow, Text, TextField, useBreakpoint, useKalamTheme, useToast,
+  Button, Checkbox, ConfirmSheet, SegmentedControl, Sheet, Surface, SwitchRow, Text, TextField, useBreakpoint, useKalamTheme, useToast,
 } from '@/design';
 import { getDatabase, secureRandomBytes } from '@/infrastructure/storage/database';
 import { useAppsStore } from '@/state/apps-store';
 import { useSettingsStore } from '@/state/settings-store';
+import { SectionHeading } from '@/features/settings/Section';
 import { backupFileName, passphraseStrength } from './helpers';
 import { cleanupTemporaryExports, pickFile, saveFile, type PickedFile } from './platform';
 
@@ -29,7 +30,7 @@ const errorText = (e: unknown, fallback: string) => (isBackupError(e) ? e.messag
 
 const LEVEL_LABEL = { too_short: 'Too short', weak: 'Weak', fair: 'Fair', strong: 'Strong' } as const;
 
-/** Selectable app chips (all chosen at first); docs/11 §12.2, docs/14 §15.5 step 3. */
+/** Selectable apps, one checkbox each (all chosen at first); docs/11 §12.2, docs/14 §15.5 step 3. */
 function AppChooser({ label, apps, left, onToggle }: {
   label: string; apps: ReadonlyArray<{ id: string; name: string }>; left: ReadonlySet<string>; onToggle: (id: string) => void;
 }) {
@@ -38,8 +39,8 @@ function AppChooser({ label, apps, left, onToggle }: {
   return (
     <View style={{ gap: space[2] }} accessibilityRole="list" accessibilityLabel={label}>
       <Text weight="semibold">{label}</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }}>
-        {apps.map((a) => <Chip key={a.id} label={a.name} selected={!left.has(a.id)} onPress={() => onToggle(a.id)} />)}
+      <View>
+        {apps.map((a) => <Checkbox key={a.id} label={a.name} checked={!left.has(a.id)} onChange={() => onToggle(a.id)} />)}
       </View>
     </View>
   );
@@ -365,13 +366,10 @@ export function BackupPanel() {
 
   return (
     <View style={{ gap: space[3] }}>
-      <View style={{ gap: space[1] }}>
-        <Text variant="h3" accessibilityRole="header">Encrypted backup</Text>
-        <Text tone="secondary">
-          Lock a copy of everything with a passphrase and keep the file somewhere safe, like a pen drive or your email. Use it to move
-          your apps to a new phone or computer.
-        </Text>
-      </View>
+      <SectionHeading
+        title="Encrypted backup"
+        description="Lock a copy of everything with a passphrase and keep the file somewhere safe, like a pen drive or your email. Use it to move your apps to a new phone or computer."
+      />
       <Surface padded={20} style={{ gap: space[3] }}>
         <Text variant="bodySmall">
           Included: apps, their older versions, records, drawings and your settings. Not included: saved AI answers, unfinished drafts

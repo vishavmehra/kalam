@@ -1,6 +1,6 @@
 export {
   applyReviewEdit, explainIssues, locateIssue, reviewModel,
-  type FieldChanges, type NewField, type ReviewEdit, type ReviewModel, type ReviewResult,
+  type AIBlockFallback, type AIBlockOnError, type FieldChanges, type NewField, type ReviewEdit, type ReviewModel, type ReviewResult,
 } from './edits';
 export {
   listUncertainItems, resolveUncertainItem,

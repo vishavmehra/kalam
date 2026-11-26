@@ -20,6 +20,7 @@ function sampleValue(field: KalamField, i: number, today: Date): RecordValue {
     }
     case 'boolean': return i % 2 === 0;
     case 'enum': return field.options[i % field.options.length] ?? null;
+    case 'image': return null; // a preview never invents a photo
   }
 }
 

@@ -3,7 +3,7 @@ import type { NormalizedImage } from '@/core/contracts';
 import {
   base64Bytes, dedupeFrames, fitWithin, frameTimestamps, hammingDistance, luminanceHash, stripDataUrl,
 } from './media-math';
-import { buildNormalizedInput, creationInputRecord, draftBlocker, draftModalities, type CreationDraft } from './normalize';
+import { buildNormalizedInput, creationInputRecord, draftBlocker, draftBlockerKey, draftModalities, type CreationDraft } from './normalize';
 
 /** Solid or gradient RGBA test images. */
 function image(w: number, h: number, px: (x: number, y: number) => number): Uint8ClampedArray {
@@ -110,5 +110,15 @@ describe('NormalizedInput assembly', () => {
     expect(input.modalities).toEqual(['audio']);
     expect(input.preferences).toBeUndefined();
     expect(draftModalities({ ...empty, drawing: { title: 'x', summary: { drawingId: 'd', pageCount: 1, elements: [], texts: [], images: [] } } })).toEqual([]);
+  });
+});
+
+describe('draft blocker', () => {
+  it('the English wording and the translated key always agree', () => {
+    const empty: CreationDraft = { text: '', photos: [], preferences: { language: 'en' } };
+    for (const d of [empty, { ...empty, text: '  ' }, { ...empty, text: 'a ledger' }, { ...empty, text: 'x'.repeat(4001) }]) {
+      expect(draftBlocker(d) === undefined, d.text.slice(0, 10)).toBe(draftBlockerKey(d) === undefined);
+    }
+    expect(draftBlockerKey({ ...empty, text: 'x'.repeat(4001) })).toBe('create.ws.blockLong');
   });
 });

@@ -21,6 +21,7 @@ on:
       - package.json
       - package-lock.json
       - src/**
+      - modules/**
       - assets/**
       - .github/workflows/android.yml
   workflow_dispatch:
@@ -40,6 +41,8 @@ env:
   EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
   EXPO_PUBLIC_FIREBASE_APP_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_APP_ID }}
   EXPO_PUBLIC_SPECIALIST_ENABLED: 'false'
+  # Keeps /lab and /nano-check reachable in this test build (the Test Lab APK). A store build never sets it.
+  EXPO_PUBLIC_DIAGNOSTICS: 'true'
 
 jobs:
   apk:
@@ -66,6 +69,17 @@ jobs:
         run: ./gradlew assembleRelease --no-daemon --stacktrace
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
+
+      # The home screen widget (modules/kalam-widget, docs/14 §18) is an Expo module that autolinking compiles into the
+      # app. The build fails here when its receiver is not in the merged manifest, which means it was left out.
+      - name: The widget is in the app
+        run: |
+          manifest=$(find android/app/build -path '*merged_manifests/release*' -name AndroidManifest.xml | head -n 1)
+          if [ -z "$manifest" ]; then echo "::error::No merged manifest found"; exit 1; fi
+          for name in expo.modules.kalamwidget.KalamWidgetProvider expo.modules.kalamwidget.WidgetPickerActivity; do
+            grep -q "$name" "$manifest" || { echo "::error::$name is not in the app manifest"; exit 1; }
+          done
+          echo "The Kalam widget receiver and picker are in the app manifest."
 
       # Report only: a store build is smaller than this test build, and the target is the install size on a device.
       - name: APK size against the 25 MB target

@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import type { CreationRoute, InputModality } from '../contracts';
+import { limitsPolicy } from '../limits/policy';
 import { COMPONENT_TYPES, idSchema } from '../spec/schema';
 import { BASE64_RE } from './base64';
 
@@ -15,7 +16,7 @@ const ITEM_ID_RE = /^[A-Za-z0-9_.:-]{1,160}$/;
 const LANG_RE = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}$/;
 
 /** Largest single local file (photo, frame, page image) Kalam stores, decoded. */
-export const MAX_BLOB_BYTES = 10 * 1024 * 1024;
+export const MAX_BLOB_BYTES = limitsPolicy.data.blobBytes;
 
 const CREATION_ROUTES = [
   'template', 'template+on_device', 'cloud', 'cloud+repair', 'specialist', 'import', 'manual',
@@ -29,6 +30,7 @@ export const storedAppShape = z.object({
   updatedAt: timestamp.optional().catch(undefined),
   lastOpenedAt: timestamp.optional().catch(undefined),
   pinned: z.boolean().optional().catch(undefined),
+  archived: z.boolean().optional().catch(undefined),
   origin: z
     .object({
       route: z.enum(CREATION_ROUTES),
@@ -57,6 +59,13 @@ export const recordShape = z.object({
   values: z.unknown(),
 });
 
+/**
+ * The key the runtime keeps an unsent form draft under (runtime/engine/draft.ts). It is typed text that was never
+ * saved, so it stays on this device: no backup, JSON export or account sync carries it, and a restore drops it.
+ */
+export const DRAFT_STATE_KEY = 'kalam_draft';
+export const isLocalOnlyStateKey = (key: unknown): boolean => key === DRAFT_STATE_KEY;
+
 export const stateRowSchema = z.object({
   appId: z.string(),
   key: idSchema,
@@ -84,6 +93,8 @@ export const versionRowShape = z.object({
     .optional(),
   summary: z.string().max(300).catch('Imported version'),
   source: z.enum(['create', 'edit', 'restore', 'import']).catch('import'),
+  /** Who made the change. An unknown value is dropped, not rejected. */
+  origin: z.enum(['user', 'ai', 'import', 'marketplace']).optional().catch(undefined),
 });
 
 // ─── Drawings (docs/08 §13) ───────────────────────────────────────────────────
@@ -95,6 +106,12 @@ const elementCommon = {
   rotation: finite.min(-3600).max(3600).optional(),
   hint: z.string().max(60).optional(),
   groupId: z.string().max(160).optional(),
+  // Object properties (DX1): without them a restored drawing silently loses its fill, corners, arrow head and text style.
+  fill: z.string().max(64).optional(),
+  radius: finite.min(0).max(400).optional(),
+  headSize: finite.min(6).max(80).optional(),
+  font: z.enum(['sans', 'serif', 'mono']).optional(),
+  bold: z.boolean().optional(),
 };
 const color = z.string().max(64);
 const box = { x: coord, y: coord, w: coord, h: coord };

@@ -80,12 +80,18 @@ export interface DraftCheck {
   lines: string[];
 }
 
-export function checkDraft(draft: Draft, thisSpec: KalamSpec, otherSpec: KalamSpec | undefined): DraftCheck {
+/**
+ * `parentOf` finds an app on this device by id, so a copy of a Bazaar app is still known as one (the service
+ * follows the same trail, so the form asks for the person's trust exactly when the service will).
+ */
+export function checkDraft(
+  draft: Draft, thisSpec: KalamSpec, otherSpec: KalamSpec | undefined, parentOf?: (appId: string) => KalamSpec | undefined,
+): DraftCheck {
   const blockers: string[] = [];
   const sides = sidesOf(draft, thisSpec, otherSpec);
   const { from, to } = collectionsOf(draft, sides);
   const fields = chosenFields(draft, from);
-  const needsBazaarAck = isFromBazaar(sides.destination);
+  const needsBazaarAck = isFromBazaar(sides.destination, parentOf);
   if (!otherSpec) blockers.push(SHARE_UI.form.blockers.pickApp);
   else if (!from || !to) blockers.push(SHARE_UI.form.blockers.pickLists);
   else if (!fields.length) blockers.push(SHARE_UI.form.blockers.pickFields);
@@ -197,9 +203,20 @@ export function toggleEntry(selected: ReadonlySet<string>, id: string, limit: nu
 /** The first `limit` ids of the list, for "Choose all". */
 export const chooseAllEntries = (ids: readonly string[], limit: number): Set<string> => new Set(ids.slice(0, limit));
 
-/** How many chosen entries are already in the other app and would be changed. Zero unless the person asked for updates. */
-export function entriesToChange(items: ReadonlyArray<{ id: string; alreadySent: boolean }>, selected: ReadonlySet<string>, update: boolean): number {
-  return update ? items.filter((i) => i.alreadySent && selected.has(i.id)).length : 0;
+/** What a send of the chosen entries will do, so the question the person answers is the truth. */
+export interface SendPlan {
+  /** Entries that will be made new in the other app. */
+  create: number;
+  /** Entries sent before that will be changed. Zero unless the person asked for updates. */
+  change: number;
+  /** Entries sent before that stay as they are, because the person did not ask for updates. */
+  leftOut: number;
+}
+
+export function sendPlan(items: ReadonlyArray<{ id: string; alreadySent: boolean }>, selected: ReadonlySet<string>, update: boolean): SendPlan {
+  const chosen = items.filter((i) => selected.has(i.id));
+  const before = chosen.filter((i) => i.alreadySent).length;
+  return { create: chosen.length - before, change: update ? before : 0, leftOut: update ? 0 : before };
 }
 
 /** Local date and time for a history line. Falls back to a plain ISO date when Intl is not there. */

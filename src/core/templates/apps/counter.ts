@@ -16,6 +16,8 @@ const paramsSchema = z
   .strict();
 export type CounterParams = z.infer<typeof paramsSchema>;
 
+/** "how many people come in", "how many glasses of water I drink" → what is counted (eval: "Count" / "Counts count"). */
+const HOW_MANY = /\bhow many\s+([a-z]+(?:\s+of\s+[a-z]+)?)/i;
 const COUNTED = /\b(?:count|counting|counter for|tally of|track|ginti)\s+(?:my\s+|the\s+|of\s+)?([a-z][a-z ]{2,30}?)(?=\s+(?:with|and|for|to|up|till|until|target|goal|per|each|every|daily)\b|[.,!?]|$)/i;
 
 export const counterTemplate: KalamTemplate<CounterParams> = {
@@ -38,18 +40,20 @@ export const counterTemplate: KalamTemplate<CounterParams> = {
     const step = extractNumberAfter(text, ['step of', 'steps of', 'by']);
     if (step !== undefined && step > 0 && step <= 1000) out.step = step;
     if (/\bnegative\b|below zero/i.test(text)) out.allowNegative = true;
-    const counted = COUNTED.exec(text)?.[1]?.trim();
-    if (counted && !/^(?:app|application|counter|something|things?)$/i.test(counted)) {
+    const counted = (COUNTED.exec(text)?.[1] ?? HOW_MANY.exec(text)?.[1])?.trim();
+    if (counted && !/^(?:app|application|counter|something|things?|times?)$/i.test(counted)) {
       out.label = counted.charAt(0).toUpperCase() + counted.slice(1);
     } else if (/\bmala\b|\bjaap\b|\bjap\b/i.test(text)) out.label = 'Mala count';
     return out;
   },
   build(p, opts) {
+    // Nothing named: say "Count" on the counter, but never "Counts count" in the description.
+    const what = p.label.trim().toLowerCase() === 'count' ? undefined : p.label.toLowerCase();
     const children: KalamComponent[] = [
       {
         id: 'count', type: 'counter', label: p.label, step: p.step,
         ...(p.allowNegative ? {} : { min: 0 }),
-        a11yLabel: `${p.label} counter`, readAloud: `${p.label} is now`,
+        a11yLabel: what ? `${p.label} counter` : 'Counter', readAloud: what ? `${p.label} is now` : 'The count is now',
       },
     ];
     if (p.target > 0) {
@@ -67,7 +71,9 @@ export const counterTemplate: KalamTemplate<CounterParams> = {
       {
         templateId: 'counter',
         name: p.name,
-        description: p.target > 0 ? `Counts ${p.label.toLowerCase()} towards a target of ${p.target}.` : `Counts ${p.label.toLowerCase()} with one tap.`,
+        description: p.target > 0
+          ? `Counts ${what ?? 'taps'} towards a target of ${p.target}.`
+          : what ? `Counts ${what} with one tap.` : 'A tap counter: add, subtract and reset with one tap.',
         glyph: 'plus',
         theme: p.theme,
         collections: {},

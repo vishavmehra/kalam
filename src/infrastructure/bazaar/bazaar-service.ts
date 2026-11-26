@@ -23,6 +23,7 @@ import type {
 } from '@/core/contracts';
 import { generateId } from '@/core/pipeline/create-application';
 import type { KalamSpec } from '@/core/spec/schema';
+import { track } from '@/core/telemetry';
 import {
   cachedDrafts, cachedListings, cachedSpec, cachedVerdict, forgetDraft, forgetListing, installedFrom, rememberDraft,
   rememberInstalled, rememberListings, rememberPublishedApp, rememberSpec, rememberVerdict,
@@ -242,6 +243,7 @@ export function createBazaarService(deps: BazaarServiceDeps): BazaarService {
       return { ok: false, message: 'Could not save the app on this device. Free up some space and try again.' };
     }
     await rememberInstalled(prepared.app.id, { listingId: listing.id, specVersion: listing.specVersion, specHash: listing.specHash });
+    track('bazaar', 'installed'); // the person's own count, local and opt-in (docs/12 §21)
     const counted = mode === 'install' ? await countInstall(listing).catch(() => false) : false;
     return {
       ok: true,
@@ -275,6 +277,9 @@ export function createBazaarService(deps: BazaarServiceDeps): BazaarService {
         if (after) constraints.push(startAfter(after));
         constraints.push(limit(pageSize));
         const snap = await getDocs(query(collection(db, 'listings'), ...constraints));
+        // Firestore answers from its saved copy, without throwing, when it cannot reach the server. That is not
+        // "Bazaar is empty": report it as unreachable so the screen says so instead of "no apps yet".
+        if (snap.metadata.fromCache) return fromCache();
         const all = snap.docs.flatMap((d) => toListing(d.id, d.data()) ?? []);
         await rememberListings(all);
         const last = snap.docs.at(-1);
@@ -421,6 +426,7 @@ export function createBazaarService(deps: BazaarServiceDeps): BazaarService {
       });
       await rememberPublishedApp(listingId, app.id);
       await forgetDraft(app.id);
+      track('bazaar', 'published');
       return outcome(listingId, decision, review, cached);
     },
 

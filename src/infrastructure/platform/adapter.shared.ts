@@ -7,10 +7,23 @@
  * `adapter.native.ts` lists the native ones (Android, and iOS from the same code); Metro picks the right
  * file, as for every other platform module in this folder.
  *
- * Operations a platform cannot do are reported by the member itself, as before: `speech.getCapability`
- * says `supported: false`, `notifications.capability` says `delivery`, `files.saveFile` resolves
- * `false` when sharing is unavailable. There is no haptics module in Kalam today, so there is no
- * haptics member; add one here when a module exists.
+ * Unsupported operations (docs/09 §15.4: "report unsupported operations explicitly"). Two ways, both
+ * explicit and neither a throw:
+ *   - `capabilities()` says up front what can differ between platforms: speech to text and where it
+ *     runs, spoken output, and how reminders are delivered.
+ *   - A member that tries the work says so in its result: `files.saveFile` resolves `false` when
+ *     saving or sharing is unavailable, `files.pickFile` and `files.pickJsonFile` resolve `undefined`
+ *     when nothing was chosen, `audio.discardRecording` resolves `false` when nothing was deleted.
+ * There is no haptics module in Kalam today, so there is no haptics member; add one here when a
+ * module exists.
+ *
+ * Differences from the member list in docs/09 §15.4, on purpose (the doc's list is an example):
+ *   - `saveDurableSnapshot` and `restoreDurableSnapshot`: durable storage is the database layer, not the
+ *     device adapter (SQLite on Android and iOS, IndexedDB on the web; D09-036). `files.requestPersistence`
+ *     and `files.deviceStorage` are the device parts of it.
+ *   - `requestCamera`: the camera is reached through `media.pickImages` and `media.pickVideo`, which ask
+ *     for the permission when they need it and throw `MediaPermissionError` when it is off.
+ *   - `speak`: `tts.getAdapter().speak` and `tts.getSpeaker()`, which queue spoken lines.
  */
 import type { NetworkMonitor } from '@/core/contracts';
 import type { DeviceStorage, PickedFile } from '@/features/storage/platform';
@@ -18,7 +31,7 @@ import type { normalizeImageUri, pickImages, pickVideo } from './image';
 import type { extractKeyframes } from './media';
 import type { DiscardFn } from './media-audio.shared';
 import type { NotificationAdapter } from './notifications.shared';
-import type { DictationSession, SpeechCapability, StartDictationOptions } from './speech.shared';
+import type { DictationSession, OnDeviceSpeech, SpeechCapability, StartDictationOptions } from './speech.shared';
 import type { SpeechQueue } from './tts-queue';
 import type { TextToSpeechAdapter } from './tts.shared';
 
@@ -29,8 +42,24 @@ export function platformNameFor(os: string): PlatformName {
   return os === 'ios' ? 'ios' : os === 'web' ? 'web' : 'android';
 }
 
+/** What can differ between platforms, asked once. Every field has a safe value when a check fails. */
+export interface PlatformCapabilities {
+  platform: PlatformName;
+  /** Speech to text exists here (docs/06 §2.3). */
+  speechToText: boolean;
+  /** Where speech to text runs. Anything but `available` may use a speech service in the cloud, with consent. */
+  speechOnDevice: OnDeviceSpeech;
+  /** Spoken output exists here (docs/10 §4.4). */
+  textToSpeech: boolean;
+  /** How a reminder reaches the person (docs/14 §10.4). */
+  reminders: 'system' | 'while_open' | 'none';
+}
+
 export interface PlatformAdapter {
   getPlatform(): PlatformName;
+
+  /** What this platform can and cannot do. Never rejects. */
+  capabilities(): Promise<PlatformCapabilities>;
 
   /** Speech to text (docs/06 §2.3). */
   speech: {
@@ -91,7 +120,7 @@ export interface PlatformAdapter {
  * Every member of every group, as a checked list. The type forces each group and each member name
  * to be real; `adapter.test.ts` then checks both platform adapters supply all of them.
  */
-export const ADAPTER_MEMBERS: { [G in Exclude<keyof PlatformAdapter, 'getPlatform'>]: ReadonlyArray<keyof PlatformAdapter[G]> } = {
+export const ADAPTER_MEMBERS: { [G in Exclude<keyof PlatformAdapter, 'getPlatform' | 'capabilities'>]: ReadonlyArray<keyof PlatformAdapter[G]> } = {
   speech: ['getCapability', 'installOnDevice', 'startDictation'],
   tts: ['getAdapter', 'getSpeaker'],
   audio: ['discardRecording', 'settleRecording'],
@@ -101,3 +130,34 @@ export const ADAPTER_MEMBERS: { [G in Exclude<keyof PlatformAdapter, 'getPlatfor
   notifications: ['getAdapter'],
   random: ['bytes', 'uuid'],
 };
+
+/** Runs one check, and falls back when the platform module throws or rejects. */
+async function attempt<T>(check: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await check();
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Builds `PlatformAdapter.capabilities` from the members the adapter already has. `lang` is the language
+ * speech to text is checked for.
+ */
+export async function describeCapabilities(
+  adapter: Pick<PlatformAdapter, 'getPlatform' | 'speech' | 'tts' | 'notifications'>,
+  lang = 'en',
+): Promise<PlatformCapabilities> {
+  const [speech, textToSpeech, reminders] = await Promise.all([
+    attempt(() => adapter.speech.getCapability(lang), undefined),
+    attempt(() => adapter.tts.getAdapter().isAvailable(), false),
+    attempt(async () => (await adapter.notifications.getAdapter().capability()).delivery, 'none' as const),
+  ]);
+  return {
+    platform: adapter.getPlatform(),
+    speechToText: speech?.supported === true,
+    speechOnDevice: speech?.onDevice ?? 'unknown',
+    textToSpeech,
+    reminders,
+  };
+}

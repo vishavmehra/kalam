@@ -3,7 +3,7 @@ import { pickJsonFile, saveJsonFile } from '@/components/files/json-file.web';
 import {
   cleanupTemporaryExports, deviceStorage, pickFile, requestPersistence, saveFile,
 } from '@/features/storage/platform.web';
-import type { PlatformAdapter } from './adapter.shared';
+import { describeCapabilities, type PlatformAdapter } from './adapter.shared';
 import { normalizeImageUri, pickImages, pickVideo } from './image';
 import { discardRecording, settleRecording } from './media-audio.web';
 import { extractKeyframes } from './media.web';
@@ -16,6 +16,7 @@ export * from './adapter.shared';
 
 const adapter: PlatformAdapter = {
   getPlatform: () => 'web',
+  capabilities: () => describeCapabilities(adapter),
   speech: { getCapability: getSpeechCapability, installOnDevice: installOnDeviceSpeech, startDictation },
   tts: { getAdapter: getTtsAdapter, getSpeaker },
   audio: { discardRecording, settleRecording },

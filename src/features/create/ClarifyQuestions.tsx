@@ -8,12 +8,15 @@ import { View } from 'react-native';
 
 import { Button, Text, TextField, useKalamTheme } from '@/design';
 import { MAX_TEXT_CHARS } from '@/features/input/normalize';
+import { useT } from '@/i18n/react';
 import { useCreationStore } from '@/state/creation-store';
 
 import { answersToText } from './input-summary';
 
 export function ClarifyQuestions({ questions, onRetry }: { questions: string[]; onRetry: () => void }) {
-  const { space } = useKalamTheme();
+  const theme = useKalamTheme();
+  const t = useT(theme.uiLanguage);
+  const { space } = theme;
   const [answers, setAnswers] = useState<string[]>(() => questions.map(() => ''));
   const setText = useCreationStore((s) => s.setText);
   const added = answersToText(questions, answers);
@@ -27,7 +30,7 @@ export function ClarifyQuestions({ questions, onRetry }: { questions: string[]; 
 
   return (
     <View style={{ gap: space[3], marginTop: space[1] }}>
-      <Text weight="semibold">Answer what you can, and Kalam will try again:</Text>
+      <Text weight="semibold">{t('create.clarify.intro')}</Text>
       {questions.map((q, i) => (
         <TextField
           key={q}
@@ -37,7 +40,7 @@ export function ClarifyQuestions({ questions, onRetry }: { questions: string[]; 
         />
       ))}
       <View style={{ flexDirection: 'row' }}>
-        <Button label="Add answers and try again" onPress={apply} disabled={!added} />
+        <Button label={t('create.clarify.submit')} onPress={apply} disabled={!added} />
       </View>
     </View>
   );

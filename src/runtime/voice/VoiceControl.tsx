@@ -12,6 +12,7 @@
 import { Keyboard, Mic, RotateCcw, Send, Square, VolumeX, X } from 'lucide-react-native';
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import { ActivityIndicator, Animated, Text, TextInput, View } from 'react-native';
+import { elevation } from '@/design/tokens';
 import type { RuntimeTheme } from '../engine/theme';
 import { EASE_OUT, font, NATIVE_DRIVER, Pressy, useReducedMotion } from '../ui/kit';
 import { useVoiceAgent, type UseVoiceAgentArgs, type VoiceAgent } from './useVoiceAgent';
@@ -85,7 +86,7 @@ export function VoiceControl({ theme: t, bottomOffset = 88, ...args }: VoiceCont
           backgroundColor: listening ? t.colors.danger : t.colors.primary,
           borderWidth: listening ? Math.max(2, t.borderWidth) : t.borderWidth,
           borderColor: listening ? t.colors.onDanger : t.colors.onPrimary,
-          shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4,
+          ...elevation[2],
         }}
       >
         {thinking ? (
@@ -195,7 +196,7 @@ function Card({ t, agent, typing, draft, setDraft, send }: {
       style={{
         width: '100%', maxWidth: 360, padding: t.space, gap: 10, borderRadius: Math.min(t.radius + 4, 24),
         backgroundColor: t.colors.surface, borderWidth: Math.max(1, t.borderWidth), borderColor: t.colors.border,
-        shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 6,
+        ...elevation[2],
       }}
     >
       {title ? (

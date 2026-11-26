@@ -6,6 +6,7 @@ import { Hand, ListChecks, PenLine, RotateCcw, StickyNote, X } from 'lucide-reac
 import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { IconButton, useKalamTheme } from '@/design';
+import { useT } from '@/i18n/react';
 
 export type OverlayTool = 'pen' | 'note' | 'scroll';
 
@@ -21,7 +22,8 @@ export function ToolRail({ tool, onTool, onPick, onClear, onClose, canClear, dis
   left: boolean;
   reduced: boolean;
 }) {
-  const { colors, radius, elevation, space } = useKalamTheme();
+  const { colors, radius, elevation, space, uiLanguage } = useKalamTheme();
+  const t = useT(uiLanguage);
   return (
     <Animated.View
       entering={reduced ? undefined : FadeIn.duration(200)}
@@ -33,15 +35,15 @@ export function ToolRail({ tool, onTool, onPick, onClear, onClose, canClear, dis
         elevation[2],
       ]}
       accessibilityRole="toolbar"
-      accessibilityLabel="Drawing tools"
+      accessibilityLabel={t('edit.draw.tools.label')}
     >
-      <IconButton icon={PenLine} label="Draw" selected={tool === 'pen'} disabled={disabled} onPress={() => onTool('pen')} />
-      <IconButton icon={StickyNote} label="Write a note" selected={tool === 'note'} disabled={disabled} onPress={() => onTool('note')} />
-      <IconButton icon={Hand} label="Scroll the app" selected={tool === 'scroll'} disabled={disabled} onPress={() => onTool('scroll')} />
+      <IconButton icon={PenLine} label={t('edit.draw.tools.draw')} selected={tool === 'pen'} disabled={disabled} onPress={() => onTool('pen')} />
+      <IconButton icon={StickyNote} label={t('edit.draw.tools.note')} selected={tool === 'note'} disabled={disabled} onPress={() => onTool('note')} />
+      <IconButton icon={Hand} label={t('edit.draw.tools.scroll')} selected={tool === 'scroll'} disabled={disabled} onPress={() => onTool('scroll')} />
       <View style={[styles.rule, { backgroundColor: colors.border }]} />
-      <IconButton icon={ListChecks} label="Pick from a list" disabled={disabled} onPress={onPick} />
-      <IconButton icon={RotateCcw} label="Start over" disabled={disabled || !canClear} onPress={onClear} />
-      <IconButton icon={X} label="Stop drawing" onPress={onClose} />
+      <IconButton icon={ListChecks} label={t('edit.draw.pickFromList')} disabled={disabled} onPress={onPick} />
+      <IconButton icon={RotateCcw} label={t('edit.draw.tools.startOver')} disabled={disabled || !canClear} onPress={onClear} />
+      <IconButton icon={X} label={t('edit.stopDrawing')} onPress={onClose} />
     </Animated.View>
   );
 }

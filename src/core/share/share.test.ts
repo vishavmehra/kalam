@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CreateLinkInput } from './service';
 import { SharedRecordReadOnlyError } from './service';
 import { isSharedRecordId, SHARE_LIMITS } from './model';
+import { ShareStoreError } from './store';
 import {
   APP_C, APP_O, APP_X, customers, fakeRecords, NAME_PHONE, orders, rig, SENTINEL, specWith, storedApp, type Rig,
 } from './test-kit';
@@ -64,7 +65,7 @@ describe('creating a link', () => {
     const r = rig();
     const res = await r.service.create(readInput({ fields: [{ source: 'credit', target: 'phone' }] }));
     expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.problems?.[0].message).toContain('"Phone" in Order Book is now text and cannot hold a number');
+    if (!res.ok) expect(res.problems?.[0].message).toContain('"Phone" in Order Book is text and cannot hold a number');
   });
 
   it('a link that sends must fill every required field of the destination', async () => {
@@ -104,6 +105,35 @@ describe('creating a link', () => {
     const [view] = await r.service.list('app_bazaar');
     expect(view.destinationFromBazaar).toBe(true);
     expect(view.sourceFromBazaar).toBe(false);
+  });
+});
+
+describe('apps made by someone else through the Bazaar', () => {
+  const listing = 'bazaar:l0123456789abcdefghi';
+  const original = () => storedApp(specWith('app_bz', 'Bazaar Orders', { orders }, { source: 'import', basedOn: listing }));
+  const remix = () => storedApp(specWith('app_remix', 'Remix Orders', { orders }, { source: 'remix', basedOn: listing }));
+  const copy = () => storedApp(specWith('app_copy', 'Copy Orders', { orders }, { source: 'remix', basedOn: 'app_bz' }));
+  const plain = () => storedApp(specWith('app_plain', 'Plain Orders', { orders }, { source: 'remix', basedOn: APP_O }));
+
+  it.each([['a remix of a Bazaar listing', 'app_remix'], ['a copy of a Bazaar app made on this device', 'app_copy']])(
+    '%s needs the person to say they trust it',
+    async (_name, id) => {
+      const r = rig([original(), remix(), copy()]);
+      const input = readInput({ destinationAppId: id });
+      expect(await r.service.create(input)).toMatchObject({ ok: false, reason: 'needs_bazaar_ack' });
+      expect((await r.service.create({ ...input, acknowledgeBazaar: true })).ok).toBe(true);
+      expect((await r.service.list(id))[0].destinationFromBazaar).toBe(true);
+    },
+  );
+
+  it('a copy of an app you made yourself needs no such question', async () => {
+    const r = rig([plain()]);
+    expect((await r.service.create(readInput({ destinationAppId: 'app_plain' }))).ok).toBe(true);
+  });
+
+  it('a copy whose original is gone from this device is no longer known as a Bazaar app', async () => {
+    const r = rig([copy()]);
+    expect((await r.service.create(readInput({ destinationAppId: 'app_copy' }))).ok).toBe(true);
   });
 });
 
@@ -328,6 +358,131 @@ describe('sending entries', () => {
     expect(await r.service.send('lnk_doesnotexist', { recordIds: [a.id], confirmed: true })).toMatchObject({ ok: false, reason: 'no_link' });
   });
 
+  it('pauses a link when the other app starts to need a field the link does not fill', async () => {
+    const { r, a, link } = await ready();
+    const stricter = { ...orders, fields: { ...orders.fields, amount: { type: 'number' as const, label: 'Amount', required: true } } };
+    r.apps.set(APP_O, storedApp(specWith(APP_O, 'Order Book', { orders: stricter })));
+    const [view] = await r.service.list(APP_C);
+    expect(view.health).toMatchObject({ ok: false, problems: [{ code: 'destination_required_missing', field: 'amount' }] });
+    if (!view.health.ok) {
+      expect(view.health.problems[0].message).toBe('Order Book needs "Amount" on every entry, and this link does not fill it. Order Book would not take the entries.');
+    }
+    expect(await r.service.send(link.id, { recordIds: [a.id], confirmed: true })).toMatchObject({ ok: false, reason: 'broken' });
+    expect(r.records.rows.filter((x) => x.appId === APP_O)).toEqual([]);
+    // A link that only shows entries inserts nothing, so it keeps working.
+    const looking = await made(r, readInput());
+    expect((await r.service.readShared(APP_O, 'orders')).paused).toEqual([]);
+    expect(looking.access).toBe('read');
+  });
+
+  it('a turn off made while a send is running stays turned off, stops the rest, and the history keeps both', async () => {
+    const { r, a, b, link } = await ready();
+    const insert = r.records.repo.insert;
+    let first = true;
+    r.records.repo.insert = async (...args) => {
+      const row = await insert(...args);
+      if (first) {
+        first = false;
+        await r.service.revoke(link.id);
+      }
+      return row;
+    };
+    const out = await r.service.send(link.id, { recordIds: [a.id, b.id], confirmed: true });
+    expect(out).toMatchObject({ ok: false, reason: 'revoked', created: 1, skipped: [{ recordId: b.id, reason: 'link_off' }], recorded: true });
+    expect(out.message).toBe('Sent to Order Book: 1 new entry. The link was turned off while sending, so the rest were not sent.');
+    const stored = await r.store.get(link.id);
+    expect(stored).toMatchObject({ status: 'revoked' });
+    expect(stored?.revokedAt).toBeDefined();
+    expect(stored?.audit.map((e) => e.kind)).toEqual(['created', 'revoked', 'sent']);
+    expect(stored?.sent).toEqual([[a.id, expect.any(String)]]);
+    expect(r.records.rows.filter((x) => x.appId === APP_O)).toHaveLength(1);
+  });
+
+  it('a turn off that lands between reading and saving the history still wins, and the history is kept', async () => {
+    const { r, a, link } = await ready();
+    const put = r.store.put.bind(r.store);
+    let late = true;
+    r.store.put = async (next) => {
+      // The person turns the link off just before the send saves its history (once).
+      if (late && next.audit.some((e) => e.kind === 'sent')) {
+        late = false;
+        await r.service.revoke(link.id);
+      }
+      return put(next);
+    };
+    const out = await r.service.send(link.id, { recordIds: [a.id], confirmed: true });
+    expect(out).toMatchObject({ created: 1, recorded: true });
+    const stored = await r.store.get(link.id);
+    expect(stored?.status).toBe('revoked');
+    expect(stored?.audit.map((e) => e.kind)).toEqual(['created', 'revoked', 'sent']);
+    expect(stored?.sent?.map(([from]) => from)).toEqual([a.id]);
+  });
+
+  it('a turned off link cannot be saved as on again', async () => {
+    const { r, link } = await ready();
+    await r.service.revoke(link.id);
+    await expect(r.store.put(link)).rejects.toBeInstanceOf(ShareStoreError);
+    expect((await r.store.get(link.id))?.status).toBe('revoked');
+  });
+
+  it('sends that overlap run one after the other, so nothing is added twice and no history is lost', async () => {
+    const { r, a, b, link } = await ready();
+    const [one, two, three] = await Promise.all([
+      r.service.send(link.id, { recordIds: [a.id], confirmed: true }),
+      r.service.send(link.id, { recordIds: [b.id], confirmed: true }),
+      r.service.send(link.id, { recordIds: [a.id], confirmed: true }),
+    ]);
+    expect([one.created, two.created, three.created]).toEqual([1, 1, 0]);
+    expect(three.skipped).toEqual([{ recordId: a.id, reason: 'already_sent' }]);
+    expect(r.records.rows.filter((x) => x.appId === APP_O)).toHaveLength(2);
+    const stored = await r.store.get(link.id);
+    expect(stored?.sent?.map(([from]) => from).sort()).toEqual([a.id, b.id].sort());
+    expect(stored?.audit.filter((e) => e.kind === 'sent')).toHaveLength(3);
+  });
+
+  it('remembers an entry whose id is as long as the app allows', async () => {
+    const r = rig();
+    const long = 'x'.repeat(100);
+    r.records.rows.push({ id: long, appId: APP_C, collectionId: 'customers', createdAt: 1, updatedAt: 1, values: { name: 'Asha' } });
+    const link = await made(r, writeInput());
+    expect(await r.service.send(link.id, { recordIds: [long], confirmed: true })).toMatchObject({ ok: true, created: 1, recorded: true });
+    expect((await r.store.get(link.id))?.sent?.[0][0]).toBe(long);
+    expect(await r.service.send(link.id, { recordIds: [long], confirmed: true })).toMatchObject({ created: 0, skipped: [{ reason: 'already_sent' }] });
+  });
+
+  it('says so when the entries were sent but the history could not be saved', async () => {
+    const { r, a, link } = await ready();
+    r.store.put = async () => {
+      throw new Error(`disk ${SENTINEL}`);
+    };
+    const out = await r.service.send(link.id, { recordIds: [a.id], confirmed: true });
+    expect(out).toMatchObject({ ok: true, created: 1, recorded: false });
+    expect(out.message).toBe('Sent to Order Book: 1 new entry. The history of this send could not be saved. Sending the same entries again may add them twice.');
+    expect(JSON.stringify(out)).not.toContain(SENTINEL);
+    expect(r.events.some((e) => e.code === 'audit_not_saved')).toBe(true);
+  });
+
+  it('keeps the entries not sent yet in reach when there are more than one screen shows', async () => {
+    const r = rig();
+    const total = SHARE_LIMITS.sendWindow + 10;
+    for (let i = 0; i < total; i++) {
+      r.records.rows.push({ id: `rec_${i}`, appId: APP_C, collectionId: 'customers', createdAt: i + 1, updatedAt: i + 1, values: { name: `P${i}` } });
+    }
+    const link = await made(r, writeInput());
+    // The newest 100 go first.
+    const newest = Array.from({ length: SHARE_LIMITS.sendBatch }, (_, i) => `rec_${total - 1 - i}`);
+    expect(await r.service.send(link.id, { recordIds: newest, confirmed: true })).toMatchObject({ created: SHARE_LIMITS.sendBatch });
+    const res = await r.service.sendable(link.id);
+    expect(res.ok && res.total).toBe(total);
+    if (!res.ok) throw new Error('expected a list');
+    expect(res.items).toHaveLength(SHARE_LIMITS.sendWindow);
+    const open = res.items.filter((i) => !i.alreadySent);
+    expect(open).toHaveLength(total - SHARE_LIMITS.sendBatch);
+    expect(open.map((i) => i.id)).toContain('rec_0');
+    // Entries not sent yet are listed before the ones sent before.
+    expect(res.items.slice(0, open.length).every((i) => !i.alreadySent)).toBe(true);
+  });
+
   it('lists what could be sent, newest first, saying what went before', async () => {
     const { r, a, b, link } = await ready();
     await r.service.send(link.id, { recordIds: [a.id], confirmed: true });
@@ -355,6 +510,23 @@ describe('what the runtime sees', () => {
     // The source app is not changed by being shared.
     expect(await repo.list(APP_C, 'customers')).toHaveLength(1);
     expect(r.records.rows.filter((x) => x.appId === APP_O)).toHaveLength(1);
+  });
+
+  it('keeps the app own entries when sharing cannot be read', async () => {
+    const { r, repo } = await runtime();
+    r.store.forApp = async () => {
+      throw new Error('disk');
+    };
+    expect((await repo.list(APP_O, 'orders')).map((x) => x.values.customer_name)).toEqual(['Own order']);
+    expect((await repo.listAll(APP_O)).orders.map((x) => x.values.customer_name)).toEqual(['Own order']);
+    expect(r.events.filter((e) => e.code === 'read_failed')).toHaveLength(2);
+
+    const { r: r2, repo: repo2 } = await runtime();
+    r2.records.repo.list = async (appId, collectionId) => {
+      if (appId === APP_C) throw new Error('disk');
+      return r2.records.rows.filter((x) => x.appId === appId && x.collectionId === collectionId);
+    };
+    expect((await repo2.list(APP_O, 'orders')).map((x) => x.values.customer_name)).toEqual(['Own order']);
   });
 
   it('keeps shared entries read only', async () => {

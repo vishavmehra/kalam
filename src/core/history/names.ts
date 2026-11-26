@@ -7,6 +7,15 @@ export function humanize(id: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/**
+ * What the person is told about saved entries when part of the design goes. Storage keeps a removed field's value
+ * until that entry is edited (the edit rewrites the entry with the fields the design still has), so the wording
+ * says exactly that and not "stays on this device".
+ */
+export const NOTE_FIELD_VALUES = 'Values you already saved stay on this device';
+export const NOTE_COLLECTION_ENTRIES = 'Entries you already saved stay on this device';
+export const NOTE_CHOICES = 'Entries already saved are not changed';
+
 /** Lowercases a leading capital that starts an ordinary word (`Added` becomes `added`, `GST` stays). */
 export const lowerFirst = (s: string): string => (/^[A-Z][a-z]/.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s);
 
@@ -44,6 +53,10 @@ export const COMPONENT_NOUN: Record<KalamComponentType, string> = {
   list: 'list',
   stat: 'number',
   photo: 'photo',
+  chart: 'chart',
+  timer: 'timer',
+  reminder: 'reminder',
+  signature: 'signature box',
 };
 
 export interface SpecNames {

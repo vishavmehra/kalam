@@ -5,6 +5,7 @@
 import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Button, Text, TextField, useKalamTheme } from '@/design';
+import { useT } from '@/i18n/react';
 import type { Point } from './geometry';
 
 const WIDTH = 280;
@@ -20,7 +21,8 @@ export function NoteBubble({ at, area, text, onText, onAdd, onCancel, reduced }:
   onCancel(): void;
   reduced: boolean;
 }) {
-  const { colors, radius, space, elevation } = useKalamTheme();
+  const { colors, radius, space, elevation, uiLanguage } = useKalamTheme();
+  const t = useT(uiLanguage);
   const width = Math.min(WIDTH, Math.max(200, area.width - 24));
   const left = clamp(at.x - 20, 12, area.width - width - 12);
   const top = at.y + 16 + HEIGHT < area.height ? at.y + 16 : clamp(at.y - HEIGHT - 16, 12, area.height - HEIGHT - 12);
@@ -32,25 +34,25 @@ export function NoteBubble({ at, area, text, onText, onAdd, onCancel, reduced }:
         style={[styles.bubble, { left, top, width, gap: space[2], padding: space[3], borderRadius: radius.lg, backgroundColor: colors.surface, borderColor: colors.border }, elevation[2]]}
       >
         <TextField
-          label="Note"
+          label={t('edit.draw.note.label')}
           labelHidden
           value={text}
           onChangeText={onText}
-          placeholder="Closed on Sundays"
+          placeholder={t('edit.draw.note.placeholder')}
           autoFocus
           returnKeyType="done"
           onSubmitEditing={onAdd}
         />
         <View style={[styles.row, { gap: space[2] }]}>
-          <Button label="Cancel" variant="ghost" size="sm" onPress={onCancel} />
-          <Button label="Add note" size="sm" disabled={!text.trim()} onPress={onAdd} />
+          <Button label={t('common.cancel')} variant="ghost" size="sm" onPress={onCancel} />
+          <Button label={t('edit.draw.note.add')} size="sm" disabled={!text.trim()} onPress={onAdd} />
         </View>
       </Animated.View>
     </>
   );
 }
 
-/** A placed note: marigold slip pinned where the person tapped. */
+/** A placed note: haldi slip pinned where the person tapped. */
 export function NotePin({ at, text, area }: { at: Point; text: string; area: { width: number; height: number } }) {
   const { colors, radius, space } = useKalamTheme();
   const left = clamp(at.x - 8, 8, area.width - 228);

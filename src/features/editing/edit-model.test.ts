@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { kalamSpecSchema, type KalamSpec } from '@/core/spec/schema';
-import { applyVerification, joinSummary, presetOps } from './edit-model';
+import { applyVerification, joinSummary, presetOps, verificationSummary } from './edit-model';
 
 const spec: KalamSpec = kalamSpecSchema.parse({
   id: 'app_notes', schemaVersion: '1.0.0', version: 3, name: 'Notes', lang: 'en',
@@ -22,6 +22,12 @@ describe('edit model', () => {
     expect(out.aiBlocks.tagger).toMatchObject({ verified: 'onDevice', verification: { status: 'onDevice', testCount: 50, passCount: 50, model: 'nano', verifiedAt: 1700000000000 } });
     expect(kalamSpecSchema.safeParse(out).success).toBe(true);
     expect(applyVerification(spec, 'missing', { status: 'onDevice', testCount: 5, passCount: 5, details: [] }, 0)).toBe(spec);
+  });
+
+  it('writes the check note for the version history from the catalogue', () => {
+    expect(verificationSummary('tagger', { status: 'onDevice', testCount: 5, passCount: 4, details: [] }))
+      .toBe('Checked "Tagger" on this device: 4 of 5 passed, runs on this device');
+    expect(verificationSummary('tagger', { status: 'cloudPreferred', testCount: 5, passCount: 2, details: [] })).toMatch(/will prefer the cloud$/);
   });
 
   it('preset ops set colours only; summaries stay bounded', () => {

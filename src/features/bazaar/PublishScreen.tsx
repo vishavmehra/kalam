@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from 'expo-router';
-import { ArrowLeft, CheckCircle2, CircleAlert, Clock, CloudOff, ImagePlus, Lock, Shapes, Upload, X } from 'lucide-react-native';
+import { CheckCircle2, CircleAlert, Clock, ImagePlus, Lock, Shapes, Upload, X } from 'lucide-react-native';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, View } from 'react-native';
 
@@ -8,15 +8,14 @@ import { AppShell } from '@/components/shell/AppShell';
 import { routes } from '@/components/shell/routes';
 import { useOnline } from '@/components/status/useHybridStatus';
 import {
-  BAZAAR_CATEGORIES, BAZAAR_LIMITS, CATEGORY_LABELS, cleanTags, deriveDisclosure, lineageForPublish, MAX_PRICE,
+  BAZAAR_CATEGORIES, BAZAAR_LIMITS, cleanTags, deriveDisclosure, lineageForPublish, MAX_PRICE,
   remixAllowedFor, sanitizeSvg, validatePublishForm, type BazaarCategory, type BazaarListing, type ListingLicense,
   type PublishForm, type Screenshot,
 } from '@/core/bazaar';
 import type { BazaarPublishOutcome, BazaarPublishStage, StoredApp } from '@/core/contracts';
-import { languageName } from '@/core/spec/describe';
 import { SCHEMA_VERSION } from '@/core/spec/schema';
 import {
-  AppIconTile, Button, Chip, EmptyState, Screen, SegmentedControl, Surface, Text, TextField, useBreakpoint, useKalamTheme,
+  AppIconTile, Button, Chip, cloths, EmptyState, NumberInput, Screen, SegmentedControl, Slip, slipNumber, Text, TextField, useBreakpoint, useKalamTheme,
   useToast,
 } from '@/design';
 import { SignInPanel } from '@/features/auth/SignInPanel';
@@ -24,28 +23,36 @@ import { publicName, useAuthUser } from '@/features/auth/use-auth';
 import { publishedAppFor } from '@/infrastructure/bazaar/cache';
 import { pickScreenshots } from '@/infrastructure/bazaar/media-picker';
 import { pickSvgText } from '@/infrastructure/bazaar/pick-svg';
+import type { TranslationKey } from '@/i18n/keys';
+import { languageInfo } from '@/i18n/languages';
+import { useT } from '@/i18n/react';
+import type { TFunction } from '@/i18n/translator';
 import { getServices } from '@/services';
 import { useAppsStore } from '@/state/apps-store';
 
 import { ListingCard } from './ListingCard';
 import { ListingIcon } from './ListingIcon';
+import { BackToBazaar, Busy, CATEGORY, OfflineNote, PageHead } from './parts';
 import { bazaarRoutes } from './routes';
 
-const STAGES: Record<BazaarPublishStage, string> = {
-  validating: 'Checking the app design',
-  checking: 'Running the safety check with Firebase cloud AI',
-  saving: 'Saving your listing',
+const STAGES: Record<BazaarPublishStage, TranslationKey> = {
+  validating: 'bazaar.publish.stage.validating',
+  checking: 'bazaar.publish.stage.checking',
+  saving: 'bazaar.publish.stage.saving',
 };
 
 const emptyForm = (): PublishForm => ({ title: '', description: '', category: 'productivity', tags: [], license: 'remix_allowed', price: 0 });
+const langName = (code: string) => { const l = languageInfo(code); return l.code === 'en' ? l.english : `${l.native} (${l.english})`; };
 
 /**
  * Creator flow (docs/12 §9.1-9.2, §10, §13.2): share a local app, publish a new version of a
  * listing, or edit a listing's details without touching its spec (`mode="details"`). The form is
- * kept as a local draft while typing, so nothing is lost offline (§19.3).
+ * kept as a local draft while typing, so nothing is lost offline (§19.3). The price field shows only when
+ * payments are switched on.
  */
 export function PublishScreen({ appId, listingId, mode }: { appId?: string; listingId?: string; mode?: 'details' }) {
   const theme = useKalamTheme();
+  const t = useT(theme.uiLanguage);
   const { isPhone } = useBreakpoint();
   const toast = useToast();
   const online = useOnline();
@@ -129,7 +136,8 @@ export function PublishScreen({ appId, listingId, mode }: { appId?: string; list
     setTagsText((app.spec.meta.tags ?? []).join(', '));
   }, [app, touched]);
 
-  const price = Number.parseInt(priceText || '0', 10);
+  // Without payments every listing is free, whatever an older draft said.
+  const price = payments ? Number.parseInt(priceText || '0', 10) : 0;
   const fullForm: PublishForm = { ...form, tags: tagsText.split(','), price: Number.isFinite(price) ? price : -1 };
 
   // Keep the draft while typing.
@@ -145,7 +153,7 @@ export function PublishScreen({ appId, listingId, mode }: { appId?: string; list
 
   const set = (patch: Partial<PublishForm>) => { setTouched(true); setForm((f) => ({ ...f, ...patch })); };
   const formErrors = validatePublishForm(fullForm);
-  const nameError = makerName.trim() ? undefined : 'Choose the name people will see.';
+  const nameError = makerName.trim() ? undefined : t('bazaar.publish.nameNeeded');
   const canSubmit = (detailsOnly ? !!existing : !!app && !blockedReason(app)) && !formErrors.length && !nameError && online && !stage;
   const languages = app ? [app.spec.lang, ...(app.spec.meta.supportedLanguages ?? [])] : existing ? [existing.lang] : [];
 
@@ -169,8 +177,8 @@ export function PublishScreen({ appId, listingId, mode }: { appId?: string; list
       const clean = sanitizeSvg(text);
       if (clean.ok) set({ iconSvg: clean.svg });
       else setMediaError(clean.reason);
-    } catch (e) {
-      setMediaError(e instanceof Error ? e.message : 'That icon could not be used.');
+    } catch {
+      setMediaError(t('bazaar.publish.iconFailed'));
     }
   };
   const addShots = async () => {
@@ -179,46 +187,30 @@ export function PublishScreen({ appId, listingId, mode }: { appId?: string; list
       const picked = await pickScreenshots(3 - (shots?.length ?? 0));
       if (picked.error) setMediaError(picked.error);
       if (picked.shots.length) { setTouched(true); setShots([...(shots ?? []), ...picked.shots].slice(0, 3)); }
-    } catch (e) {
-      setMediaError(e instanceof Error ? e.message : 'Those screenshots could not be used.');
+    } catch {
+      setMediaError(t('bazaar.publish.shotsFailed'));
     }
   };
 
-  const title = detailsOnly ? `Edit details of ${existing?.title ?? 'your listing'}` : existing ? `New version of ${existing.title}` : 'Share an app';
-  const header = (
-    <View style={{ gap: 6, marginBottom: 24 }}>
-      <View style={{ alignSelf: 'flex-start', marginLeft: -8, marginBottom: 8 }}>
-        <Button label="Back" variant="ghost" size="sm" icon={ArrowLeft}
-          onPress={() => (router.canGoBack() ? router.back() : router.replace(bazaarRoutes.home))} />
-      </View>
-      <Text variant="h1">{title}</Text>
-      <Text tone="secondary">
-        {detailsOnly
-          ? 'Change how your listing looks. The app itself stays the same. To change the app or its licence, publish a new version.'
-          : 'People can install a copy of your app. Only the app design is shared. The records you saved in it stay on this device.'}
-      </Text>
-    </View>
-  );
+  const title = detailsOnly
+    ? existing ? t('bazaar.publish.titleDetails', { name: existing.title }) : t('bazaar.publish.titleDetailsNone')
+    : existing ? t('bazaar.publish.titleVersion', { name: existing.title }) : t('bazaar.share');
 
   let body: ReactNode;
   if (!configured) {
-    body = <EmptyState title="Kalam Bazaar is not set up in this build" description="Sharing needs Firebase to be configured." />;
+    body = <EmptyState title={t('bazaar.notSetUp.title')} description={t('bazaar.notSetUp.studio')} />;
   } else if (restoring) {
-    body = <Loading text="Checking your account" />;
+    body = <Busy text={t('bazaar.studio.checkingAccount')} />;
   } else if (!user || user.isAnonymous) {
     body = (
-      <Surface padded={24} style={{ gap: 16, maxWidth: 520 }}>
+      <Slip tint="carbon" style={{ maxWidth: 520 }}>
         <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
           <Lock size={18} color={theme.colors.primary} />
-          <Text variant="h3">Sign in to share</Text>
+          <Text variant="h3">{t('bazaar.publish.signIn')}</Text>
         </View>
-        <Text tone="secondary">
-          {user?.isAnonymous
-            ? 'Guest accounts cannot share apps. Add an email so your listings stay yours.'
-            : 'Sharing needs an account so your listings stay yours. You can keep using Kalam without one.'}
-        </Text>
+        <Text tone="secondary">{t('bazaar.publish.needsAccount')}</Text>
         <SignInPanel initialMode={user?.isAnonymous ? 'signup' : 'signin'} />
-      </Surface>
+      </Slip>
     );
   } else if (result?.ok || (result && !result.ok && result.issues?.length)) {
     body = (
@@ -238,32 +230,27 @@ export function PublishScreen({ appId, listingId, mode }: { appId?: string; list
         disclosure: disclosure ?? { stores: [], usesPhotos: false, aiFeatures: [], cloudPossible: false }, searchKeywords: [],
         installs: 0, likes: 0, ratingSum: 0, ratingCount: 0, ratingAvg: 0, createdAt: Date.now(), updatedAt: Date.now(),
       }),
-      title: form.title.trim() || 'Your app', description: form.description.trim(), category: form.category,
+      title: form.title.trim() || t('bazaar.publish.yourApp'), description: form.description.trim(), category: form.category,
       tags: cleanTags(fullForm.tags), lang: form.lang ?? app?.spec.lang ?? 'en', price: Math.max(0, price || 0),
-      makerName: makerName.trim() || 'You', icon: app?.spec.icon ?? existing?.icon, iconSvg: form.iconSvg,
-      appColor: app?.spec.theme.primary ?? existing?.appColor ?? '#315C4C', license: form.license, remixAllowed: remixAllowedFor(form.license),
+      makerName: makerName.trim() || t('bazaar.publish.you'), icon: app?.spec.icon ?? existing?.icon, iconSvg: form.iconSvg,
+      appColor: app?.spec.theme.primary ?? existing?.appColor ?? cloths.green.cloth, license: form.license, remixAllowed: remixAllowedFor(form.license),
       screenshotCount: shots?.length ?? 0,
     } : undefined;
 
     body = (
-      <View style={{ gap: 32 }}>
-        {!online ? (
-          <Surface tone="alt" padded={14} style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }} role="status">
-            <CloudOff size={18} color={theme.colors.warning} />
-            <Text style={{ flex: 1 }}>You are offline. Your details are saved on this device. Share when you are back online.</Text>
-          </Surface>
-        ) : null}
-        {restored ? <Text tone="secondary" role="status">Your unsent details were restored.</Text> : null}
+      <View style={{ gap: 36 }}>
+        {!online ? <OfflineNote>{t('bazaar.publish.offline')}</OfflineNote> : null}
+        {restored ? <Text tone="secondary" role="status">{t('bazaar.publish.restored')}</Text> : null}
 
         {detailsOnly ? null : (
-          <Step n={1} title="Choose an app">
+          <Step n={1} title={t('bazaar.publish.step.choose')} t={t}>
             {apps.length === 0 ? (
-              <EmptyState title="No apps on this device yet" description="Make an app first, then come back to share it."
-                action={<Button label="Create an app" onPress={() => router.push(routes.create)} />} />
+              <EmptyState title={t('bazaar.publish.noApps')} description={t('bazaar.publish.noAppsBody')}
+                action={<Button label={t('shelf.create')} onPress={() => router.push(routes.create)} />} />
             ) : (
-              <View role="radiogroup" accessibilityLabel="App to share" style={{ gap: 8 }}>
+              <View role="radiogroup" accessibilityLabel={t('bazaar.publish.appToShare')} style={{ gap: 8 }}>
                 {apps.map((a) => (
-                  <AppRow key={a.id} app={a} selected={a.id === selected} blocked={blockedReason(a)}
+                  <AppRow key={a.id} app={a} t={t} selected={a.id === selected} blocked={blockedReason(a)}
                     onPress={() => { setSelected(a.id); if (!existing) { setTouched(false); setRestored(false); } }} />
                 ))}
               </View>
@@ -271,12 +258,12 @@ export function PublishScreen({ appId, listingId, mode }: { appId?: string; list
           </Step>
         )}
 
-        <Step n={detailsOnly ? 1 : 2} title="Describe it">
+        <Step n={detailsOnly ? 1 : 2} title={t('bazaar.publish.step.describe')} t={t}>
           <View style={{ gap: 16, maxWidth: 640 }}>
-            <TextField label="Title" value={form.title} onChangeText={(v) => set({ title: v })} maxLength={BAZAAR_LIMITS.title} />
+            <TextField label={t('bazaar.publish.title')} value={form.title} onChangeText={(v) => set({ title: v })} maxLength={BAZAAR_LIMITS.title} />
             <TextField
-              label="Description"
-              helper={`What it is for and who it helps. ${form.description.trim().length}/${BAZAAR_LIMITS.description} characters.`}
+              label={t('bazaar.publish.description')}
+              helper={t('bazaar.publish.descriptionHint', { used: form.description.trim().length, max: BAZAAR_LIMITS.description })}
               value={form.description}
               onChangeText={(v) => set({ description: v })}
               multiline
@@ -284,109 +271,109 @@ export function PublishScreen({ appId, listingId, mode }: { appId?: string; list
               maxLength={BAZAAR_LIMITS.description}
             />
             <View style={{ gap: 8 }}>
-              <Text variant="bodySmall" weight="medium" tone="secondary">Category</Text>
-              <View role="radiogroup" accessibilityLabel="Category" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <Text variant="bodySmall" weight="medium" tone="secondary">{t('bazaar.filter.category')}</Text>
+              <View role="radiogroup" accessibilityLabel={t('bazaar.filter.category')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {BAZAAR_CATEGORIES.map((c: BazaarCategory) => (
-                  <Chip key={c} label={CATEGORY_LABELS[c]} role="radio" selected={form.category === c} onPress={() => set({ category: c })} />
+                  <Chip key={c} label={t(CATEGORY[c])} role="radio" selected={form.category === c} onPress={() => set({ category: c })} />
                 ))}
               </View>
             </View>
             {languages.length > 1 ? (
               <View style={{ gap: 8 }}>
-                <Text variant="bodySmall" weight="medium" tone="secondary">Main language</Text>
-                <View role="radiogroup" accessibilityLabel="Main language" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                <Text variant="bodySmall" weight="medium" tone="secondary">{t('bazaar.publish.mainLanguage')}</Text>
+                <View role="radiogroup" accessibilityLabel={t('bazaar.publish.mainLanguage')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                   {languages.map((l) => (
-                    <Chip key={l} label={languageName(l)} role="radio" selected={(form.lang ?? languages[0]) === l} onPress={() => set({ lang: l })} />
+                    <Chip key={l} label={langName(l)} role="radio" selected={(form.lang ?? languages[0]) === l} onPress={() => set({ lang: l })} />
                   ))}
                 </View>
               </View>
             ) : languages[0] ? (
-              <Text variant="bodySmall" tone="secondary">Main language: {languageName(languages[0])}</Text>
+              <Text variant="bodySmall" tone="secondary">{t('bazaar.publish.mainLanguageIs', { language: langName(languages[0]) })}</Text>
             ) : null}
-            <TextField label="Tags" helper="Words people might search for, separated by commas." value={tagsText}
+            <TextField label={t('bazaar.publish.tags')} helper={t('bazaar.publish.tagsHint')} value={tagsText}
               onChangeText={(v) => { setTouched(true); setTagsText(v); }} autoCapitalize="none" />
             {detailsOnly ? (
-              <Text variant="bodySmall" tone="secondary">Licence: {form.license === 'remix_allowed' ? 'others may remix it' : 'install and use only'}.</Text>
+              <Text variant="bodySmall" tone="secondary">{t(form.license === 'remix_allowed' ? 'bazaar.publish.licenseRemix' : 'bazaar.publish.licenseInstall')}</Text>
             ) : (
               <SegmentedControl<ListingLicense>
-                label="Can other people remix it?"
+                label={t('bazaar.publish.remixQuestion')}
                 wrap
                 value={form.license}
                 onChange={(v) => set({ license: v })}
                 options={[
-                  { value: 'remix_allowed', label: 'Yes, credit me' },
-                  { value: 'all_rights_reserved', label: 'No, install only' },
-                  { value: 'personal', label: 'Personal use only' },
+                  { value: 'remix_allowed', label: t('bazaar.publish.remixYes') },
+                  { value: 'all_rights_reserved', label: t('bazaar.publish.remixNo') },
+                  { value: 'personal', label: t('bazaar.publish.remixPersonal') },
                 ]}
               />
             )}
             {payments ? (
-              <TextField
-                label="Price in credits"
-                helper={`0 means free. Up to ${MAX_PRICE}. Credits are a test currency, not money.`}
-                value={priceText}
-                onChangeText={(v) => { setTouched(true); setPriceText(v.replace(/[^0-9]/g, '').slice(0, 4)); }}
-                keyboardType="number-pad"
-                inputMode="numeric"
+              <NumberInput
+                label={t('bazaar.publish.price')}
+                helper={t('bazaar.publish.priceHint', { max: MAX_PRICE })}
+                value={priceText === '' ? null : Number.parseInt(priceText, 10)}
+                onChange={(n) => { setTouched(true); setPriceText(n === null ? '' : String(n)); }}
+                min={0}
+                max={MAX_PRICE}
+                step={1}
+                decimals={0}
               />
-            ) : (
-              <Text variant="bodySmall" tone="secondary">Price: free. Paid apps are not available yet.</Text>
-            )}
+            ) : null}
             {existing && !detailsOnly ? (
-              <TextField label="What changed in this version?" helper="Shown to people who installed it." value={form.changeSummary ?? ''}
+              <TextField label={t('bazaar.publish.changed')} helper={t('bazaar.publish.changedHint')} value={form.changeSummary ?? ''}
                 onChangeText={(v) => set({ changeSummary: v })} maxLength={BAZAAR_LIMITS.changeSummary} />
             ) : null}
-            <TextField label="Your name in Kalam Bazaar" helper="Shown on the listing. Your email is never shown." value={makerName}
+            <TextField label={t('bazaar.publish.makerName')} helper={t('bazaar.publish.makerNameHint')} value={makerName}
               onChangeText={setMakerName} maxLength={BAZAAR_LIMITS.makerName} error={makerName ? nameError : undefined} />
           </View>
         </Step>
 
-        <Step n={detailsOnly ? 2 : 3} title="Icon and screenshots (optional)">
+        <Step n={detailsOnly ? 2 : 3} title={t('bazaar.publish.step.media')} t={t}>
           <View style={{ gap: 14, maxWidth: 640 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
               {preview ? <ListingIcon listing={preview} size={56} /> : null}
-              <Button label={form.iconSvg ? 'Change icon' : 'Use your own icon (SVG)'} variant="outline" icon={Shapes} onPress={chooseIcon} />
-              {form.iconSvg ? <Button label="Use the app's icon" variant="ghost" onPress={() => set({ iconSvg: '' })} /> : null}
+              <Button label={t(form.iconSvg ? 'bazaar.publish.changeIcon' : 'bazaar.publish.ownIcon')} variant="outline" icon={Shapes} onPress={chooseIcon} />
+              {form.iconSvg ? <Button label={t('bazaar.publish.appIcon')} variant="ghost" onPress={() => set({ iconSvg: '' })} /> : null}
             </View>
-            <Text variant="bodySmall" tone="muted">Icons are checked and cleaned. Scripts, links and pictures inside SVG files are not allowed.</Text>
+            <Text variant="bodySmall" tone="muted">{t('bazaar.publish.iconNote')}</Text>
             <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
               {(shots ?? []).map((s, i) => (
                 <View key={i}>
-                  <Image source={{ uri: `data:${s.mimeType};base64,${s.base64}` }} accessibilityLabel={`Screenshot ${i + 1}`}
-                    style={{ width: Math.round((s.width / s.height) * 140), height: 140, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border }} />
-                  <View style={{ position: 'absolute', top: 2, right: 2 }}>
-                    <Button label="Remove" size="sm" variant="secondary" icon={X} onPress={() => { setTouched(true); setShots((shots ?? []).filter((_, j) => j !== i)); }} />
+                  <Image source={{ uri: `data:${s.mimeType};base64,${s.base64}` }} accessibilityLabel={t('bazaar.listing.screenshot', { n: i + 1, total: shots?.length ?? 0 })}
+                    style={{ width: Math.round((s.width / s.height) * 140), height: 140, borderRadius: theme.radius.paper, borderWidth: 1, borderColor: theme.colors.border }} />
+                  <View style={{ position: 'absolute', top: 2, end: 2 }}>
+                    <Button label={t('common.remove')} size="sm" variant="secondary" icon={X} onPress={() => { setTouched(true); setShots((shots ?? []).filter((_, j) => j !== i)); }} />
                   </View>
                 </View>
               ))}
             </View>
             {(shots?.length ?? 0) < 3 ? (
               <View style={{ alignSelf: 'flex-start' }}>
-                <Button label="Add screenshots" variant="outline" icon={ImagePlus} onPress={addShots} />
+                <Button label={t('bazaar.publish.addShots')} variant="outline" icon={ImagePlus} onPress={addShots} />
               </View>
             ) : null}
-            <Text variant="bodySmall" tone="muted">Up to 3. Pictures are made smaller and location details are removed. Make sure they show no private entries.</Text>
+            <Text variant="bodySmall" tone="muted">{t('bazaar.publish.shotsNote')}</Text>
             {mediaError ? <Text tone="danger" role="alert">{mediaError}</Text> : null}
           </View>
         </Step>
 
-        <Step n={detailsOnly ? 3 : 4} title="Check what is shared">
-          <View style={{ gap: 16, maxWidth: 640 }}>
-            <Surface tone="alt" padded={20} style={{ gap: 8 }}>
+        <Step n={detailsOnly ? 3 : 4} title={t('bazaar.publish.step.check')} t={t}>
+          <View style={{ gap: 16, flexDirection: isPhone ? 'column' : 'row', alignItems: 'flex-start' }}>
+            <Slip tint="kraft" style={{ flex: isPhone ? undefined : 1, maxWidth: 560 }}>
               {app || existing ? (
                 <>
-                  {app ? <Line>Shared: the design of {app.spec.name}, with {app.spec.screens.length} {app.spec.screens.length === 1 ? 'screen' : 'screens'}.</Line> : null}
-                  <Line>Not shared: anything saved in the app, your photos, your drawings and what you typed to create it.</Line>
-                  {disclosure?.stores.length ? <Line>Listed as keeping: {disclosure.stores.join(', ').toLowerCase()}.</Line> : null}
-                  {disclosure?.aiFeatures.length ? <Line>Listed AI features: {disclosure.aiFeatures.join('; ')}.</Line> : null}
-                  <Line>Before it goes live, Kalam checks the design on this device and runs a safety check with Firebase cloud AI.</Line>
+                  {app ? <Line>{t('bazaar.publish.shared', { name: app.spec.name, count: app.spec.screens.length })}</Line> : null}
+                  <Line>{t('bazaar.publish.notShared')}</Line>
+                  {disclosure?.stores.length ? <Line>{t('bazaar.publish.keeps', { what: disclosure.stores.join(', ').toLowerCase() })}</Line> : null}
+                  {disclosure?.aiFeatures.length ? <Line>{t('bazaar.publish.aiFeatures', { what: disclosure.aiFeatures.join('; ') })}</Line> : null}
+                  <Line>{t('bazaar.publish.checks')}</Line>
                 </>
-              ) : <Text tone="secondary">Choose an app to see what will be shared.</Text>}
-            </Surface>
+              ) : <Text tone="secondary">{t('bazaar.publish.chooseFirst')}</Text>}
+            </Slip>
             {preview ? (
-              <View style={{ gap: 8 }}>
-                <Text variant="bodySmall" weight="medium" tone="secondary">How it will look in Kalam Bazaar</Text>
-                <View pointerEvents="none"><ListingCard listing={preview} width={isPhone ? 300 : 320} /></View>
+              <View style={{ gap: 8, width: isPhone ? '100%' : 230 }}>
+                <Text variant="bodySmall" weight="medium" tone="secondary">{t('bazaar.publish.looks')}</Text>
+                <View style={{ width: 220, alignSelf: isPhone ? 'center' : 'flex-start' }}><ListingCard listing={preview} payments={payments} height={340} preview /></View>
               </View>
             ) : null}
           </View>
@@ -397,7 +384,7 @@ export function PublishScreen({ appId, listingId, mode }: { appId?: string; list
 
         <View style={{ flexDirection: isPhone ? 'column' : 'row', gap: 16, alignItems: isPhone ? 'stretch' : 'center' }}>
           <Button
-            label={detailsOnly ? 'Save details' : existing ? `Publish version ${existing.specVersion + 1}` : 'Share in Kalam Bazaar'}
+            label={detailsOnly ? t('bazaar.publish.saveDetails') : existing ? t('bazaar.publish.publishVersion', { version: existing.specVersion + 1 }) : t('shelf.actions.share')}
             icon={Upload}
             size="lg"
             loading={!!stage}
@@ -407,15 +394,15 @@ export function PublishScreen({ appId, listingId, mode }: { appId?: string; list
           {stage ? (
             <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }} role="status">
               <ActivityIndicator color={theme.colors.primary} />
-              <Text tone="secondary">{STAGES[stage]}</Text>
+              <Text tone="secondary">{t(STAGES[stage])}</Text>
             </View>
           ) : null}
           {!detailsOnly && selected && touched ? (
-            <Button label="Discard draft" variant="ghost" onPress={async () => {
+            <Button label={t('bazaar.publish.discardDraft')} variant="ghost" onPress={async () => {
               await bazaar.removeDraft(selected);
               setTouched(false);
               setRestored(false);
-              toast.show({ message: 'Draft removed.', tone: 'info' });
+              toast.show({ message: t('bazaar.publish.draftRemoved'), tone: 'info' });
             }} />
           ) : null}
         </View>
@@ -426,7 +413,8 @@ export function PublishScreen({ appId, listingId, mode }: { appId?: string; list
   return (
     <AppShell active="bazaar">
       <Screen maxWidth={900}>
-        {header}
+        <BackToBazaar t={t} />
+        <PageHead title={title} lede={t(detailsOnly ? 'bazaar.publish.ledeDetails' : 'bazaar.publish.lede')} />
         {body}
       </Screen>
     </AppShell>
@@ -442,44 +430,50 @@ function blockedReason(app: StoredApp | undefined): string | undefined {
 
 function Result({ result, app, onAgain }: { result: BazaarPublishOutcome; app?: StoredApp; onAgain: () => void }) {
   const theme = useKalamTheme();
+  const t = useT(theme.uiLanguage);
   const tone = result.status === 'published' ? 'success' : result.status === 'pending_review' ? 'warning' : 'danger';
   const Icon = result.status === 'published' ? CheckCircle2 : result.status === 'pending_review' ? Clock : CircleAlert;
-  const title = result.status === 'published' ? 'Shared' : result.status === 'pending_review' ? 'Saved, waiting for checks' : 'Needs changes';
+  const title = t(result.status === 'published' ? 'bazaar.publish.result.shared' : result.status === 'pending_review' ? 'bazaar.publish.result.waiting' : 'bazaar.status.rejected');
+  const review = result.review;
   return (
-    <Surface padded={24} style={{ gap: 16, maxWidth: 640 }} role="status">
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Icon size={24} color={theme.colors[tone]} />
-        <Text variant="h3">{title}</Text>
-      </View>
-      <Text>{result.message}</Text>
-      {result.reasons?.length && result.status !== 'published' ? (
-        <View style={{ gap: 6 }}>{result.reasons.map((r) => <Line key={r}>{r}</Line>)}</View>
-      ) : null}
-      {result.issues?.length ? (
-        <View style={{ gap: 6 }}>{result.issues.slice(0, 5).map((i) => <Line key={`${i.path}${i.code}`}>{i.message}</Line>)}</View>
-      ) : null}
-      {result.review ? (
-        <Text variant="bodySmall" tone="muted">
-          {result.review.cached
-            ? 'Safety check: the earlier result for the same content was used.'
-            : `Safety check: ${result.review.source === 'cloud' ? 'Firebase cloud AI' : 'not run'}${result.review.model ? ` (${result.review.model})` : ''}, ${formatLatency(result.review.latencyMs)}.`}
-        </Text>
-      ) : null}
-      <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
-        {result.status === 'published' && result.listingId ? (
-          <Button label="View listing" onPress={() => router.push(bazaarRoutes.listing(result.listingId!))} />
+    <Slip tint={result.status === 'published' ? 'leaf' : 'haldi'} style={{ maxWidth: 640 }}>
+      <View role="status" style={{ gap: 16 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Icon size={24} color={theme.colors[tone]} />
+          <Text variant="h3">{title}</Text>
+        </View>
+        <Text>{result.message}</Text>
+        {result.reasons?.length && result.status !== 'published' ? (
+          <View style={{ gap: 6 }}>{result.reasons.map((r) => <Line key={r}>{r}</Line>)}</View>
         ) : null}
-        {(result.status === 'rejected' || result.issues?.length) && app ? (
-          <Button label="Edit the app" onPress={() => router.push(routes.editApp(app.id))} />
+        {result.issues?.length ? (
+          <View style={{ gap: 6 }}>{result.issues.slice(0, 5).map((i) => <Line key={`${i.path}${i.code}`}>{i.message}</Line>)}</View>
         ) : null}
-        <Button label="Creator Studio" variant="outline" onPress={() => router.push(bazaarRoutes.mine)} />
-        <Button label="Share another app" variant="ghost" onPress={onAgain} />
+        {review ? (
+          <Text variant="bodySmall" tone="muted">
+            {review.cached
+              ? t('bazaar.publish.result.cached')
+              : review.source === 'cloud'
+                ? t('bazaar.publish.result.cloud', { model: review.model ? ` (${review.model})` : '', time: formatLatency(review.latencyMs) })
+                : t('bazaar.publish.result.notRun')}
+          </Text>
+        ) : null}
+        <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+          {result.status === 'published' && result.listingId ? (
+            <Button label={t('bazaar.publish.result.view')} onPress={() => router.push(bazaarRoutes.listing(result.listingId!))} />
+          ) : null}
+          {(result.status === 'rejected' || result.issues?.length) && app ? (
+            <Button label={t('bazaar.publish.result.editApp')} onPress={() => router.push(routes.editApp(app.id))} />
+          ) : null}
+          <Button label={t('bazaar.studio.title')} variant="outline" onPress={() => router.push(bazaarRoutes.mine)} />
+          <Button label={t('bazaar.publish.result.another')} variant="ghost" onPress={onAgain} />
+        </View>
       </View>
-    </Surface>
+    </Slip>
   );
 }
 
-function AppRow({ app, selected, blocked, onPress }: { app: StoredApp; selected: boolean; blocked?: string; onPress: () => void }) {
+function AppRow({ app, t, selected, blocked, onPress }: { app: StoredApp; t: TFunction; selected: boolean; blocked?: string; onPress: () => void }) {
   const theme = useKalamTheme();
   const c = theme.colors;
   return (
@@ -491,17 +485,15 @@ function AppRow({ app, selected, blocked, onPress }: { app: StoredApp; selected:
       disabled={!!blocked}
       onPress={onPress}
       style={{
-        flexDirection: 'row', alignItems: 'center', gap: 14, padding: 12, minHeight: 64, borderRadius: theme.radius.md,
-        borderWidth: selected ? 2 : 1, borderColor: selected ? c.primary : c.border,
+        flexDirection: 'row', alignItems: 'center', gap: 14, padding: 12, minHeight: Math.max(64, theme.touchTarget), borderRadius: theme.radius.press,
+        borderWidth: selected ? 1.75 : 1.25, borderColor: selected ? c.primary : c.borderStrong,
         backgroundColor: selected ? c.primarySoft : c.surface, opacity: blocked ? 0.6 : 1,
       }}
     >
       <AppIconTile icon={app.spec.icon} appColor={app.spec.theme.primary} size={40} />
       <View style={{ flex: 1, gap: 2 }}>
         <Text weight="semibold" numberOfLines={1}>{app.spec.name}</Text>
-        <Text variant="bodySmall" tone="muted" numberOfLines={2}>
-          {blocked ?? `${app.spec.screens.length} ${app.spec.screens.length === 1 ? 'screen' : 'screens'}`}
-        </Text>
+        <Text variant="bodySmall" tone="muted" numberOfLines={2}>{blocked ?? t('shelf.screens', { count: app.spec.screens.length })}</Text>
       </View>
       <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: selected ? c.primary : c.borderStrong, alignItems: 'center', justifyContent: 'center' }}>
         {selected ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: c.primary }} /> : null}
@@ -510,14 +502,13 @@ function AppRow({ app, selected, blocked, onPress }: { app: StoredApp; selected:
   );
 }
 
-function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
+/** A numbered step, numbered like an order-book slip ("No. 01"). */
+function Step({ n, title, t, children }: { n: number; title: string; t: TFunction; children: ReactNode }) {
   const theme = useKalamTheme();
   return (
     <View style={{ gap: 14 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: theme.colors.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
-          <Text variant="bodySmall" weight="bold" tone="primary">{n}</Text>
-        </View>
+      <View style={{ gap: 2 }}>
+        <Text mono variant="caption" style={{ color: theme.colors.markInk }}>{slipNumber(n, 2, t('slip.no'))}</Text>
         <Text variant="h3">{title}</Text>
       </View>
       {children}
@@ -529,18 +520,8 @@ function Line({ children }: { children: ReactNode }) {
   const theme = useKalamTheme();
   return (
     <View style={{ flexDirection: 'row', gap: 10 }}>
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.textMuted, marginTop: 8 }} />
+      <View style={{ width: 6, height: 6, borderRadius: 1, backgroundColor: theme.colors.mark, marginTop: 9 }} />
       <Text style={{ flex: 1 }}>{children}</Text>
-    </View>
-  );
-}
-
-function Loading({ text }: { text: string }) {
-  const theme = useKalamTheme();
-  return (
-    <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 24 }}>
-      <ActivityIndicator color={theme.colors.primary} />
-      <Text tone="secondary">{text}</Text>
     </View>
   );
 }

@@ -33,6 +33,7 @@ export const REPORT_COPY = {
 
   // Deterministic sentences.
   empty: (collection: string) => `There are no entries in ${collection} yet.`,
+  filteredOut: (collection: string) => `No entries in ${collection} match this report's filter.`,
   noneInRange: (collection: string, range: string) => `There are no entries in ${collection} for ${range}.`,
   single: (metric: string, range: string, value: string) => `${metric} for ${range}: ${value}.`,
   byGroup: (metric: string, top: string, value: string, groups: number, range: string) =>
@@ -46,6 +47,11 @@ export const REPORT_COPY = {
   fromNothing: (range: string) => `There was nothing for ${range}, so there is no percent change.`,
   trend: { up: 'The trend is going up.', down: 'The trend is going down.', flat: 'The trend is about level.' },
   skipped: (n: number) => (n === 1 ? '1 entry has no date, so it is left out.' : `${n} entries have no date, so they are left out.`),
+  future: (n: number) => (n === 1 ? '1 entry is dated after today, so it is left out.' : `${n} entries are dated after today, so they are left out.`),
+  trimmed: (n: number, unit: TimeUnit) => `Only the last ${n} ${unitWord(unit, n)} fit in one chart, so earlier entries are left out.`,
+  openPeriod: (unit: TimeUnit) => (unit === 'day' ? 'Today is not over yet, so the trend leaves it out.' : `This ${unitWord(unit)} is not over yet, so the trend leaves it out.`),
+  datesFrom: (field: string) => `Dates come from the ${field} field.`,
+  datesAdded: 'Dates are when each entry was added.',
 
   // Validation messages (reports are rejected, never guessed).
   unknownCollection: (id: string) => `This app has no list called "${id}".`,
@@ -55,6 +61,8 @@ export const REPORT_COPY = {
   needsGroupable: (id: string) => `"${id}" cannot be used to split entries. Use a choice or yes/no field.`,
   badFilter: (id: string) => `The filter on "${id}" does not match the kind of field it is.`,
   compareNeedsRange: 'A comparison needs a period such as the last 4 weeks.',
+  splitTooBig: (split: TimeUnit, range: TimeUnit) =>
+    `A report over the last few ${unitWord(range, 2)} cannot be split by ${unitWord(split)}. Split it by ${unitWord(range)}${range === 'day' ? '' : ' or a shorter period'}.`,
   viewNeedsGroup: (view: string) => `A ${view} chart needs the entries split into groups.`,
   lineNeedsTime: 'A line chart needs the entries split by day, week or month.',
   donutNeedsField: 'A donut chart needs the entries split by a choice or yes/no field.',

@@ -1,76 +1,66 @@
-import { Link } from 'expo-router';
-import { Download, Heart, Star } from 'lucide-react-native';
-import { Pressable, View } from 'react-native';
+import { router } from 'expo-router';
+import { Star } from 'lucide-react-native';
+import { View } from 'react-native';
 
-import { CATEGORY_LABELS, isCompatible, priceLabel, type BazaarListing } from '@/core/bazaar';
-import { languageName } from '@/core/spec/describe';
-import { Chip, Text, useKalamTheme, webData } from '@/design';
+import { isCompatible, type BazaarListing } from '@/core/bazaar';
+import { clothLabel, cloths, Register, Stamp, Text, useKalamTheme } from '@/design';
+import { useT } from '@/i18n/react';
 
-import { ListingIcon } from './ListingIcon';
+import { CATEGORY, clothForColor, priceText, ratingText } from './parts';
 import { bazaarRoutes } from './routes';
 
-export const countLabel = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-export const ratingLabel = (l: Pick<BazaarListing, 'ratingAvg' | 'ratingCount'>) =>
-  l.ratingCount ? `${l.ratingAvg.toFixed(1)} stars from ${countLabel(l.ratingCount, 'review', 'reviews')}` : 'No reviews yet';
-
-/** Browse card (docs/12 §6): icon, title, maker, description, price, category, language, rating, installs. */
-export function ListingCard({ listing, width }: { listing: BazaarListing; width: number }) {
+/**
+ * A listing on the market shelf (docs/12 §6, DIRECTION §6): a register cover like the shelf, the app's title on
+ * the label in its own language, the maker's name under it, installs and rating in Courier Prime, and a stamp for
+ * how it was checked. Prices show only when payments are switched on.
+ */
+export function ListingCard({ listing, height = 360, payments, preview = false }: {
+  listing: BazaarListing;
+  height?: number;
+  payments: boolean;
+  /** A look-only copy (the publish preview): no button, nothing to focus, nowhere to go. */
+  preview?: boolean;
+}) {
   const theme = useKalamTheme();
-  const c = theme.colors;
-  const compact = width < 240;
-  const installs = countLabel(listing.installs, 'install', 'installs');
-  const likes = countLabel(listing.likes, 'like', 'likes');
-  const price = priceLabel(listing.price);
+  const t = useT(theme.uiLanguage);
+  const cloth = clothForColor(listing.appColor);
+  const fg = cloths[cloth].fg;
+  // Paper: stamps sit on the label white. Ink night: the stamp's own dark wash keeps its light ink readable.
+  const coverWash = theme.scheme === 'dark' ? undefined : clothLabel.bg;
+  const installs = t('bazaar.installs', { count: listing.installs });
   const compatible = isCompatible(listing.kalamSpecVersion);
+  const checked = listing.status === 'published';
+  const label = [
+    listing.title,
+    t('bazaar.by', { name: listing.makerName }),
+    payments ? priceText(t, listing.price) : null,
+    t(CATEGORY[listing.category]),
+    ratingText(t, listing),
+    installs,
+    listing.featured ? t('bazaar.featuredByTeam') : null,
+    compatible ? null : t('bazaar.needsNewer'),
+  ].filter(Boolean).join('. ');
   return (
-    <Link href={bazaarRoutes.listing(listing.id)} asChild>
-      <Pressable
-        role="link"
-        accessibilityLabel={`${listing.title}, by ${listing.makerName}. ${price}. ${CATEGORY_LABELS[listing.category]}. ${ratingLabel(listing)}. ${installs}.${listing.featured ? ' Featured by the Kalam team.' : ''}`}
-        {...webData({ kPress: '', kHover: 'border' })}
-        android_ripple={{ color: c.surfaceAlt, foreground: true }}
-        style={{
-          width,
-          minHeight: compact ? 200 : 220,
-          padding: compact ? 14 : 18,
-          gap: 12,
-          backgroundColor: c.surface,
-          borderRadius: theme.radius.lg,
-          borderWidth: theme.accessModes.highContrast ? 2 : 1,
-          borderColor: c.border,
-          overflow: 'hidden',
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <ListingIcon listing={listing} size={compact ? 40 : 48} />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text variant={compact ? 'body' : 'h4'} weight="semibold" numberOfLines={2}>{listing.title}</Text>
-            <Text variant="bodySmall" tone="muted" numberOfLines={1}>by {listing.makerName}</Text>
+    <Register
+      cloth={cloth}
+      name={listing.title}
+      lang={listing.lang}
+      subtitle={t('bazaar.by', { name: listing.makerName })}
+      stat={listing.ratingCount ? `${installs} · ★ ${listing.ratingAvg.toFixed(1)}` : installs}
+      height={height}
+      onPress={preview ? undefined : () => router.push(bazaarRoutes.listing(listing.id))}
+      accessibilityLabel={label}
+      footer={
+        <>
+          {checked ? <Stamp kind="checked" label={t(listing.reviewed ? 'bazaar.status.reviewed' : 'bazaar.stamp.checked')} size="sm" wash={coverWash} /> : null}
+          {listing.featured ? <Stamp kind="plain" icon={Star} label={t('bazaar.featured')} size="sm" wash={coverWash} /> : null}
+          {!compatible ? <Stamp kind="needs" label={t('bazaar.needsNewer')} size="sm" wash={coverWash} /> : null}
+          <View style={{ width: '100%', flexDirection: 'row', flexWrap: 'wrap', columnGap: 8, rowGap: 2 }}>
+            <Text variant="caption" weight="semibold" numberOfLines={1} style={{ color: fg }}>{t(CATEGORY[listing.category])}</Text>
+            {payments ? <Text variant="caption" weight="semibold" style={{ color: fg }}>{priceText(t, listing.price)}</Text> : null}
           </View>
-        </View>
-        <Text variant="bodySmall" tone="secondary" numberOfLines={3} style={{ flex: 1 }}>{listing.description}</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-          <Chip label={price} tone={listing.price === 0 ? 'success' : 'accent'} />
-          {!compact ? <Chip label={CATEGORY_LABELS[listing.category]} tone="neutral" /> : null}
-          {!listing.lang.startsWith('en') ? <Chip label={languageName(listing.lang)} tone="neutral" /> : null}
-          {listing.featured ? <Chip label="Featured" tone="info" /> : null}
-          {!compatible ? <Chip label="Needs a newer Kalam" tone="warning" /> : null}
-        </View>
-        <View style={{ flexDirection: 'row', gap: 14, flexWrap: 'wrap' }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Star size={14} color={c.textMuted} />
-            <Text variant="caption" tone="muted">{listing.ratingCount ? `${listing.ratingAvg.toFixed(1)} (${listing.ratingCount})` : 'New'}</Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Download size={14} color={c.textMuted} />
-            <Text variant="caption" tone="muted">{installs}</Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Heart size={14} color={c.textMuted} />
-            <Text variant="caption" tone="muted">{likes}</Text>
-          </View>
-        </View>
-      </Pressable>
-    </Link>
+        </>
+      }
+    />
   );
 }

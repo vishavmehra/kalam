@@ -17,8 +17,13 @@ export interface MigrationResult {
   error?: string;
 }
 
-/** Registry. KalamSpec 1.0.0 is the first public format, so there is nothing to migrate yet. */
-export const SPEC_MIGRATIONS: readonly SpecMigration[] = [];
+/**
+ * Registry. 1.0.0 → 1.1.0 is additive (docs/05 §15.2): every 1.0 document is already a valid 1.1
+ * document, so only the format number changes. Older minors are migrated (ADR-024).
+ */
+export const SPEC_MIGRATIONS: readonly SpecMigration[] = [
+  { fromVersion: '1.0.0', toVersion: '1.1.0', migrate: (doc) => ({ ...doc }) },
+];
 
 const parseVersion = (v: string): [number, number, number] | undefined => {
   const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(v);

@@ -1,40 +1,51 @@
 /**
- * Kalam shell theme: colour scheme, access-mode overlays (Large, High Contrast) and reduced
- * motion, resolved from user settings + OS preferences. Generated apps never use this theme
- * (docs/02 §12) — they render with their own KalamSpec tokens.
+ * Kalam shell theme: Paper or Ink night, access-mode overlays (Large, High Contrast), reduced motion and the
+ * UI language's script, resolved from user settings and OS preferences. Generated apps never use this theme:
+ * they render with their own KalamSpec tokens.
  */
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Platform, useColorScheme, useWindowDimensions } from 'react-native';
 
 import type { AccessModes, KalamSettings } from '@/core/contracts';
+import { isCatalogueLoaded } from '@/i18n/catalogue';
+import { htmlLang } from '@/i18n/languages';
+import { useSyncCatalogues } from '@/i18n/react';
 import type { Script } from '@/i18n/scripts';
-import { useScriptFonts } from '@/i18n/use-script-fonts';
+import { useShellFonts } from '@/i18n/use-script-fonts';
 
 import { installGlobalCss } from './global-css';
+import { effectiveFontScale, loadTextScale, useTextScale } from './text-scale';
 import {
-  breakpoints, darkColors, elevation, highContrastDarkColors, highContrastLightColors, type KalamColors,
-  layout, lightColors, motion, radius, space,
+  breakpoints, darkColors, darkTints, elevation, highContrastDarkColors, highContrastLightColors, type KalamColors,
+  layout, lightColors, lightTints, motion, radius, space, stampColors, type StampColors, type TintColors,
 } from './tokens';
 
 export interface KalamTheme {
+  /** `light` is Paper, `dark` is Ink night. */
   scheme: 'light' | 'dark';
   colors: KalamColors;
-  /** Multiplier applied to the type scale (Large access mode = 1.5, docs/10 §4.1, lead decision 4). */
+  /** Stamp ink and wash per kind (Template, On device, Cloud, Checked, Needs check, plain). */
+  stamps: StampColors;
+  /** Order-book slip tints. */
+  tints: TintColors;
+  /** Multiplier applied to the type scale: Large access mode (1.5, docs/10 §4.1) times the Settings text size. */
   fontScale: number;
-  /** Minimum interactive size (48, or 64 in Large mode — docs/10 §4.1). */
+  /** Minimum interactive size (48, or 64 in Large mode, docs/10 §4.1). */
   touchTarget: number;
   reducedMotion: boolean;
   accessModes: AccessModes;
+  /** Narrower than 640 px: display type uses the phone scale. */
+  compact: boolean;
   space: typeof space;
   radius: typeof radius;
   layout: typeof layout;
   motion: typeof motion;
   elevation: typeof elevation;
-  /** Loaded script of the UI language. Pass to `fontFamily()` so Indic text gets its Noto face. */
+  /** Loaded script of the UI language. Pass to `fontFamily()` so Indic text gets its Anek or Tiro face. */
   script: Script;
   /**
-   * Language the shell's strings are really shown in. Pass it to `useT()` / `useFormat()` for keyed
-   * strings so a sentence is never half translated. It follows Settings once P1-5b moves the strings.
+   * Language the shell's strings are really shown in: the Settings language once its catalogue has loaded,
+   * English until then. Pass it to `useT()` / `useFormat()` so a sentence is never half translated.
    */
   uiLanguage: string;
 }
@@ -42,28 +53,30 @@ export interface KalamTheme {
 /** The subset of settings the theme depends on. */
 export type ThemeSettings = Pick<KalamSettings, 'colorScheme' | 'reducedMotion' | 'accessModes' | 'language'>;
 
-/** Language of the shell's own strings today (see ThemeProvider). */
-const UI_LANGUAGE = 'en';
-
 const NO_MODES: AccessModes = { large: false, highContrast: false, simple: false, readAloud: false, leftHanded: false };
 
-function buildTheme(scheme: 'light' | 'dark', modes: AccessModes, reducedMotion: boolean, script: Script = 'latin', uiLanguage = UI_LANGUAGE): KalamTheme {
+function buildTheme(
+  scheme: 'light' | 'dark', modes: AccessModes, reducedMotion: boolean, compact: boolean, script: Script = 'latin', uiLanguage = 'en', textScale = 1,
+): KalamTheme {
   const hc = modes.highContrast;
   const colors = scheme === 'dark' ? (hc ? highContrastDarkColors : darkColors) : hc ? highContrastLightColors : lightColors;
   return {
     scheme,
     colors,
-    fontScale: modes.large ? 1.5 : 1,
+    stamps: stampColors(colors),
+    tints: scheme === 'dark' ? darkTints : lightTints,
+    fontScale: effectiveFontScale(modes.large, textScale),
     touchTarget: modes.large ? 64 : layout.touchTarget,
     reducedMotion,
     accessModes: modes,
+    compact,
     space, radius, layout, motion, elevation,
     script,
     uiLanguage,
   };
 }
 
-const ThemeContext = createContext<KalamTheme>(buildTheme('light', NO_MODES, false));
+const ThemeContext = createContext<KalamTheme>(buildTheme('light', NO_MODES, false, false));
 
 /** OS "reduce motion" preference, kept live. */
 function useOsReducedMotion(): boolean {
@@ -102,10 +115,11 @@ function useOsHighContrast(): boolean {
  * @param settings  user settings (colour scheme, reduced motion, access modes, language). Optional
  *                  so the provider can render before settings hydrate.
  */
-export function ThemeProvider({ settings, children }: { settings?: ThemeSettings; children: ReactNode }) {
+export function ThemeProvider({ settings, preview, children }: { settings?: ThemeSettings; /** A sample inside a sheet: never touches the page's global CSS or the saved text size. */ preview?: boolean; children: ReactNode }) {
   const system = useColorScheme();
   const osReduced = useOsReducedMotion();
   const osContrast = useOsHighContrast();
+  const compact = useWindowDimensions().width < breakpoints.tablet;
   const pref = settings?.colorScheme ?? 'system';
   const scheme: 'light' | 'dark' = pref === 'system' ? (system === 'dark' ? 'dark' : 'light') : pref;
   // A Kalam setting may only make things stricter than the device asks for (docs/10 §3.3):
@@ -118,23 +132,25 @@ export function ThemeProvider({ settings, children }: { settings?: ThemeSettings
     [osContrast, userModes],
   );
 
-  // <html lang> and keyed strings name the language the UI is really shown in (docs/10 §11). The
-  // shell's strings are English until they move to i18n keys (GAP P1-5b), so it stays 'en' even when
-  // another language is chosen for new apps and voice. Generated apps tag their own content
-  // (KalamRuntime) and language names carry their own lang. When translated catalogues load, use
-  // `isCatalogueLoaded(language) ? language : 'en'` from src/i18n/catalogue here.
-  const uiLang = UI_LANGUAGE;
-  // Script fonts for the language in Settings; Latin until they finish loading.
-  const { script } = useScriptFonts();
-  const theme = useMemo(() => buildTheme(scheme, modes, reduced, script, uiLang), [scheme, modes, reduced, script, uiLang]);
+  // The shell's strings are keyed (P1-5b), so <html lang> and keyed strings name the Settings language once
+  // its catalogue has arrived, and English until then (docs/10 §11). Generated apps tag their own content.
+  useSyncCatalogues();
+  const language = settings?.language ?? 'en';
+  const uiLang = isCatalogueLoaded(language) ? language : 'en';
+  // Anek and Tiro for the language in Settings; Latin until they finish loading.
+  const { script } = useShellFonts();
+  // The Settings text size lives on this device, not in the settings record; read once, then live.
+  const textScale = useTextScale();
+  useEffect(() => { if (!preview) void loadTextScale(); }, [preview]);
+  const theme = useMemo(() => buildTheme(scheme, modes, reduced, compact, script, uiLang, textScale), [scheme, modes, reduced, compact, script, uiLang, textScale]);
   useEffect(() => {
-    installGlobalCss(theme, uiLang);
-  }, [theme, uiLang]);
+    if (!preview) installGlobalCss(theme, htmlLang(uiLang));
+  }, [theme, uiLang, preview]);
 
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
 }
 
-/** Current Kalam shell theme. Read colours from here — never hardcode them. */
+/** Current Kalam shell theme. Read colours from here, never hardcode them. */
 export function useKalamTheme(): KalamTheme {
   return useContext(ThemeContext);
 }
@@ -149,13 +165,13 @@ export interface Breakpoint {
   height: number;
   /** < 640 */
   isPhone: boolean;
-  /** ≥ 768 — wide enough for the navigation rail. */
+  /** ≥ 768: wide enough for the navigation rail. */
   hasRail: boolean;
   /** ≥ 1024 */
   isDesktop: boolean;
 }
 
-/** Layout breakpoint from the window size (docs/02 §7.3). Never use it to infer capabilities. */
+/** Layout breakpoint from the window size. Never use it to infer capabilities. */
 export function useBreakpoint(): Breakpoint {
   const { width, height } = useWindowDimensions();
   return {

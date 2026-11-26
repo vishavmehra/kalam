@@ -1,5 +1,6 @@
 import Dexie from 'dexie';
 import { describe, expect, it, vi } from 'vitest';
+import { DRAFT_STATE_KEY } from '@/core/backup/schemas';
 import { DEFAULT_SETTINGS, type InferenceEvent, type StoredApp } from '@/core/contracts';
 import type { KalamSpec } from '@/core/spec/schema';
 import { validateSpec } from '@/core/spec/validate';
@@ -196,6 +197,21 @@ describe('records', () => {
     expect(await db.records.list('app_expenses', 'expenses')).toEqual([]);
   });
 
+  it('keeps the saved values of a field that left the design when the entry is edited, and they return with the field', async () => {
+    const db = fresh();
+    const spec = expenseSpec();
+    await db.apps.save(stored(spec), create);
+    const rec = await db.records.insert('app_expenses', 'expenses', { title: 'Tea', amount: 2, category: 'Food' });
+    // Version 2 drops the Category field.
+    const { category: _gone, ...fields } = spec.collections.expenses!.fields;
+    await db.apps.save(stored({ ...spec, version: 2, collections: { expenses: { ...spec.collections.expenses!, fields } } }), edit(1));
+    const updated = await db.records.update('app_expenses', 'expenses', rec.id, { amount: 3 });
+    expect(updated.values).toEqual({ title: 'Tea', amount: 3, category: 'Food' });
+    // Restoring the old design shows the value again.
+    await db.restore('app_expenses', 1);
+    expect((await db.records.list('app_expenses', 'expenses'))[0]!.values.category).toBe('Food');
+  });
+
   it('isolates apps: one app cannot read, update or delete another app’s records', async () => {
     const db = fresh();
     await db.apps.save(stored(expenseSpec()), create);
@@ -316,6 +332,75 @@ describe('backup', () => {
     await target.importAll(backup);
     expect(await target.records.list('app_expenses', 'expenses')).toHaveLength(1);
     expect(await target.versions.list('app_expenses')).toHaveLength(1);
+  });
+
+  it('keeps an unsent form draft on this device: not in an export or backup, and dropped on a restore', async () => {
+    const source = fresh();
+    await source.apps.save(stored(expenseSpec()), create);
+    await source.state.set('app_expenses', 'cups', 5);
+    await source.state.set('app_expenses', DRAFT_STATE_KEY, '{"v":1,"stack":["home"],"forms":{"home":{"title":"Tea"}}}');
+    expect(await source.state.all('app_expenses')).toHaveProperty(DRAFT_STATE_KEY); // the device itself keeps it
+    const exported = JSON.parse(JSON.stringify(await source.exportAll())) as { state: Array<{ key: string }> };
+    expect(exported.state.map((s) => s.key)).toEqual(['cups']);
+    const backup = await source.readBackupData();
+    expect(backup.state.map((s) => s.key)).toEqual(['cups']);
+
+    // An older file that does carry a draft: it is dropped quietly, not counted as a problem.
+    const withDraft = { ...exported, state: [...exported.state, { appId: 'app_expenses', key: DRAFT_STATE_KEY, value: 'x' }] };
+    const imported = fresh();
+    expect((await imported.importAll(withDraft)).skippedState).toBe(0);
+    expect(await imported.state.all('app_expenses')).toEqual({ cups: 5 });
+    const restored = fresh();
+    const written = await restored.writeBackupData({ ...backup, state: withDraft.state as typeof backup.state }, { replaceAppIds: [], replaceDrawingIds: [] });
+    expect(written.skippedState).toBe(0);
+    expect(await restored.state.all('app_expenses')).toEqual({ cups: 5 });
+  });
+
+  it('carries the saved value of a field that left the design through export, import and restore', async () => {
+    const source = fresh();
+    const spec = expenseSpec();
+    await source.apps.save(stored(spec), create);
+    const rec = await source.records.insert('app_expenses', 'expenses', { title: 'Tea', amount: 2, category: 'Food' });
+    // Version 2 drops Category, and the entry is edited afterwards: the row now holds a value the design no longer has.
+    const { category: _gone, ...fields } = spec.collections.expenses!.fields;
+    await source.apps.save(stored({ ...spec, version: 2, collections: { expenses: { ...spec.collections.expenses!, fields } } }), edit(1));
+    await source.records.update('app_expenses', 'expenses', rec.id, { amount: 3 });
+    const kept = { title: 'Tea', amount: 3, category: 'Food' };
+    expect((await source.records.list('app_expenses', 'expenses'))[0]!.values).toEqual(kept);
+
+    // A backup file: the entry is imported, not counted as skipped, and keeps the value.
+    const imported = fresh();
+    const file = JSON.parse(JSON.stringify(await source.exportAll())) as unknown;
+    expect(await imported.importAll(file)).toEqual({ apps: 1, records: 1, skippedApps: 0, skippedRecords: 0, skippedState: 0 });
+    expect((await imported.records.list('app_expenses', 'expenses'))[0]!.values).toEqual(kept);
+
+    // A full restore (what the Backup screen writes) does the same.
+    const restored = fresh();
+    const written = await restored.writeBackupData(await source.readBackupData(), { replaceAppIds: [], replaceDrawingIds: [] });
+    expect(written).toEqual({ records: 1, skippedRecords: 0, skippedState: 0 });
+    expect((await restored.records.list('app_expenses', 'expenses'))[0]!.values).toEqual(kept);
+    // And the old design, restored, shows it again.
+    await restored.restore('app_expenses', 1);
+    expect((await restored.records.list('app_expenses', 'expenses'))[0]!.values.category).toBe('Food');
+  });
+
+  it('only carries a stale value that is plain: an object or a huge text still rejects the entry', async () => {
+    const db = fresh();
+    const row = (id: string, values: unknown) => ({ id, appId: 'app_expenses', collectionId: 'expenses', values });
+    const backup = {
+      format: 'kalam-backup', formatVersion: 1, exportedAt: 1, apps: [stored(expenseSpec())], state: [],
+      records: [
+        row('ok1', { title: 'a', amount: 1, gone: 'text', gone2: 4, gone3: false, gone4: null }),
+        row('bad1', { title: 'b', amount: 1, gone: { nested: true } }),
+        row('bad2', { title: 'c', amount: 1, gone: 'x'.repeat(5_001) }),
+        row('bad3', { title: 'd', amount: 'lots', gone: 'text' }), // a known field still has to be valid
+      ],
+    };
+    const summary = await db.importAll(backup);
+    expect(summary).toMatchObject({ records: 1, skippedRecords: 3 });
+    expect((await db.records.list('app_expenses', 'expenses'))[0]!.values).toEqual({
+      title: 'a', amount: 1, gone: 'text', gone2: 4, gone3: false, gone4: null,
+    });
   });
 
   it('skips invalid or malicious specs and records, and rejects broken files without writing', async () => {

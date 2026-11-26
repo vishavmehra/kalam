@@ -1,0 +1,6 @@
+11-25 04:50:02.023 23149 23171 I ReactNativeJS: KALAM_NANO_CHECK {"step":"start","os":"android","brand":"google","model":"Pixel 9","release":"15","apiLevel":"35"}
+11-25 04:50:02.035 23149 23171 I ReactNativeJS: KALAM_NANO_CHECK {"step":"status","availability":"unavailable","apiExposed":true}
+11-25 04:50:02.038 23149 23171 I ReactNativeJS: KALAM_NANO_CHECK {"step":"status_after","availability":"unavailable"}
+11-25 04:50:02.057 23149 23171 I ReactNativeJS: KALAM_NANO_CHECK {"step":"prompt","success":false,"source":"on_device","provider":"none","latencyMs":10,"matchesExpected":false,"errorCode":"model_unavailable","errorMessage":"On-device AI is not ready on this device (unavailable).","attempts":1}
+11-25 04:50:07.220 23149 23171 I ReactNativeJS: KALAM_NANO_CHECK {"step":"app_check","status":"not_configured"}
+11-25 04:50:07.220 23149 23171 I ReactNativeJS: KALAM_NANO_CHECK {"step":"done","device":{"os":"android","brand":"google","model":"Pixel 9","release":"15","apiLevel":"35"},"availability":"unavailable","download":"not_needed","availabilityAfter":"unavailable","source":"on_device","latencyMs":10,"outputValid":false,"matchesExpected":false,"errorCode":"model_unavailable","errorMessage":"On-device AI is not ready on this device (unavailable).","appCheck":{"status":"not_configured"},"totalMs":5197}

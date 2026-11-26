@@ -97,3 +97,8 @@ GoogleService-Info.plist
 !/README.md
 tests/evaluation/reports/
 .playwright-mcp/
+
+/.claude/settings.local.json
+
+# Design-review tool scratch
+.impeccable/

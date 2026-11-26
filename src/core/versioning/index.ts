@@ -17,6 +17,8 @@ export const MAX_VERSIONS = 20;
 export interface VersionChange {
   summary: string;
   source: AppVersion['source'];
+  /** Who made the change: the history timeline shows it (docs/14 §11.3). */
+  origin?: AppVersion['origin'];
 }
 
 /** Specs are JSON data, so a JSON round-trip is a complete deep copy (structuredClone is not on Hermes). */
@@ -42,7 +44,10 @@ export function createVersion(
   now: number,
 ): AppVersion {
   const version = (previous?.version ?? 0) + 1;
-  const base = { appId, version, createdAt: now, summary: change.summary, source: change.source };
+  const base = {
+    appId, version, createdAt: now, summary: change.summary, source: change.source,
+    ...(change.origin ? { origin: change.origin } : {}),
+  };
   if (!previous || (version - 1) % SNAPSHOT_INTERVAL === 0) {
     return { ...base, kind: 'snapshot', snapshot: cloneSpec(spec) };
   }
@@ -61,7 +66,7 @@ export function materialize(versions: readonly AppVersion[], target: number): Ka
     for (let n = base + 1; n <= target; n++) {
       const patch = byNumber.get(n)?.patch;
       if (!patch) return undefined;
-      doc = applyPatch(doc, patch, false, true).newDocument;
+      doc = applyPatch(doc, JSON.parse(JSON.stringify(patch)) as typeof patch, false, true).newDocument;
     }
     return doc;
   } catch {

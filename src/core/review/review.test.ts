@@ -1,13 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { irToSpec } from '../compiler/convert';
+import { VERIFY_COPY } from '../pipeline/copy';
 import { compilerIRSchema } from '../compiler/ir';
 import type { AIBlockVerificationReport } from '../contracts';
 import { describeSpec } from '../spec/describe';
-import type { KalamSpec, ThemePreset } from '../spec/schema';
+import { COMPONENT_TYPES, FIELD_TYPES, type KalamSpec, type ThemePreset } from '../spec/schema';
 import { validateSpec } from '../spec/validate';
 import {
-  applyReviewEdit, finalizeReview, initReview, listUncertainItems, resolveUncertainItem, reviewModel, reviewReducer,
+  applyReviewEdit, finalizeReview, initReview, listUncertainItems, resolveUncertainItem, REVIEW_COPY, reviewModel, reviewReducer,
   reviewSummary, type ReviewEdit, type ReviewResult, type ReviewSource,
 } from './index';
 
@@ -206,6 +207,15 @@ describe('review edits: labels, data and AI steps', () => {
     expect(s.aiBlocks).toEqual({});
     expect(component(s, 'scan_slip')).not.toHaveProperty('aiBlock');
   });
+  it('sets how an AI step runs, keeping the defaults out of the spec', () => {
+    const local = ok({ kind: 'setAIBlockPolicy', blockId: 'slip_to_order', fallback: 'none', onError: 'manual_entry' });
+    expect(local.aiBlocks.slip_to_order).toMatchObject({ fallback: 'none', onError: 'manual_entry' });
+    expect(reviewModel(local).aiSteps).toEqual([{ id: 'slip_to_order', kind: 'extractFromPhoto', fallback: 'none', onError: 'manual_entry' }]);
+    const back = ok({ kind: 'setAIBlockPolicy', blockId: 'slip_to_order', fallback: 'cloud', onError: 'keep_input' }, local);
+    expect(back.aiBlocks.slip_to_order).not.toHaveProperty('fallback');
+    expect(back.aiBlocks.slip_to_order).not.toHaveProperty('onError');
+    rejected({ kind: 'setAIBlockPolicy', blockId: 'nope', fallback: 'none' });
+  });
   it('removes unused data but not data the app uses', () => {
     const extra: KalamSpec = { ...tailor, collections: { ...tailor.collections, suppliers: { label: 'Suppliers', fields: { name: { type: 'text', label: 'Name' } } } } };
     expect(ok({ kind: 'removeCollection', collectionId: 'suppliers' }, extra).collections).not.toHaveProperty('suppliers');
@@ -216,7 +226,7 @@ describe('review edits: labels, data and AI steps', () => {
 describe('review model', () => {
   it('summarises the edited draft with the check words for unchecked AI steps', () => {
     const renamed = ok({ kind: 'renameScreen', screenId: 'home', title: 'Today' });
-    const words = 'Not checked yet. Add 3 sample photos in Edit to test it on this device.';
+    const words = VERIFY_COPY.notChecked.needs_samples;
     const report = {
       blockId: 'slip_to_order', appVersion: 1, blockHash: 'x', promptVersion: 'ai-block-verify/1', status: 'unverified' as const,
       testCount: 0, passCount: 0, judgeUsed: false, cases: [], checkedAt: 1, message: words,
@@ -240,7 +250,7 @@ describe('uncertain items', () => {
   const report: AIBlockVerificationReport = {
     blockId: 'slip_to_order', appVersion: 1, blockHash: 'abcd1234', promptVersion: 'ai-block-verify/1', status: 'unverified',
     reason: 'needs_samples', testCount: 0, passCount: 0, judgeUsed: false, cases: [], checkedAt: 1,
-    message: 'Not checked yet. Add 3 sample photos in Edit to test it on this device.',
+    message: VERIFY_COPY.notChecked.needs_samples,
   };
   const general = describeSpec(tailor).assumptions;
   const source: ReviewSource = {
@@ -268,9 +278,11 @@ describe('uncertain items', () => {
     const item = listUncertainItems(lost).find((i) => i.id === 'check:unreachable:customers');
     expect(item).toMatchObject({ actions: ['accept', 'change', 'remove'], target: { type: 'screen', id: 'customers' } });
     const linked = resolveUncertainItem(lost, item!, 'change');
-    expect(linked.ok && listUncertainItems(linked.spec).some((i) => i.id === item!.id)).toBe(false);
+    if (!linked.ok) throw new Error(linked.error);
+    expect(listUncertainItems(linked.spec).some((i) => i.id === item!.id)).toBe(false);
     const removed = resolveUncertainItem(lost, item!, 'remove');
-    expect(removed.ok && removed.spec.screens.some((s) => s.id === 'customers')).toBe(false);
+    if (!removed.ok) throw new Error(removed.error);
+    expect(removed.spec.screens.some((s) => s.id === 'customers')).toBe(false);
   });
 
   it('accept keeps the app; remove takes the part out; answered items drop off the list', () => {
@@ -279,7 +291,8 @@ describe('uncertain items', () => {
     expect(kept).toEqual({ ok: true, spec: tailor });
     expect(listUncertainItems(tailor, source, [untested!.id]).some((i) => i.id === untested!.id)).toBe(false);
     const removed = resolveUncertainItem(tailor, untested!, 'remove');
-    expect(removed.ok && Object.keys(removed.spec.aiBlocks)).toEqual([]);
+    if (!removed.ok) throw new Error(removed.error);
+    expect(Object.keys(removed.spec.aiBlocks)).toEqual([]);
     expect(resolveUncertainItem(tailor, untested!, 'change').ok).toBe(false);
   });
 
@@ -328,10 +341,50 @@ describe('review session', () => {
 
   it('Continue validates the corrected app and names the part to fix when it fails', () => {
     const done = finalizeReview(reviewReducer(initReview(tailor), { type: 'edit', edit: { kind: 'renameScreen', screenId: 'home', title: 'Today' } }));
-    expect(done.ok && done.spec.screens[0]?.title).toBe('Today');
-    const broken = { ...tailor, initialScreen: 'gone' } as KalamSpec;
+    if (!done.ok) throw new Error(done.error);
+    expect(done.spec.screens[0]?.title).toBe('Today');
+    expect(done.rebuild).toEqual([]);
+    const broken: KalamSpec = {
+      ...tailor,
+      screens: tailor.screens.map((sc) => ({
+        ...sc, children: sc.children.map((c) => (c.id === 'save_order_button' && c.type === 'bigButton' ? { ...c, action: 'gone' } : c)),
+      })),
+    };
     const bad = finalizeReview(initReview(broken));
-    expect(bad.ok).toBe(false);
-    expect(bad.ok ? '' : bad.error).not.toMatch(/initialScreen/);
+    if (bad.ok) throw new Error('expected a failure');
+    expect(bad.error).not.toMatch(/screens\[|children/);
+    expect(bad.target).toEqual({ type: 'component', id: 'save_order_button' });
+  });
+
+  it('a change that changes nothing is not counted, and the same answer is kept once', () => {
+    let s = reviewReducer(initReview(tailor), { type: 'edit', edit: { kind: 'moveScreen', screenId: 'home', toIndex: 0 } });
+    s = reviewReducer(s, { type: 'edit', edit: { kind: 'renameApp', name: tailor.name } });
+    expect(s.edits).toBe(0);
+    expect(s.spec).toBe(tailor);
+    const [question] = listUncertainItems(tailor, { route: 'cloud', spec: tailor, warnings: [], understanding: describeSpec(tailor), clarifications: ['Keep old orders?'] })
+      .filter((i) => i.kind === 'question');
+    s = reviewReducer(s, { type: 'resolve', item: question!, action: 'change', answer: 'Yes' });
+    s = reviewReducer(s, { type: 'resolve', item: question!, action: 'change', answer: 'Yes' });
+    expect(s.rebuild).toEqual(['Keep old orders? Answer: Yes']);
+    // Continue passes the answers on, so the screen can ask before saving without them.
+    const done = finalizeReview(s);
+    expect(done.ok && done.rebuild).toEqual(['Keep old orders? Answer: Yes']);
+  });
+
+  it('keeps the words on the screen controls in the translated catalogues, not in core copy', () => {
+    const en = (JSON.parse(readFileSync(new URL('../../i18n/locales/en.json', import.meta.url), 'utf8')) as { review: Record<string, Record<string, string> | string> }).review;
+    const names = (k: string) => Object.keys(en[k] as Record<string, string>).sort();
+    expect(names('action')).toEqual(['accept', 'change', 'remove']);
+    expect(names('fallback')).toEqual(['cloud', 'none']);
+    expect(names('onError')).toEqual(['keep_input', 'manual_entry']);
+    // Every kind of component and field has a plain name, so a new kind cannot ship without one.
+    expect(names('componentType')).toEqual([...COMPONENT_TYPES].sort());
+    expect(names('fieldType')).toEqual([...FIELD_TYPES].sort());
+    // The screen reader label of an item button says which item it answers.
+    expect(en.actionFor).toContain('{action}');
+    expect(en.actionFor).toContain('{message}');
+    const kinds = en.componentType as Record<string, string>;
+    for (const c of reviewModel(tailor).screens.flatMap((x) => x.components)) expect(kinds[c.type]).toMatch(/^[A-Z][a-z ]+$/);
+    for (const moved of ['actions', 'actionLabel', 'componentTypes', 'fallback', 'onError', 'fieldTypes']) expect(REVIEW_COPY).not.toHaveProperty(moved);
   });
 });

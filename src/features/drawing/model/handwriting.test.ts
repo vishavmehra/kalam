@@ -3,7 +3,7 @@ import type { DrawingElement, DrawingPoint } from '@/core/contracts';
 import { STAMP_COLORS } from './constants';
 import {
   canReadHandwriting, cleanReading, DIGIT_SHAPES, dominantColor, HANDWRITING_MAX_CHARS, handwritingStrokes, matchDigit,
-  parseHandwritingReply, readingSourceLabel, recognizeDigits, splitGlyphs, strokePicturePage, textPlacement,
+  parseHandwritingReply, readingSourceLabel, readingWasShortened, recognizeDigits, splitGlyphs, strokePicturePage, textPlacement, tidyText,
 } from './handwriting';
 import type { StrokeElement } from './geometry';
 
@@ -106,6 +106,21 @@ describe('tidying a reading', () => {
     expect(cleanReading('कुल  रक़म')).toBe('कुल रक़म'.normalize('NFC'));
     expect(cleanReading('மொத்தம்')).toBe('மொத்தம்');
   });
+
+  it('tidies text the person typed without cutting any of it off', () => {
+    expect(tidyText('  Total   price \u0007 \n\n  120  ')).toBe('Total price\n120');
+    const long = 'x'.repeat(HANDWRITING_MAX_CHARS + 150);
+    expect(tidyText(long)).toBe(long);
+    expect(tidyText('a\nb\nc\nd\ne\nf\ng\nh').split('\n')).toHaveLength(8);
+  });
+
+  it('knows when a model reading had to be shortened, so the screen can say so', () => {
+    expect(readingWasShortened('Rice 2 kg')).toBe(false);
+    expect(readingWasShortened('x'.repeat(HANDWRITING_MAX_CHARS))).toBe(false);
+    expect(readingWasShortened('x'.repeat(HANDWRITING_MAX_CHARS + 1))).toBe(true);
+    expect(readingWasShortened('a\nb\nc\nd\ne\nf\ng')).toBe(true);
+    expect(readingWasShortened('a\nb\nc\nd\ne\nf')).toBe(false);
+  });
 });
 
 describe('the reply', () => {
@@ -159,6 +174,27 @@ describe('reading handwritten digits with no model', () => {
     expect(recognizeDigits(zigzag)).toBeUndefined();
     expect(recognizeDigits(crossbar)).toBeUndefined();
     expect(recognizeDigits([])).toBeUndefined();
+  });
+
+  it('reads letters that look like digits as digits, which is why the screen offers the AI instead', () => {
+    // O, I, S and Z have the same shapes as 0, 1, 8 and 2. No shape matcher can tell them apart, so the sheet
+    // says so and offers "Read it with AI instead". The claim for this step is digits, not letters.
+    const arc = (cx: number, cy: number, rx: number, ry: number, from: number, to: number, n = 24): Array<[number, number]> =>
+      Array.from({ length: n + 1 }, (_, i) => {
+        const a = ((from + ((to - from) * i) / n) * Math.PI) / 180;
+        return [cx + rx * Math.cos(a), cy + ry * Math.sin(a)];
+      });
+    const letterO = [stroke('o', arc(30, 50, 28, 50, -90, 270))];
+    const letterI = [stroke('i', [[30, 0], [30, 25], [30, 50], [30, 75], [30, 100]])];
+    const letterZ = [stroke('z', [[0, 0], [30, 0], [60, 0], [30, 50], [0, 100], [30, 100], [60, 100]])];
+    expect(recognizeDigits(letterO)?.text).toBe('0');
+    expect(recognizeDigits(letterI)?.text).toBe('1');
+    expect(recognizeDigits(letterZ)?.text).toBe('2');
+  });
+
+  it('gives up on a letter drawn with several crossing strokes', () => {
+    const letterH = [stroke('h1', [[0, 0], [0, 100]]), stroke('h2', [[50, 0], [50, 100]]), stroke('h3', [[0, 50], [50, 50]])];
+    expect(recognizeDigits(letterH)).toBeUndefined();
   });
 
   it('gives up when one glyph is far taller than the rest', () => {

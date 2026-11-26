@@ -78,3 +78,8 @@ export const kalamSpecialistReason = onCall(
 
 // Kalam Bazaar trusted operations (wallet, paid purchases, moderation, recount). See ./bazaar/index.ts.
 export { kalamBazaarModerate, kalamBazaarPurchase, kalamBazaarWallet } from './bazaar/index.js';
+// Moderator queue, anonymous listing counters and a maker's own numbers (docs/12 §14.5, §21).
+export { kalamBazaarCount, kalamBazaarModerationList, kalamBazaarStats } from './bazaar/index.js';
+
+// Kalam collaborative apps and teams: the trusted join step (invite check, then membership). See ./collab/index.ts.
+export { kalamCollabJoin } from './collab/index.js';

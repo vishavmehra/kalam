@@ -8,6 +8,9 @@
  *
  * Structured output: neither native SDK takes a runtime JSON Schema for constrained decoding, so the schema
  * goes in the prompt; firebase-provider parses the JSON and the caller's Zod parser decides.
+ *
+ * The system text reaches the engine as `instructions`, apart from the request (docs/07 §17.4). Apple's
+ * session takes it separately; an engine without that field joins the two itself.
  */
 import type {
   LanguageModelCreateCoreOptions, LanguageModelCreateOptions, LanguageModelMessage, LanguageModelPromptOptions,
@@ -25,11 +28,16 @@ export interface PromptLanguageModel extends LanguageModelStatic {
   create(options?: LanguageModelCreateOptions): Promise<PromptSession>;
 }
 
+/** One request for the engine: the system instructions, and the request with the JSON Schema note. */
+export interface NativePrompt { prompt: string; instructions?: string }
+
 /** What a native on-device bridge provides to the adapter. */
 export interface NativePromptEngine {
   /** True when the model can answer text in all these primary language codes now. Never downloads. */
   ready(languages: string[]): Promise<boolean>;
-  generate(requestId: string, options: { prompt: string }): Promise<{ text: string; source: 'on_device' | 'cloud' }>;
+  /** Longest instructions plus prompt, in characters, worth sending to the model. Unset: no cap here. */
+  maxPromptChars?: number;
+  generate(requestId: string, options: NativePrompt): Promise<{ text: string; source: 'on_device' | 'cloud' }>;
   cancel(requestId: string): boolean;
   /** Turns a native failure into one of the Prompt API error names below. */
   toPromptError(e: unknown): Error;
@@ -62,7 +70,7 @@ export function createPromptLanguageModel(engine: NativePromptEngine, idPrefix: 
     async create(options?: LanguageModelCreateOptions): Promise<PromptSession> {
       const system = textOf(options?.initialPrompts?.filter((m) => m.role === 'system') ?? []);
       return {
-        prompt: (input, promptOptions) => generate(
+        prompt: async (input, promptOptions) => generate(
           engine, idPrefix, composePrompt(system, input, promptOptions?.responseConstraint), promptOptions?.signal ?? options?.signal,
         ),
         destroy() {},
@@ -71,24 +79,29 @@ export function createPromptLanguageModel(engine: NativePromptEngine, idPrefix: 
   };
 }
 
+/** Text only. Any other part is refused, so an answer is never built from part of the request. */
 function textOf(messages: LanguageModelMessage[]): string {
-  return messages
-    .flatMap((m) => m.content)
-    .map((c) => (c.type === 'text' && typeof c.value === 'string' ? c.value : ''))
-    .filter(Boolean)
-    .join('\n\n');
+  const parts = messages.flatMap((m) => m.content);
+  if (parts.some((c) => c.type !== 'text')) throw promptError('NotSupportedError', 'On-device AI takes text only.');
+  return parts.map((c) => (typeof c.value === 'string' ? c.value : '')).filter(Boolean).join('\n\n');
 }
 
-/** One single-turn prompt: on-device inference is single turn and does not keep roles apart. */
-function composePrompt(system: string, input: LanguageModelMessage[], schema?: object): string {
+/** One single-turn request: the system instructions, then the request followed by the JSON Schema note. */
+function composePrompt(instructions: string, input: LanguageModelMessage[], schema?: object): NativePrompt {
   const format = schema
     ? `Reply with only one JSON value that matches this JSON Schema. No other text.\n${JSON.stringify(schema)}`
     : '';
-  return [system, textOf(input), format].filter(Boolean).join('\n\n');
+  const prompt = [textOf(input), format].filter(Boolean).join('\n\n');
+  return instructions ? { prompt, instructions } : { prompt };
 }
 
-async function generate(engine: NativePromptEngine, idPrefix: string, prompt: string, signal?: AbortSignal): Promise<string> {
+async function generate(engine: NativePromptEngine, idPrefix: string, request: NativePrompt, signal?: AbortSignal): Promise<string> {
   if (signal?.aborted) throw promptError('AbortError', 'The request was cancelled.');
+  // Fails before the device spends time on a request that cannot fit its context window.
+  const size = request.prompt.length + (request.instructions?.length ?? 0);
+  if (engine.maxPromptChars !== undefined && size > engine.maxPromptChars) {
+    throw promptError('QuotaExceededError', `The request is too long for the on-device model (${size} characters, at most ${engine.maxPromptChars}).`);
+  }
   const id = `${idPrefix}-${++requestSeq}`;
   let onAbort = () => {};
   const aborted = new Promise<never>((_, reject) => {
@@ -99,7 +112,7 @@ async function generate(engine: NativePromptEngine, idPrefix: string, prompt: st
   });
   signal?.addEventListener('abort', onAbort, { once: true });
   try {
-    const call = engine.generate(id, { prompt });
+    const call = engine.generate(id, request);
     call.catch(() => {}); // after a cancel its rejection is expected
     const result = await Promise.race([call, aborted]);
     // The native side only runs the on-device model; never pass anything else off as on-device.

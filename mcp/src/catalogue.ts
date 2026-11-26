@@ -6,9 +6,11 @@
 import { z } from 'zod';
 import { FORMULA_FUNCTIONS } from '@/core/formula';
 import {
-  ACTION_TYPES, AI_BLOCK_KINDS, FIELD_TYPES, FONT_FAMILIES, ICON_GLYPHS, LIMITS, RESERVED_IDS, SCHEMA_VERSION,
-  THEME_PRESETS, actionSchema, aiBlockSchema, componentSchema, fieldSchema, kalamSpecSchema,
+  ACTION_TYPES, V11_ACTION_TYPES, AI_BLOCK_KINDS, FIELD_TYPES, FONT_FAMILIES, ICON_GLYPHS, LAYOUT_TYPES, LIMITS, ON_DELETE_RULES, PERMISSION_KINDS,
+  RESERVED_IDS, SCHEMA_VERSION, STYLE_ALIGN, STYLE_EMPHASIS, STYLE_SIZES, STYLE_TONES, SUGGESTED_MODES, THEME_PRESETS,
+  V11_COMPONENT_TYPES, actionSchema, aiBlockSchema, componentSchema, fieldSchema, kalamSpecSchema,
 } from '@/core/spec';
+import { CHART_KINDS, METRIC_OPERATIONS, TIME_UNITS } from '@/core/reports/chart-component';
 import { MAX_SPEC_BYTES } from '@/core/spec/validate';
 
 const COMPONENTS: Record<string, string> = {
@@ -24,6 +26,11 @@ const COMPONENTS: Record<string, string> = {
   list: 'Shows the records of a collection. `primary` is the field shown first. Can filter, sort, toggle a yes or no field, and open a detail screen.',
   stat: 'Shows a value computed by a formula, for example sum(expenses.amount).',
   photo: 'Takes or picks a photo. Can run a read-from-photo AI block.',
+  // KalamSpec 1.1
+  chart: 'Bar, line or donut chart from one collection: count, sum or average, split by a field or by day, week or month.',
+  timer: 'Countdown or stopwatch. With field, the time goes into a number field of the screen form.',
+  reminder: 'Reminds the person about dated entries. Off until the person switches it on.',
+  signature: 'Signature pad. Saves the drawing as numbers in a text field.',
 };
 
 const ACTIONS: Record<string, string> = {
@@ -54,6 +61,48 @@ const variants = (union: unknown, key: string): Array<{ name: string; required: 
     return { name: String(lit?.value), required: requiredKeys(o, key) };
   });
 
+/** The optional KalamSpec 1.1 parts, built from the schema's own constants so they cannot drift from it. */
+function v11Catalogue() {
+  return {
+    summary: `Every 1.1 part is optional, and a spec that uses none stays valid 1.0. When a spec uses one, set schemaVersion to "${SCHEMA_VERSION}": validate raises it for you and warns SCHEMA_VERSION_RAISED.`,
+    components: V11_COMPONENT_TYPES,
+    chart: {
+      kinds: CHART_KINDS, metrics: METRIC_OPERATIONS, periods: TIME_UNITS,
+      rules: 'Split by groupBy (an enum or yes/no field) or by period (day, week or month), never both and never neither. Count takes no valueField. Sum and average need a number field as valueField. range is "all" or { last, unit }. At most 3 filters.',
+    },
+    relations: {
+      how: 'A text field links to an entry of another collection with `ref`: { collection, display?, onDelete? }. The field stores the linked entry id and the person picks it by name.',
+      onDelete: {
+        [ON_DELETE_RULES[0]]: 'Default. Deleting the linked entry is refused while this one points at it.',
+        [ON_DELETE_RULES[1]]: 'Deleting the linked entry deletes this one too.',
+        [ON_DELETE_RULES[2]]: 'Deleting the linked entry empties this link. Not allowed on a required field.',
+      },
+      rules: 'display is a text, number, date or choice field of the linked collection. A link field takes no maxLength, defaultValue or multiline. Do not sort a list by a link field.',
+    },
+    layout: {
+      how: 'A screen can have `layout`: a list of groups. Components stay in the screen children list. A group only names the component ids it arranges, so unlisted components keep their normal order.',
+      types: { row: 'Components side by side.', grid: 'Equal columns. Set columns from 2 to 4.', card: 'A framed block. May have a title.' },
+      groupProperties: { type: LAYOUT_TYPES, children: 'Component ids on this screen, or nested groups.', title: 'Cards only.', columns: 'Grids only.', style: 'Optional style.' },
+      rules: `Groups nest at most ${LIMITS.layoutDepth} deep, a screen has at most ${LIMITS.layoutNodesPerScreen} groups, a group has at most ${LIMITS.layoutChildren} children, and each component is in at most one group.`,
+    },
+    style: {
+      how: 'Any component, and any layout group, can have `style`. Named choices only. Colours come from the app theme, so raw CSS and colour codes are rejected.',
+      properties: { size: STYLE_SIZES, emphasis: STYLE_EMPHASIS, tone: STYLE_TONES, align: STYLE_ALIGN, fullWidth: 'true or false' },
+    },
+    sections: {
+      permissions: {
+        kinds: PERMISSION_KINDS,
+        how: 'Optional list of { kind, reason }. If you list it, list camera when the app has a photo component and notifications when it has a reminder, each once. Missing or unused entries are warnings.',
+      },
+      accessibility: { summary: 'One or two sentences a screen reader can say about the whole app. At most 300 characters.', suggestedModes: SUGGESTED_MODES },
+      settings: { currency: 'Three capital letters, for example INR. Used by money values that name no currency.', timeFormat: ['12h', '24h'] },
+      localization: {
+        terminology: `Up to ${LIMITS.terminology} entries. Each is { term, keep: true } to never translate it, or { term, translations: { "<language>": "<text>" } } to fix the word per language. One of the two, and each term once.`,
+      },
+    },
+  };
+}
+
 let jsonSchema: Record<string, unknown> | undefined;
 /** KalamSpec v1 as JSON Schema (what the strict Zod schema accepts). Built once. */
 export function specJsonSchema(): Record<string, unknown> {
@@ -78,10 +127,11 @@ export function specCatalogue() {
     themePresets: THEME_PRESETS,
     fontFamilies: FONT_FAMILIES,
     iconGlyphs: ICON_GLYPHS,
+    v11: v11Catalogue(),
     formulaFunctions: FORMULA_FUNCTIONS,
     formulaNames:
       'In formulas: `collection` is its list of records, `collection.field` its values, `form.field` a value on the current screen, `state.counter_id` a counter, `today` is YYYY-MM-DD and `now` is epoch ms. Inside filter() and list filters a bare name is a field of the record.',
-    known: { componentTypes: Object.keys(COMPONENTS), actionTypes: ACTION_TYPES, fieldTypes: FIELD_TYPES, aiBlockKinds: AI_BLOCK_KINDS },
+    known: { componentTypes: Object.keys(COMPONENTS), actionTypes: [...ACTION_TYPES, ...V11_ACTION_TYPES], fieldTypes: FIELD_TYPES, aiBlockKinds: AI_BLOCK_KINDS },
   };
 }
 
@@ -119,6 +169,19 @@ const HINTS: Record<string, string> = {
   FORM_MISMATCH: "Make the insert action save to the screen's form collection.",
   UNREACHABLE_SCREEN: 'Add a navigate button or a list detailScreen that leads here, or remove the screen.',
   UNUSED_COLLECTION: 'Show the collection in a list, a form or a stat, or remove it.',
+  INVALID_CHART: 'Split a chart by groupBy or by period, not both. Count takes no valueField; sum and average need a number field. Check the collection and field ids.',
+  MISSING_DURATION: 'Give a countdown durationSec, or change its mode to stopwatch.',
+  INVALID_LAYOUT: 'Name only component ids of this screen, each in one group. Keep groups at most 3 deep. columns is for grids and title is for cards.',
+  INVALID_RELATION: 'Point ref at an existing collection and display at one of its text, number, date or choice fields. Use restrict or cascade on a required link, and remove maxLength, defaultValue and multiline from it.',
+  INVALID_TERM: 'Give each term either keep: true or translations, not both and not neither. List each term once.',
+  PERMISSION_MISSING: 'Add the permission to `permissions` with a short reason, or drop `permissions` and let Kalam work it out.',
+  PERMISSION_UNUSED: 'Remove this permission: no component of the app uses it.',
+  SORT_BY_LINK: 'Sort the list by a field of its own collection. A link field sorts by hidden codes.',
+  IGNORED_PROPERTY: 'Remove this property. It has no effect here.',
+  SCHEMA_VERSION_RAISED: `Set schemaVersion to "${SCHEMA_VERSION}", because the spec uses a 1.1 part. Kalam already did this for the check.`,
+  MISSING_FORM: 'Set the screen form to a collection so the photo is kept with an entry.',
+  FIELD_NOT_SHOWN: 'Show the field in a list or on the detail screen, or remove the field.',
+  NO_OP_UPDATE: 'Add inputs for the collection to the screen, or give the action a fixed value with set.',
 };
 
 export const hintFor = (code: string): string | undefined => HINTS[code];

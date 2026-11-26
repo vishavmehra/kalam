@@ -1,0 +1,15 @@
+11-25 04:37:07.297  1622  8510 W ActivityManager: Unable to start service Intent { xflg=0x4 cmp=com.google.android.aicore/com.google.android.apps.aicore.service.multiuser.AiCoreMultiUserService } U=0: not found
+11-25 04:37:07.298  1622  8510 W ActivityManager: Unable to start service Intent { xflg=0x4 cmp=com.google.android.aicore/com.google.android.apps.aicore.service.AiCoreService } U=0: not found
+11-25 04:37:07.302  1622  7042 W ActivityManager: Unable to start service Intent { xflg=0x4 cmp=com.google.android.aicore/com.google.android.apps.aicore.service.multiuser.AiCoreMultiUserService } U=0: not found
+11-25 04:37:07.309  1622  7116 W ActivityManager: Unable to start service Intent { xflg=0x4 cmp=com.google.android.aicore/com.google.android.apps.aicore.service.AiCoreService } U=0: not found
+11-25 04:37:07.312 15585 23672 E tbk     : uik: [ErrorCode 601] AICore failed with error type 4-CONNECTION_ERROR and error code 601-BINDING_FAILURE: AiCore service failed to bind to primary or fallback.
+11-25 04:37:12.355 15961 22870 I Finsky  : [231] Installer package name of package com.google.android.aicore is 
+11-25 04:37:26.591  1622  6102 W ActivityManager: Unable to start service Intent { xflg=0x4 cmp=com.google.android.aicore/com.google.android.apps.aicore.service.multiuser.AiCoreMultiUserService } U=0: not found
+11-25 04:37:26.591  1622  6102 W ActivityManager: Unable to start service Intent { xflg=0x4 cmp=com.google.android.aicore/com.google.android.apps.aicore.service.AiCoreService } U=0: not found
+11-25 04:37:26.595 24823 24855 W GenAiProcessorKt: eq3: [ErrorCode 601] AICore failed with error type 4-CONNECTION_ERROR and error code 601-BINDING_FAILURE: AiCore service failed to bind to primary or fallback.
+11-25 04:37:26.596  1622  6913 W ActivityManager: Unable to start service Intent { xflg=0x4 cmp=com.google.android.aicore/com.google.android.apps.aicore.service.multiuser.AiCoreMultiUserService } U=0: not found
+11-25 04:37:26.596  1622  8540 W ActivityManager: Unable to start service Intent { xflg=0x4 cmp=com.google.android.aicore/com.google.android.apps.aicore.service.AiCoreService } U=0: not found
+11-25 04:37:26.597 24823 24855 W GenAiProcessorKt: eq3: [ErrorCode 601] AICore failed with error type 4-CONNECTION_ERROR and error code 601-BINDING_FAILURE: AiCore service failed to bind to primary or fallback.
+11-25 04:37:26.603  1622  6102 W ActivityManager: Unable to start service Intent { xflg=0x4 cmp=com.google.android.aicore/com.google.android.apps.aicore.service.multiuser.AiCoreMultiUserService } U=0: not found
+11-25 04:37:26.604  1622  6913 W ActivityManager: Unable to start service Intent { xflg=0x4 cmp=com.google.android.aicore/com.google.android.apps.aicore.service.AiCoreService } U=0: not found
+11-25 04:37:26.605 24823 24855 W GenAiProcessorKt: eq3: [ErrorCode 601] AICore failed with error type 4-CONNECTION_ERROR and error code 601-BINDING_FAILURE: AiCore service failed to bind to primary or fallback.

@@ -11,7 +11,7 @@ import { getCatalogueVersion, isCatalogueSettled, loadCatalogue, subscribeCatalo
 import type { Formatter } from './format';
 import { resolveLanguage, type LanguageCode } from './languages';
 import type { TFunction, Translator } from './translator';
-import { useScriptFonts } from './use-script-fonts';
+import { useShellFonts } from './use-script-fonts';
 
 /** The UI language from Settings, normalised to a supported code. */
 export function useLanguage(): LanguageCode {
@@ -34,6 +34,11 @@ export function useI18n(language?: string): Translator {
   return getTranslator(code);
 }
 
+/** Re-renders the caller whenever a catalogue finishes loading. Returns the catalogue version. */
+export function useSyncCatalogues(): number {
+  return useSyncExternalStore(subscribeCatalogues, getCatalogueVersion, getCatalogueVersion);
+}
+
 /** `t` for the UI language. The function identity changes only when the language or its catalogue changes. */
 export function useT(language?: string): TFunction {
   return useI18n(language).t;
@@ -45,7 +50,7 @@ export function useFormat(language?: string): Formatter {
 }
 
 /**
- * Call once in the root layout. Loads the catalogue and the script fonts for the language in Settings,
+ * Call once in the root layout. Loads the catalogue and the shell fonts (Anek, Tiro) for the language in Settings,
  * points the global `t` at it, and reports when the first screen can be shown.
  *
  * `ready` becomes true once and stays true, so a later language switch never unmounts the app.
@@ -53,7 +58,7 @@ export function useFormat(language?: string): Formatter {
  */
 export function useI18nBoot(settingsReady: boolean): { ready: boolean } {
   const language = useLanguage();
-  const fonts = useScriptFonts();
+  const fonts = useShellFonts();
   useSyncExternalStore(subscribeCatalogues, getCatalogueVersion, getCatalogueVersion);
   setActiveLanguage(language);
   useEffect(() => {

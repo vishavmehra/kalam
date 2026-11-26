@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AIErrorCode } from '../contracts';
-import { AI_COPY, AI_ERROR_MESSAGES } from './copy';
+import { AI_COPY, AI_ERROR_MESSAGES, AI_ERROR_MESSAGES_BY_SOURCE } from './copy';
 import { describeAIError, failureCategory, type FailureCategory } from './errors';
 
 const CODES: AIErrorCode[] = [
@@ -47,6 +47,14 @@ describe('AI failure taxonomy (docs/13 §21)', () => {
     expect(describeAIError('model_unavailable')).toMatchObject({ recovery: 'prepare_on_device' });
   });
 
+  it('fits the message and next step to where the failure happened', () => {
+    expect(describeAIError('model_unavailable', '', 'cloud')).toMatchObject({ recovery: 'retry_later', userMessage: expect.stringMatching(/cloud AI model/) });
+    expect(describeAIError('model_unavailable', '', 'on_device')).toMatchObject({ recovery: 'prepare_on_device', userMessage: expect.stringMatching(/On-device AI/) });
+    expect(describeAIError('unsupported_modality', '', 'on_device').userMessage).toMatch(/turn on cloud AI/);
+    expect(describeAIError('unsupported_modality', '', 'cloud').userMessage).toBe(AI_ERROR_MESSAGES.unsupported_modality);
+    expect(describeAIError('timeout', '', 'deterministic').userMessage).toBe(AI_ERROR_MESSAGES.timeout);
+  });
+
   it('clips long technical text and falls back to the code', () => {
     expect(describeAIError('provider_error', 'x'.repeat(1000)).technical).toHaveLength(401);
     expect(describeAIError('timeout').technical).toBe('timeout');
@@ -56,6 +64,7 @@ describe('AI failure taxonomy (docs/13 §21)', () => {
 describe('AI copy follows the house copy rule', () => {
   const sentences = [
     ...Object.values(AI_ERROR_MESSAGES),
+    ...Object.values(AI_ERROR_MESSAGES_BY_SOURCE).flatMap((m) => Object.values(m)),
     ...Object.values(AI_COPY).map((v) => (typeof v === 'function' ? v('image_input' as never) : v)),
   ];
   it.each(sentences)('%s', (s) => {

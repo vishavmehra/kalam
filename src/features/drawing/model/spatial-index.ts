@@ -3,6 +3,10 @@
  * culling ask "which objects are near here" instead of walking all 500. Elements are immutable, so an
  * index is built once per `elements` array and reused until the page changes.
  *
+ * Where it is used today: hit tests and marquee selection on both platforms, and visible-only drawing on the
+ * web canvas. Not yet: the Android picture still records every object on each edit, and the eraser sweep
+ * (`eraseAt`) still walks all objects. There is no profiling beyond the work counts in the tests.
+ *
  * ponytail: a fixed 80 px grid. A page is 400 x 800 and objects are small, so cells hold a handful each.
  * Move to an R-tree only if pages grow far beyond the 500 object cap.
  */
@@ -24,10 +28,14 @@ export interface SpatialIndex {
   query(rect: Bounds): number[];
 }
 
+/** Marker and highlighter strokes are drawn wider than their size (display.ts `STROKE_STYLE`). */
+const STROKE_SCALE = { pen: 1, marker: 1.6, highlighter: 3 } as const;
+
 /** Room around a box for stroke width and arrow heads, so a query never misses a visible edge. */
 function reach(el: DrawingElement): number {
   const size = 'size' in el ? el.size : 0;
-  return size / 2 + 2 + (el.kind === 'arrow' ? MAX_HEAD : 0);
+  const scale = el.kind === 'stroke' ? STROKE_SCALE[el.tool] : 1;
+  return (size * scale) / 2 + 2 + (el.kind === 'arrow' ? MAX_HEAD : 0);
 }
 
 const cellOf = (v: number): number => Math.max(-LIMIT, Math.min(LIMIT - 1, Math.floor(v / CELL)));

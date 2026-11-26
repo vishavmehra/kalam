@@ -7,7 +7,13 @@
  *   node scripts/eval.mjs                        deterministic stages only: no model, no cost
  *   node scripts/eval.mjs --check                same, exit 1 when a quality floor is missed (CI)
  *   node scripts/eval.mjs --live --budget 6      also compile cloud-route cases with real Firebase AI Logic
+ *   node scripts/eval.mjs --live --budget 40 --photos   run the sketch cases that have a real photo (see --help)
+ *   node scripts/eval.mjs --live --budget 12 --video-frames   run the video cases from stills of the sketch photos as frames
  *   node scripts/eval.mjs --help
+ *
+ * Every case keeps its built spec, a plain-language summary and the automatic checks, so the report can be
+ * opened in tests/evaluation/review/index.html. Next steps: scripts/eval-judge.mjs (AI pre-scores), then
+ * scripts/eval-merge-scores.mjs (the person's scores).
  *
  * Live mode is never the default. It needs --budget N, a hard cap on model requests enforced on `fetch`
  * itself (requests past the cap get a synthetic 429 and never leave the machine). Every real request
@@ -15,9 +21,10 @@
  * live sketch compiles from the Drawing Studio summary (stamps and text), not from a rasterised page.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { applyEnv, initFirebase, installSpendCap, loadEnv, sumUsage } from './lib/eval-live.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GOLDEN = join(ROOT, 'tests', 'evaluation', 'golden');
@@ -31,73 +38,6 @@ const sha12 = (...texts) => {
 const pct = (r) => (r.rate === null ? '  n/a' : `${(r.rate * 100).toFixed(1).padStart(5)}%`);
 const frac = (r) => `${r.correct}/${r.total}`;
 const ms = (n) => (n === null || n === undefined ? 'n/a' : `${n} ms`);
-
-// ─── Config (live mode only) ──────────────────────────────────────────────────────────────
-/** Public client config from .env.local, or from the environment (CI). Only EXPO_PUBLIC_* values. */
-function loadEnv() {
-  const env = {};
-  const file = join(ROOT, '.env.local');
-  if (existsSync(file)) {
-    for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
-      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
-      if (m) env[m[1]] = m[2].replace(/^["']|["']$/g, '');
-    }
-  }
-  for (const [k, v] of Object.entries(process.env)) if (k.startsWith('EXPO_PUBLIC_') && v && !env[k]) env[k] = v;
-  return env;
-}
-
-/** Counts every model request and refuses the ones past the cap (hard spend limit, on the wire). */
-function installSpendCap(budget, scrub) {
-  const http = [];
-  const realFetch = globalThis.fetch;
-  globalThis.fetch = async (url, init) => {
-    if (!/:(stream)?generateContent\b/i.test(String(url))) return realFetch(url, init);
-    if (http.filter((h) => !h.refused).length >= budget) {
-      http.push({ refused: true });
-      return new Response(JSON.stringify({ error: { code: 429, message: 'eval budget reached' } }), { status: 429 });
-    }
-    const entry = { model: String(url).match(/models\/([^:/]+)/)?.[1] };
-    http.push(entry);
-    const res = await realFetch(url, init);
-    entry.status = res.status;
-    return res;
-  };
-  for (const level of ['log', 'info', 'warn', 'error', 'debug']) {
-    const original = console[level].bind(console);
-    console[level] = (...a) => original(...a.map((x) => (typeof x === 'string' ? scrub(x) : x)));
-  }
-  return { used: () => http.filter((h) => !h.refused).length };
-}
-
-async function initFirebase(env) {
-  const missing = ['API_KEY', 'PROJECT_ID', 'APP_ID'].map((k) => `EXPO_PUBLIC_FIREBASE_${k}`).filter((k) => !env[k]);
-  if (missing.length) throw new Error(`Live mode needs ${missing.join(', ')} in .env.local or the environment.`);
-  const { initializeApp } = await import('firebase/app');
-  const { CustomProvider, getToken, initializeAppCheck } = await import('firebase/app-check');
-  const app = initializeApp({
-    apiKey: env.EXPO_PUBLIC_FIREBASE_API_KEY,
-    authDomain: env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    projectId: env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-    storageBucket: env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    appId: env.EXPO_PUBLIC_FIREBASE_APP_ID,
-  });
-  let appCheck = 'not_configured';
-  if (env.EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN) {
-    globalThis.FIREBASE_APPCHECK_DEBUG_TOKEN = env.EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN;
-    const check = initializeAppCheck(app, {
-      provider: new CustomProvider({ getToken: () => Promise.reject(new Error('unused')) }),
-    });
-    try {
-      await getToken(check);
-      appCheck = 'debug_token_exchanged';
-    } catch {
-      appCheck = 'debug_token_rejected';
-    }
-  }
-  return { app, appCheck };
-}
 
 // ─── Output ───────────────────────────────────────────────────────────────────────────────
 function printSummary(report, written, gate, args) {
@@ -165,12 +105,29 @@ function printSummary(report, written, gate, args) {
   line(
     `Inference sources: ${report.hybrid.events} event(s), ${report.hybrid.modelCalls} model call(s), ${report.hybrid.sourceViolations.length} wrong source report(s).`,
   );
+  if (report.usage)
+    line(
+      `Model usage: ${report.usage.httpCalls} request(s), ${report.usage.inputTokens} input tokens, ${report.usage.outputTokens} output tokens (${
+        Object.entries(report.usage.byModel)
+          .map(([m, u]) => `${m}: ${u.inputTokens} in, ${u.outputTokens} out`)
+          .join('; ') || 'no tokens reported'
+      }).`,
+    );
   line(
     `Scenarios: ${report.scenarios.map((x) => `${x.id} ${x.status === 'exercised' ? 'run' : 'not run'}`).join(', ')}`,
   );
   line(
     `Human review: ${report.humanReview.pending.length} case(s) still need a person, ${report.humanReview.reviewed.length} reviewed. ${report.humanReview.handDrawnPhotos ? `Hand-drawn photo sketches: ${report.humanReview.handDrawnPhotos.present} of ${report.humanReview.handDrawnPhotos.required}.` : ''}`,
   );
+  if (report.compileFailures) {
+    const cf = report.compileFailures;
+    const list = (m) =>
+      Object.entries(m)
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, n]) => `${k} x${n}`)
+        .join(', ') || 'none';
+    line(`Cloud compile passes: ${cf.passes}. Not valid, by stage: ${list(cf.byStage)}. By code: ${list(cf.byCode)}.`);
+  }
   if (report.failures.length) {
     line('');
     line(`Cases with at least one failed check (${report.failures.length}):`);
@@ -269,13 +226,13 @@ async function main() {
     let spend = { used: () => 0 };
     let firebase;
     let liveEvents;
+    /** Every model run in order, with the provider's own error text (scrubbed), so a failed case can be explained. */
+    const runLog = [];
     const offline = runner.createOfflineAI();
     ai = offline;
     if (args.mode === 'live' && args.budget > 0) {
-      const env = loadEnv();
-      for (const [k, v] of Object.entries(env)) if (k.startsWith('EXPO_PUBLIC_')) process.env[k] = v;
-      const secrets = Object.values(env).filter((v) => v && v.length >= 12);
-      const scrub = (s) => secrets.reduce((acc, v) => acc.split(v).join('<redacted>'), String(s ?? ''));
+      const env = loadEnv(ROOT);
+      const scrub = applyEnv(env);
       spend = installSpendCap(args.budget, scrub);
       firebase = await initFirebase(env);
       const [{ createFirebaseProvider }, { createOrchestrator }, { DEFAULT_SETTINGS }] = await Promise.all([
@@ -287,6 +244,9 @@ async function main() {
       liveEvents = events;
       let settings = { ...DEFAULT_SETTINGS, onboarded: true };
       ai = createOrchestrator({
+        // Evaluation must reach the model for every case: no client token bucket, no reused answers.
+        rateLimit: false,
+        cacheResults: false,
         firebase: createFirebaseProvider(),
         // No specialist providers in evaluation: Firebase only, as in the judging build.
         specialist: {
@@ -314,6 +274,16 @@ async function main() {
         settings: { get: async () => settings, update: async (p) => (settings = { ...settings, ...p }) },
         network: { online: () => true, subscribe: () => () => {} },
       });
+      const baseRun = ai.run.bind(ai);
+      ai.run = async (req, ctx) => {
+        const res = await baseRun(req, ctx);
+        runLog.push({
+          taskType: ctx.taskType,
+          success: res.success,
+          errorMessage: res.success ? undefined : scrub(res.errorMessage ?? '').slice(0, 600),
+        });
+        return res;
+      };
       notes.push(
         `Backend ${env.EXPO_PUBLIC_AI_BACKEND || 'google'}${env.EXPO_PUBLIC_AI_LOCATION ? `/${env.EXPO_PUBLIC_AI_LOCATION}` : ''}. App Check: ${firebase.appCheck}.`,
       );
@@ -337,13 +307,136 @@ async function main() {
       mode: args.mode,
       beforeCloud: () => runner.budgetSkipReason(spend.used(), args.budget),
       httpCalls: () => spend.used(),
+      captureDetail: true,
     };
+
+    // ── Real photos of hand-drawn sketches (optional) ──
+    const photoDir = args.photosDir ? resolve(ROOT, args.photosDir) : join(GOLDEN, 'sketch-photos');
+    const photoFiles = new Map(); // case id -> file name
+    if (existsSync(photoDir)) {
+      for (const f of readdirSync(photoDir)) {
+        const m = f.match(/^(.+).(jpe?g|png)$/i);
+        const id = m?.[1].toLowerCase();
+        const known = id && sketchFile.cases.find((c) => c.id.toLowerCase() === id);
+        if (known) photoFiles.set(known.id, f);
+      }
+    }
+    const photos = new Map();
+    if (args.photos) {
+      if (photoFiles.size === 0) {
+        console.error(
+          `No sketch photos found in ${photoDir}. Name each photo after its case, for example s01-calculator.jpg.`,
+        );
+        return 2;
+      }
+      for (const [id, file] of photoFiles) {
+        const bytes = readFileSync(join(photoDir, file));
+        const info = runner.imageInfo(new Uint8Array(bytes));
+        if (!info) {
+          console.error(
+            `${file} is not a readable JPEG or PNG. Phone photos in HEIC format must be saved as JPEG first.`,
+          );
+          return 2;
+        }
+        if (bytes.length > 15 * 1024 * 1024) {
+          console.error(`${file} is ${(bytes.length / 1048576).toFixed(1)} MB. Please use a photo under 15 MB.`);
+          return 2;
+        }
+        photos.set(id, { file, bytes: bytes.length, ...info, base64: bytes.toString('base64') });
+      }
+      picked.text = [];
+      picked.modalities = [];
+      picked.sketches = picked.sketches.filter((c) => photos.has(c.id));
+      if (picked.sketches.length === 0) {
+        console.error('None of the selected sketch cases has a photo.');
+        return 2;
+      }
+      notes.push(`Sketch cases were run from ${photos.size} real photo(s), sent as images with no drawing summary.`);
+    } else if (photoFiles.size) {
+      notes.push(`${photoFiles.size} sketch photo(s) were found but not used. Run with --photos to use them.`);
+    }
+
+    // ── Video cases from stills (Node cannot decode a video) ──
+    // Each video case is shown a few of the golden sketch photos as its frames, in order, with the time of each frame. The compiler gets
+    // exactly what the app sends for a video: up to 6 images, their times and a summary. Real frame extraction from a video file
+    // (the <video> element on the web, expo-video-thumbnails on a phone) is not exercised here.
+    const FRAME_STILLS = {
+      'mv01-video-tap-counter': ['s02-water-counter', 's21-habit-tracker', 's24-workout-log'],
+      'mv02-video-inventory-walkthrough': ['s19-household-inventory', 's25-shop-sales-stock', 's04-expense-tracker'],
+      'mv03-video-plus-instruction': ['s15-todo-priority', 's03-shopping-list', 's14-packing-checklist'],
+      'mv04-video-multi-role-tour': ['s10-clinic-six-screens', 's20-appointment-register', 's17-visitor-register'],
+      'mv05-video-whiteboard-flow': ['s07-kirana-credit-book', 's23-fee-ledger', 's08-student-attendance'],
+    };
+    const videoFrames = new Map();
+    if (args.videoFrames) {
+      for (const [id, stills] of Object.entries(FRAME_STILLS)) {
+        const c = modalityFile.cases.find((x) => x.id === id);
+        if (!c?.video) continue;
+        const step = c.video.durationSec / (stills.length + 1);
+        videoFrames.set(id, stills.map((name, i) => {
+          const bytes = readFileSync(join(photoDir, `${name}.jpg`));
+          const info = runner.imageInfo(new Uint8Array(bytes));
+          const sec = Math.round(step * (i + 1));
+          return {
+            id: `frame_${id}_${i + 1}`, mimeType: 'image/jpeg', base64: bytes.toString('base64'), width: info?.width ?? 0, height: info?.height ?? 0,
+            source: 'video_frame', label: `Frame at ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`, atSec: sec,
+          };
+        }));
+      }
+      picked.text = [];
+      picked.sketches = [];
+      picked.modalities = picked.modalities.filter((c) => videoFrames.has(c.id));
+      if (!picked.modalities.length) {
+        console.error('No video case was selected.');
+        return 2;
+      }
+      notes.push(`Video cases were run from ${picked.modalities.length} set(s) of stills of the golden sketch photos, sent as the video frames with their times. They are not frames of a recorded video.`);
+    }
 
     // ── Run ──
     const results = [];
-    for (const c of picked.text) results.push(await runner.evaluateTextCase(c, deps, opts));
-    for (const c of picked.sketches) results.push(await runner.evaluateSketchCase(c, deps, opts));
-    for (const c of picked.modalities) results.push(await runner.evaluateModalityCase(c, sketchFile.cases, deps, opts));
+    const total = picked.text.length + picked.sketches.length + picked.modalities.length;
+    /** Runs one case and, in live mode, attributes the model requests and tokens its events show to it. */
+    const runCase = async (run) => {
+      const e0 = liveEvents?.length ?? 0;
+      const l0 = runLog.length;
+      const h0 = spend.used();
+      const r = await run();
+      if (liveEvents) {
+        const evs = liveEvents.slice(e0).filter((e) => e.source !== 'deterministic');
+        const logs = runLog.slice(l0);
+        const sum = (k) => evs.reduce((n, e) => n + (e.tokens?.[k] ?? 0), 0);
+        if (evs.length || spend.used() > h0) {
+          r.usage = {
+            httpCalls: spend.used() - h0,
+            inputTokens: sum('input'),
+            outputTokens: sum('output'),
+            events: evs.map((e, i) => ({
+              taskType: e.taskType,
+              ...(e.model ? { model: e.model } : {}),
+              source: e.source,
+              success: e.success,
+              latencyMs: e.latencyMs,
+              ...(e.errorCode ? { errorCode: e.errorCode } : {}),
+              ...(logs[i]?.errorMessage ? { errorMessage: logs[i].errorMessage } : {}),
+              ...(e.tokens?.input !== undefined ? { inputTokens: e.tokens.input } : {}),
+              ...(e.tokens?.output !== undefined ? { outputTokens: e.tokens.output } : {}),
+            })),
+          };
+        }
+      }
+      results.push(r);
+      if (args.mode === 'live') {
+        const b = r.build;
+        console.log(
+          `[${results.length}/${total}] ${r.id}: ${b.stage}${b.stage === 'skipped' ? '' : b.ok ? (b.valid ? ' valid' : ' INVALID') : ' FAILED'}${b.route ? ` (${b.route})` : ''}, ${r.latencyMs.total} ms, requests so far ${spend.used()}/${args.budget}`,
+        );
+      }
+    };
+    for (const c of picked.text) await runCase(() => runner.evaluateTextCase(c, deps, opts));
+    for (const c of picked.sketches) await runCase(() => runner.evaluateSketchCase(c, deps, opts, photos.get(c.id)));
+    for (const c of picked.modalities)
+      await runCase(() => runner.evaluateModalityCase(c, sketchFile.cases, deps, opts, videoFrames.get(c.id)));
 
     const createdAt = new Date();
     const report = runner.buildReport({
@@ -363,9 +456,22 @@ async function main() {
         latencyMs: e.latencyMs,
         fallbackUsed: e.fallbackUsed,
       })),
-      handDrawnPhotos: meta.handDrawnPhotos,
+      handDrawnPhotos: meta.handDrawnPhotos ? { ...meta.handDrawnPhotos, present: photoFiles.size } : undefined,
       notes,
     });
+    if (args.mode === 'live') {
+      report.usage = sumUsage(
+        results.flatMap((r) =>
+          (r.usage?.events ?? []).map((e) => ({
+            model: e.model,
+            inputTokens: e.inputTokens,
+            outputTokens: e.outputTokens,
+            httpCalls: 1,
+          })),
+        ),
+      );
+      report.usage.httpCalls = spend.used();
+    }
 
     // The template route must never reach a model (docs/07 §20.4: deterministic first).
     const gate = runner.evaluateGate(report, args.thresholds);

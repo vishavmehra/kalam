@@ -47,6 +47,7 @@ export async function computeStorageUsage(driver: StorageDriver): Promise<Storag
     const translations = await t.translations.all();
     const drawings = await t.drawings.all();
     const sessions = await t.sessions.all();
+    const pendingOps = await t.pendingOps.all();
     const ownerBytes = new Map<string, number>();
     const ownerCount = new Map<string, number>();
     for (const key of await t.blobs.indexKeys('[ownerId+bytes]')) {
@@ -54,7 +55,7 @@ export async function computeStorageUsage(driver: StorageDriver): Promise<Storag
       ownerBytes.set(key[0], (ownerBytes.get(key[0]) ?? 0) + key[1]);
       ownerCount.set(key[0], (ownerCount.get(key[0]) ?? 0) + 1);
     }
-    const live = new Set([...apps.map((a) => a.id), ...drawings.map((d) => d.id), ...sessions.map((s) => s.id)]);
+    const live = new Set([...apps.map((a) => a.id), ...drawings.map((d) => d.id), ...sessions.map((s) => s.id), ...pendingOps.map((o) => o.id)]);
     const orphanOwners = [...ownerBytes.keys()].filter((owner) => !live.has(owner));
     const fileSizes = (await t.blobs.indexKeys('bytes')).filter((n): n is number => typeof n === 'number');
     const cacheSizes = (await t.aiCache.indexKeys('bytes')).filter((n): n is number => typeof n === 'number');

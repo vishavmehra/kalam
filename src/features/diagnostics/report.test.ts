@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_SETTINGS, type InferenceEvent, type KalamSettings } from '@/core/contracts';
+import { LIMITS_POLICY_VERSION } from '@/core/limits';
 import type { TimingSummary } from '@/core/observability';
 
 import { diagnosticsCopy } from './copy';
@@ -41,6 +42,7 @@ describe('buildProblemReport', () => {
       createdAt: '2026-11-18T10:00:00.000Z',
       area: 'save',
       appVersion: '1.2.3',
+      limitsVersion: LIMITS_POLICY_VERSION,
       platform: 'android',
       osVersion: 'Android API 36',
       recentErrors: [{ code: 'timeout', count: 2 }, { code: 'offline', count: 1 }, { code: 'record_limit', count: 1 }],
@@ -143,7 +145,7 @@ describe('the report holds no content', () => {
   it('has only the fields a report is meant to have', () => {
     const report = buildProblemReport(fuzzedInput());
     expect(Object.keys(report).sort()).toEqual(
-      ['ai', 'appVersion', 'area', 'createdAt', 'osVersion', 'platform', 'recentErrors', 'settings', 'timings'],
+      ['ai', 'appVersion', 'area', 'createdAt', 'limitsVersion', 'osVersion', 'platform', 'recentErrors', 'settings', 'timings'],
     );
     expect(Object.keys(report.settings).sort()).toEqual(['aiMode', 'colorScheme', 'flags', 'language', 'reducedMotion']);
     expect(Object.keys(report.settings.flags)).toHaveLength(10);
@@ -165,6 +167,7 @@ describe('the report holds no content', () => {
       'Created: 2026-11-18T10:00:00.000Z',
       'Area: Opening an app',
       'Kalam version: 1.0.0',
+      `Limits version: ${LIMITS_POLICY_VERSION}`,
       'Device: web, Chrome 131 on Windows',
       'Recent error codes: quota',
       'Timings:',

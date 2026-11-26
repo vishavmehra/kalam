@@ -21,7 +21,13 @@ export function describeResult(r: ReportResult): Pick<ReportResult, 'summary' | 
   const range = r.range.from ? r.range.label : C.allTimeInSentence;
   const fmt = (v: number | null | undefined) => formatValue(v, m, r.lang);
   if (r.status === 'empty') return { summary: C.empty(r.collection), details: [] };
-  if (r.status === 'none_in_range') return { summary: C.noneInRange(r.collection, range), details: r.skipped ? [C.skipped(r.skipped)] : [] };
+  if (r.status === 'filtered_out') return { summary: C.filteredOut(r.collection), details: [] };
+  const notes = [
+    ...(r.skipped ? [C.skipped(r.skipped)] : []),
+    ...(r.future ? [C.future(r.future)] : []),
+    ...(r.dates ? [r.dates === 'added' ? C.datesAdded : C.datesFrom(r.dates.field)] : []),
+  ];
+  if (r.status === 'none_in_range') return { summary: C.noneInRange(r.collection, range), details: notes };
 
   let summary = C.single(m.label, range, fmt(r.totals[0]));
   const top = r.points.reduce<ReportResult['points'][number] | undefined>(
@@ -41,8 +47,9 @@ export function describeResult(r: ReportResult): Pick<ReportResult, 'summary' | 
       : cmp.direction === 'new' ? C.fromNothing(cmp.range) : C.same(cmp.range));
   }
   if (r.status === 'not_enough' && r.unit) details.push(C.notEnough(r.unit));
-  if (r.trend) details.push(C.trend[r.trend]);
-  if (r.skipped) details.push(C.skipped(r.skipped));
+  if (r.trend && r.unit) details.push(C.trend[r.trend], C.openPeriod(r.unit));
+  if (r.trimmed && r.unit) details.push(C.trimmed(r.points.length, r.unit));
+  details.push(...notes);
   return { summary, details };
 }
 

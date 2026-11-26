@@ -14,7 +14,7 @@ import { classifyRequest } from '@/core/classifier';
 import { createApplicationPipeline } from '@/core/pipeline/create-application';
 import { describeSpec } from '@/core/spec/describe';
 import { validateSpec } from '@/core/spec/validate';
-import { Button, Chip, Screen, SourceBadge, Surface, Text, useKalamTheme, type ExecutionSource } from '@/design';
+import { Button, Chip, LedgerRule, Screen, SourceBadge, Stamp, Surface, Text, useKalamTheme, type ExecutionSource } from '@/design';
 import { summarizeDrawing } from '@/features/drawing/model/summarize';
 import { getServices } from '@/services';
 import type {
@@ -212,8 +212,11 @@ function LabScreen({ lab }: { lab: LabData }) {
     <Screen maxWidth={980}>
       <View style={{ gap: theme.space[5] }}>
         <View style={{ gap: theme.space[2] }}>
-          <Text variant="h2">Evaluation lab</Text>
-          <Chip label="Development build only" tone="warning" />
+          <Text variant="h1">Evaluation lab</Text>
+          <LedgerRule />
+          <View style={{ alignSelf: 'flex-start', marginVertical: theme.space[1] }}>
+            <Stamp kind="needs" label="Development build only" />
+          </View>
           <Text tone="secondary">
             Runs one golden case ({cases.length} cases, dataset {lab.version}). Every run is deterministic or real.
             Nothing here is mocked.

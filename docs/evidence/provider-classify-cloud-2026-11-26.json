@@ -1,0 +1,445 @@
+{
+  "kind": "provider-comparison",
+  "record": {
+    "task": "classify",
+    "platform": "web",
+    "model": "gemini-3.5-flash-lite (Firebase AI Logic, cloud)",
+    "date": "2026-11-26",
+    "cases": 84,
+    "schemaValid": 84,
+    "correct": 77,
+    "hallucinated": 0,
+    "p95LatencyMs": 7718,
+    "evidence": "docs/evidence/provider-classify-cloud-2026-11-26.json"
+  },
+  "verdict": {
+    "status": "failed",
+    "reasons": [
+      "p95 7718 ms, allows 4000 ms"
+    ]
+  },
+  "outcomes": [
+    {
+      "id": "calc-four-ops",
+      "outcome": "right",
+      "ms": 2475
+    },
+    {
+      "id": "calc-large-display",
+      "outcome": "right",
+      "ms": 1867
+    },
+    {
+      "id": "expense-rupees",
+      "outcome": "right",
+      "ms": 1465
+    },
+    {
+      "id": "counter-water",
+      "outcome": "right",
+      "ms": 1566
+    },
+    {
+      "id": "checklist-chores",
+      "outcome": "right",
+      "ms": 1458
+    },
+    {
+      "id": "notes-simple",
+      "outcome": "right",
+      "ms": 1490
+    },
+    {
+      "id": "habit-daily",
+      "outcome": "right",
+      "ms": 1450
+    },
+    {
+      "id": "medicine-reminder",
+      "outcome": "right",
+      "ms": 2570
+    },
+    {
+      "id": "measurement-form",
+      "outcome": "right",
+      "ms": 3555
+    },
+    {
+      "id": "attendance-basic",
+      "outcome": "right",
+      "ms": 1051
+    },
+    {
+      "id": "contacts-simple",
+      "outcome": "right",
+      "ms": 1471
+    },
+    {
+      "id": "gst-calc",
+      "outcome": "right",
+      "ms": 1492
+    },
+    {
+      "id": "registration-form",
+      "outcome": "right",
+      "ms": 3811
+    },
+    {
+      "id": "grocery-list",
+      "outcome": "right",
+      "ms": 1246
+    },
+    {
+      "id": "diary",
+      "outcome": "right",
+      "ms": 3394
+    },
+    {
+      "id": "stock-register",
+      "outcome": "wrong",
+      "ms": 1742
+    },
+    {
+      "id": "hinglish-calc",
+      "outcome": "right",
+      "ms": 9083
+    },
+    {
+      "id": "hinglish-kharcha",
+      "outcome": "right",
+      "ms": 1406
+    },
+    {
+      "id": "hinglish-ginti",
+      "outcome": "right",
+      "ms": 4409
+    },
+    {
+      "id": "hinglish-suchi",
+      "outcome": "right",
+      "ms": 1485
+    },
+    {
+      "id": "hinglish-naap",
+      "outcome": "right",
+      "ms": 2228
+    },
+    {
+      "id": "hinglish-dukaan",
+      "outcome": "right",
+      "ms": 2061
+    },
+    {
+      "id": "hinglish-bills",
+      "outcome": "right",
+      "ms": 1117
+    },
+    {
+      "id": "hindi-kharcha",
+      "outcome": "right",
+      "ms": 1648
+    },
+    {
+      "id": "no-template-weight",
+      "outcome": "right",
+      "ms": 1462
+    },
+    {
+      "id": "converter",
+      "outcome": "right",
+      "ms": 2108
+    },
+    {
+      "id": "inventory-suppliers",
+      "outcome": "right",
+      "ms": 2138
+    },
+    {
+      "id": "credit-ledger",
+      "outcome": "wrong",
+      "ms": 2453
+    },
+    {
+      "id": "udhaar-khata",
+      "outcome": "right",
+      "ms": 1399
+    },
+    {
+      "id": "tailor-orders",
+      "outcome": "right",
+      "ms": 1396
+    },
+    {
+      "id": "employee-attendance",
+      "outcome": "right",
+      "ms": 1706
+    },
+    {
+      "id": "measurement-history",
+      "outcome": "wrong",
+      "ms": 8403
+    },
+    {
+      "id": "multi-screen-medicine",
+      "outcome": "right",
+      "ms": 1416
+    },
+    {
+      "id": "expense-reports",
+      "outcome": "right",
+      "ms": 1339
+    },
+    {
+      "id": "shop-management",
+      "outcome": "right",
+      "ms": 1671
+    },
+    {
+      "id": "school-fees",
+      "outcome": "wrong",
+      "ms": 1543
+    },
+    {
+      "id": "gym-members",
+      "outcome": "right",
+      "ms": 1645
+    },
+    {
+      "id": "clinic-appointments",
+      "outcome": "right",
+      "ms": 1526
+    },
+    {
+      "id": "hinglish-orders",
+      "outcome": "right",
+      "ms": 1546
+    },
+    {
+      "id": "calc-with-history",
+      "outcome": "right",
+      "ms": 1568
+    },
+    {
+      "id": "multi-role-business",
+      "outcome": "right",
+      "ms": 1687
+    },
+    {
+      "id": "crm",
+      "outcome": "right",
+      "ms": 1253
+    },
+    {
+      "id": "advanced-inventory",
+      "outcome": "right",
+      "ms": 1509
+    },
+    {
+      "id": "school-system",
+      "outcome": "right",
+      "ms": 1249
+    },
+    {
+      "id": "hospital",
+      "outcome": "right",
+      "ms": 1960
+    },
+    {
+      "id": "erp",
+      "outcome": "right",
+      "ms": 953
+    },
+    {
+      "id": "restaurant",
+      "outcome": "right",
+      "ms": 1425
+    },
+    {
+      "id": "hinglish-business",
+      "outcome": "right",
+      "ms": 1605
+    },
+    {
+      "id": "vague-app-banao",
+      "outcome": "right",
+      "ms": 1361
+    },
+    {
+      "id": "vague-make-app",
+      "outcome": "right",
+      "ms": 1797
+    },
+    {
+      "id": "voice-counter",
+      "outcome": "right",
+      "ms": 1636
+    },
+    {
+      "id": "t01-calculator-split-bill",
+      "outcome": "right",
+      "ms": 1353
+    },
+    {
+      "id": "t02-counter-shop-visitors",
+      "outcome": "right",
+      "ms": 2388
+    },
+    {
+      "id": "t03-checklist-trip-packing",
+      "outcome": "right",
+      "ms": 7718
+    },
+    {
+      "id": "t04-notes-daily-thoughts",
+      "outcome": "right",
+      "ms": 1945
+    },
+    {
+      "id": "t05-expenses-categories-rupees",
+      "outcome": "right",
+      "ms": 1336
+    },
+    {
+      "id": "t06-habits-water-walk-read",
+      "outcome": "right",
+      "ms": 1882
+    },
+    {
+      "id": "t07-contacts-relatives",
+      "outcome": "right",
+      "ms": 1711
+    },
+    {
+      "id": "t08-inventory-low-stock",
+      "outcome": "right",
+      "ms": 1450
+    },
+    {
+      "id": "t09-measurements-tailor-inches",
+      "outcome": "right",
+      "ms": 1747
+    },
+    {
+      "id": "t10-reminders-bill-due-dates",
+      "outcome": "right",
+      "ms": 1624
+    },
+    {
+      "id": "t11-form-visitor-register",
+      "outcome": "right",
+      "ms": 2206
+    },
+    {
+      "id": "t12-calculator-gst-hinglish",
+      "outcome": "right",
+      "ms": 3323
+    },
+    {
+      "id": "t13-expenses-kharcha-hinglish",
+      "outcome": "right",
+      "ms": 2280
+    },
+    {
+      "id": "t14-contacts-customers-hindi",
+      "outcome": "right",
+      "ms": 1364
+    },
+    {
+      "id": "t15-tailor-order-book",
+      "outcome": "wrong",
+      "ms": 5012
+    },
+    {
+      "id": "t16-udhaar-khata-hinglish",
+      "outcome": "right",
+      "ms": 2924
+    },
+    {
+      "id": "t17-employee-attendance-summary",
+      "outcome": "right",
+      "ms": 9050
+    },
+    {
+      "id": "t18-clinic-patients-doctors",
+      "outcome": "wrong",
+      "ms": 2189
+    },
+    {
+      "id": "t19-shop-stock-suppliers",
+      "outcome": "right",
+      "ms": 1620
+    },
+    {
+      "id": "t20-student-fee-register-report",
+      "outcome": "right",
+      "ms": 2565
+    },
+    {
+      "id": "t21-school-management-system",
+      "outcome": "right",
+      "ms": 1204
+    },
+    {
+      "id": "t22-sales-crm-workflow",
+      "outcome": "right",
+      "ms": 1581
+    },
+    {
+      "id": "t23-kirana-chain-erp-hinglish",
+      "outcome": "right",
+      "ms": 9734
+    },
+    {
+      "id": "t24-vague-make-an-app",
+      "outcome": "right",
+      "ms": 1903
+    },
+    {
+      "id": "t25-injection-then-counter",
+      "outcome": "right",
+      "ms": 1539
+    },
+    {
+      "id": "ma01-voice-counter-hinglish",
+      "outcome": "right",
+      "ms": 1441
+    },
+    {
+      "id": "ma02-voice-expenses",
+      "outcome": "right",
+      "ms": 1696
+    },
+    {
+      "id": "ma03-voice-gst-hinglish",
+      "outcome": "right",
+      "ms": 1598
+    },
+    {
+      "id": "ma04-voice-checklist",
+      "outcome": "right",
+      "ms": 1699
+    },
+    {
+      "id": "ma05-voice-text-together",
+      "outcome": "right",
+      "ms": 7391
+    },
+    {
+      "id": "ma06-voice-tailor-orders",
+      "outcome": "wrong",
+      "ms": 1392
+    },
+    {
+      "id": "ma07-voice-attendance-summary",
+      "outcome": "right",
+      "ms": 1686
+    },
+    {
+      "id": "ma08-voice-vague-hinglish",
+      "outcome": "right",
+      "ms": 2529
+    }
+  ],
+  "modelRequests": 84,
+  "note": "Cloud run of the same cases the device model was asked. Not a record for LOCAL_EVIDENCE."
+}

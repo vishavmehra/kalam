@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { getNotificationAdapter, type NotificationCapability } from '@/infrastructure/platform/notifications';
+import { withSpecReminders } from '@/runtime/engine/v11/reminder';
 import { getServices } from '@/services';
 
 import { loadReminderConfig, saveReminderConfig } from './config';
@@ -31,8 +32,10 @@ export function useNow(intervalMs = 60_000): number {
 }
 
 export interface ReminderData {
-  /** `undefined` until the person saves reminder settings. */
+  /** What is scheduled and listed: the person's rules plus the app's own Reminder components (the ones switched on). */
   config: ReminderConfig | undefined;
+  /** Only the rules the person saved. `undefined` until they save reminder settings. The editor lists and saves these. */
+  stored: ReminderConfig | undefined;
   records: RecordsByCollection;
   loaded: boolean;
   /** Saves the settings, then updates the device's scheduled reminders. Throws a plain-language Error if they cannot be saved. */
@@ -42,6 +45,7 @@ export interface ReminderData {
 /** Reminder settings and the app's records, kept current as either changes. */
 export function useReminderData(appId: string): ReminderData {
   const [config, setConfig] = useState<ReminderConfig | undefined>(undefined);
+  const [stored, setStored] = useState<ReminderConfig | undefined>(undefined);
   const [records, setRecords] = useState<RecordsByCollection>({});
   const [loaded, setLoaded] = useState({ config: false, records: false });
 
@@ -52,7 +56,11 @@ export function useReminderData(appId: string): ReminderData {
     const loadConfig = async () => {
       try {
         const next = await loadReminderConfig(db.state, appId);
-        if (alive) setConfig(next);
+        const merged = withSpecReminders(next, (await db.apps.get(appId))?.spec, await db.state.all(appId));
+        if (alive) {
+          setStored(next);
+          setConfig(merged);
+        }
       } catch {
         // keep previous
       }
@@ -81,13 +89,14 @@ export function useReminderData(appId: string): ReminderData {
   const save = useCallback(
     async (next: ReminderConfig) => {
       await saveReminderConfig(getServices().db.state, appId, next);
+      setStored(next);
       setConfig(next);
       void syncReminders(appId);
     },
     [appId],
   );
 
-  return { config, records, loaded: loaded.config && loaded.records, save };
+  return { config, stored, records, loaded: loaded.config && loaded.records, save };
 }
 
 export type DueToday = DueResult & { count: number; loaded: boolean };

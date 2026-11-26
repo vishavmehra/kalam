@@ -125,7 +125,7 @@ export function createShareController(deps: ShareControllerDeps): ShareControlle
     async send(linkId, recordIds, updateExisting) {
       // The person confirmed in the review step before this is called. Nothing else in the app sets `confirmed`.
       const out = await deps.service.send(linkId, { recordIds, confirmed: true, updateExisting }).catch(
-        (): SendOutcome => ({ ok: false, reason: 'broken', created: 0, updated: 0, skipped: [], failed: [], message: NOT_READY }),
+        (): SendOutcome => ({ ok: false, reason: 'broken', created: 0, updated: 0, skipped: [], failed: [], recorded: true, message: NOT_READY }),
       );
       void refresh();
       return out;

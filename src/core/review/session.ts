@@ -3,6 +3,7 @@
  * spec, initReview)`. The draft is always a validated spec; a rejected edit leaves it unchanged and
  * sets a plain message. Continue (docs/03 §13.5) validates once more and names the item to fix.
  */
+import { stableStringify } from '../ai/cache';
 import type { SpecIssue, UnderstandingSummary } from '../contracts';
 import { withCheckMessages } from '../pipeline/verify-blocks';
 import { describeSpec } from '../spec/describe';
@@ -17,7 +18,7 @@ import { resolveUncertainItem, type ReviewSource, type UncertainAction, type Unc
  * uncertain items with their own actions (listUncertainItems).
  */
 export function reviewSummary(spec: KalamSpec, source?: Pick<ReviewSource, 'verification'>): UnderstandingSummary {
-  return withCheckMessages(describeSpec(spec), source?.verification ?? []);
+  return withCheckMessages(describeSpec(spec), source?.verification ?? [], spec);
 }
 
 export interface ReviewState {
@@ -49,7 +50,12 @@ export function reviewReducer(state: ReviewState, action: ReviewAction): ReviewS
   switch (action.type) {
     case 'edit': {
       const r = applyReviewEdit(state.spec, action.edit);
-      return r.ok ? { ...state, spec: r.spec, error: undefined, edits: state.edits + 1 } : { ...state, error: r.error };
+      if (!r.ok) return { ...state, error: r.error };
+      // A no-op (moving a screen to where it is, the same name again) is not a change. Key order may
+      // differ after validation, so compare key-sorted JSON. ponytail: two passes over a spec of at
+      // most 100 KB per edit, fine at review speed.
+      if (r.spec === state.spec || stableStringify(r.spec) === stableStringify(state.spec)) return { ...state, error: undefined };
+      return { ...state, spec: r.spec, error: undefined, edits: state.edits + 1 };
     }
     case 'resolve': {
       const r = resolveUncertainItem(state.spec, action.item, action.action, action.answer);
@@ -59,7 +65,7 @@ export function reviewReducer(state: ReviewState, action: ReviewAction): ReviewS
         spec: r.spec,
         error: undefined,
         resolved: state.resolved.includes(action.item.id) ? state.resolved : [...state.resolved, action.item.id],
-        rebuild: r.rebuild ? [...state.rebuild, r.rebuild] : state.rebuild,
+        rebuild: r.rebuild && !state.rebuild.includes(r.rebuild) ? [...state.rebuild, r.rebuild] : state.rebuild,
         edits: r.spec === state.spec ? state.edits : state.edits + 1,
       };
     }
@@ -71,13 +77,17 @@ export function reviewReducer(state: ReviewState, action: ReviewAction): ReviewS
 }
 
 export type ReviewFinal =
-  | { ok: true; spec: KalamSpec }
+  /** `rebuild`: answers that still need the cloud compiler. When not empty, ask before saving as is. */
+  | { ok: true; spec: KalamSpec; rebuild: string[] }
   | { ok: false; error: string; issues: SpecIssue[]; target?: ReturnType<typeof locateIssue> };
 
-/** Continue: validate the corrected app once more; on failure, say what is wrong and where (docs/03 §13.5). */
+/**
+ * Continue: validate the corrected app once more; on failure, say what is wrong and where (docs/03 §13.5).
+ * Answers that need a rebuild are passed on, so Continue never drops them without asking (docs/06 §11.5).
+ */
 export function finalizeReview(state: ReviewState): ReviewFinal {
   const v = validateSpec(state.spec);
-  if (v.ok && v.spec) return { ok: true, spec: v.spec };
+  if (v.ok && v.spec) return { ok: true, spec: v.spec, rebuild: state.rebuild };
   const first = v.errors[0];
   return { ok: false, error: explainIssues(v.errors), issues: v.errors, target: first ? locateIssue(state.spec, first.path) : undefined };
 }

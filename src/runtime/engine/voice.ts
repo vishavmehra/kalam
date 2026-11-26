@@ -16,6 +16,7 @@
  */
 import type { AccessModes, RecordValue, VoiceActionResult } from '@/core/contracts';
 import type { KalamAction, KalamScreen, KalamSpec } from '@/core/spec/schema';
+import { isMachineField } from '@/core/spec/v11';
 import { formatFieldValue } from './data';
 import { deleteListRecord, dispatchAction } from './dispatch';
 import { coerceValue, screenFieldDefs } from './fields';
@@ -87,6 +88,7 @@ export function describeActionForSpeech(spec: KalamSpec, screen: KalamScreen, ac
     case 'speak': return 'read a message aloud';
     case 'feedback': return 'show a message';
     case 'clearForm': return 'clear this form';
+    case 'compute': return 'work out a result';
   }
 }
 
@@ -107,22 +109,29 @@ const SAY_CONFIRM = 'Say confirm or cancel.';
 // ─── Planning ────────────────────────────────────────────────────────────────
 /** Keeps only fields this screen has, validated against their definitions. Untrusted input. */
 export function sanitizeVoiceFields(
-  defs: Readonly<Record<string, FieldDef>>, raw: Readonly<Record<string, RecordValue>>, now: Date,
+  defs: Readonly<Record<string, FieldDef>>, raw: Readonly<Record<string, RecordValue>>, now: Date, lang?: string,
 ): FormValues {
   const out: FormValues = {};
   for (const [id, value] of Object.entries(raw)) {
     if (!Object.prototype.hasOwnProperty.call(defs, id)) continue;
-    const r = coerceValue(defs[id]!, value, now);
+    const r = coerceValue(defs[id]!, value, now, lang);
     if (r.ok && r.value !== null) out[id] = r.value;
   }
   return out;
+}
+
+/** Fields voice may fill: never a link or a signature, which only the picker and the pad write (KalamSpec 1.1). */
+function voiceFieldDefs(spec: KalamSpec, screen: KalamScreen): Record<string, FieldDef> {
+  const defs = screenFieldDefs(spec, screen);
+  for (const id of Object.keys(defs)) if (isMachineField(spec, screen.form, id)) delete defs[id];
+  return defs;
 }
 
 export function planVoiceCommand(
   spec: KalamSpec, state: RuntimeState, result: VoiceActionResult, opts: { modes: AccessModes; now: Date },
 ): VoicePlan {
   const screen = currentScreen(spec, state);
-  const fields = sanitizeVoiceFields(screenFieldDefs(spec, screen), result.fields, opts.now);
+  const fields = sanitizeVoiceFields(voiceFieldDefs(spec, screen), result.fields, opts.now, spec.lang);
   const hasFields = Object.keys(fields).length > 0;
   const eyesFree = opts.modes.voiceOnly === true;
 
@@ -217,7 +226,7 @@ export async function executeVoiceCommand(
   env: EngineEnv, state: RuntimeState, cmd: { actionId?: string; fields: FormValues },
 ): Promise<VoiceExecution> {
   const screen = currentScreen(env.spec, state);
-  const fields = sanitizeVoiceFields(screenFieldDefs(env.spec, screen), cmd.fields, env.now);
+  const fields = sanitizeVoiceFields(voiceFieldDefs(env.spec, screen), cmd.fields, env.now, env.spec.lang);
   const filled = Object.keys(fields).length ? mergeForm(env.spec, state, screen.id, fields, env.now) : state;
 
   if (!cmd.actionId) {

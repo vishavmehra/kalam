@@ -10,27 +10,33 @@ import { z } from 'zod';
 import { exportAppJson, exportFileName } from '@/core/backup/exports';
 import { stripImportedClaims } from '@/core/backup/sanitize';
 import { classifyRequest } from '@/core/classifier';
-import type { FormulaScope, KalamRecord, NormalizedInput, SpecIssue, TemplateId } from '@/core/contracts';
+import type { FormulaScope, NormalizedInput, SpecIssue, TemplateId } from '@/core/contracts';
 import { compileFormula, evaluateFormula, formulaDependencies, validateFormula } from '@/core/formula';
+import { explainFormula } from '@/core/formula-assist';
+import { describeSpecChanges, summarizeChanges } from '@/core/history';
 import { DEFAULT_IMPORT_BASE, encodeImportLink } from '@/core/import-link';
+import { reportToText, runReport, suggestReports, type ReportDefinition, type ReportRow } from '@/core/reports';
 import { describeSpec, kalamSpecSchema, LIMITS, type KalamSpec } from '@/core/spec';
 import { MAX_SPEC_BYTES, validateSpec } from '@/core/spec/validate';
 import { instantiateTemplate, listTemplates, matchTemplates } from '@/core/templates';
 import { hintFor, specCatalogue, specJsonSchema } from './catalogue';
-import { NOT_IN_BUILD, optional, runReport } from './optional';
 
 // ─── Results ─────────────────────────────────────────────────────────────────
+// The text block repeats structuredContent for hosts that only read text (MCP spec), so it stays compact.
 export function ok(data: Record<string, unknown>, text?: string): CallToolResult {
-  return { content: [{ type: 'text', text: text ?? JSON.stringify(data, null, 2) }], structuredContent: data };
+  return { content: [{ type: 'text', text: text ?? JSON.stringify(data) }], structuredContent: data };
 }
 export function fail(message: string, data: Record<string, unknown> = {}): CallToolResult {
   return {
-    content: [{ type: 'text', text: Object.keys(data).length ? `${message}\n${JSON.stringify(data, null, 2)}` : message }],
+    content: [{ type: 'text', text: Object.keys(data).length ? `${message}\n${JSON.stringify(data)}` : message }],
     structuredContent: { ok: false, message, ...data },
     isError: true,
   };
 }
 export const isResult = (v: object): v is CallToolResult => 'content' in v;
+
+/** Plain ASCII file names, with the .kalam.json suffix: what kalam_workspace_write accepts. */
+export const FILE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,95}$/;
 
 export const withHints = (issues: readonly SpecIssue[]) =>
   issues.map(({ code, path, message, severity }) => ({ code, path, message, severity, hint: hintFor(code) }));
@@ -71,7 +77,10 @@ const valueMap = z.record(z.string().max(48), recordValue);
 const formulaInput = z.string().min(1).max(LIMITS.formulaLength);
 
 export const shapes = {
-  schema: { section: z.enum(['all', 'catalogue', 'json_schema']).default('all') },
+  schema: {
+    section: z.enum(['catalogue', 'json_schema', 'all']).default('catalogue')
+      .describe('catalogue (default): limits, components, actions, fields and functions with their required properties. json_schema or all: the full JSON Schema too (also the kalam://schema resource).'),
+  },
   validate: { spec: specInput },
   listTemplates: { request: z.string().max(4000).optional().describe('Optional: rank templates for this request.') },
   buildTemplate: {
@@ -109,15 +118,17 @@ export const shapes = {
       .array(z.object({ values: valueMap, createdAt: z.number().int().nonnegative().optional() }).strict())
       .max(5000)
       .describe('Records of that collection. Each has values (field id to value) and optionally createdAt in epoch ms.'),
-    report: z.record(z.string(), z.unknown()).optional().describe('A report definition. Leave out to get the suggested reports.'),
-    now: z.string().max(40).optional(),
+    report: z.record(z.string(), z.unknown()).optional()
+      .describe('One report definition (the shape suggested reports come back in). Leave out to compute the suggested reports.'),
+    now: z.string().max(40).optional().describe('ISO date and time for "today". Default: now.'),
+    timeZone: z.string().max(64).optional().describe('IANA time zone such as Asia/Kolkata. Default: the server zone.'),
   },
   packageApp: { spec: specInput },
 };
 type Args<S extends z.ZodRawShape> = z.infer<z.ZodObject<S>>;
 
 // ─── Handlers ────────────────────────────────────────────────────────────────
-export function specSchemaTool({ section = 'all' }: Partial<Args<typeof shapes.schema>>): CallToolResult {
+export function specSchemaTool({ section = 'catalogue' }: Partial<Args<typeof shapes.schema>>): CallToolResult {
   const data: Record<string, unknown> = {};
   if (section !== 'json_schema') data.catalogue = specCatalogue();
   if (section !== 'catalogue') data.jsonSchema = specJsonSchema();
@@ -205,27 +216,13 @@ export function explainSpecTool({ spec }: Args<typeof shapes.explain>): CallTool
   return ok({ summary, text }, text);
 }
 
-/** Plain JSON only: whatever a sibling module returns, the result is data and has a size cap. */
-function plain(value: unknown, maxChars = 200_000): unknown {
-  const text = JSON.stringify(value);
-  if (text === undefined) return null;
-  if (text.length > maxChars) throw new Error('result too large');
-  return JSON.parse(text);
-}
-
 export function diffSpecsTool({ before, after }: Args<typeof shapes.diff>): CallToolResult {
   const a = needValid(before);
   if (isResult(a)) return a;
   const b = needValid(after);
   if (isResult(b)) return b;
-  if (!optional.describeSpecChanges) return fail(NOT_IN_BUILD('Comparing two versions'));
-  try {
-    const changes = optional.describeSpecChanges(a.spec, b.spec);
-    const summary = optional.summarizeChanges?.(changes);
-    return ok({ changes: plain(changes), summary: typeof summary === 'string' ? summary : undefined });
-  } catch {
-    return fail('Kalam could not compare these two versions.');
-  }
+  const changes = describeSpecChanges(a.spec, b.spec);
+  return ok({ changes, summary: changes.length ? summarizeChanges(changes) : 'Nothing changed.' });
 }
 
 function scopeFor(spec: KalamSpec, screenId?: string, listCollection?: string): FormulaScope | string {
@@ -249,10 +246,16 @@ type FormulaCheck = { valid: boolean; errors: string[]; dependencies?: ReturnTyp
 function checkFormula(formula: string, spec?: KalamSpec, screenId?: string, listCollection?: string): FormulaCheck | CallToolResult {
   const compiled = compileFormula(formula);
   if (!compiled.ok) return { valid: false, errors: compiled.errors };
-  const dependencies = formulaDependencies(formula);
+  let dependencies = formulaDependencies(formula);
   if (!spec) return { valid: true, errors: [], dependencies, note: 'Only the syntax was checked. Pass the spec to check names too.' };
   const scope = scopeFor(spec, screenId, listCollection);
   if (typeof scope === 'string') return fail(scope);
+  if (listCollection && scope.recordFields) {
+    // In a list filter a bare name is a field of the listed collection, not a collection.
+    const fields = new Set(scope.recordFields);
+    const others = dependencies.collections.filter((n) => !fields.has(n));
+    dependencies = { ...dependencies, collections: [...new Set([listCollection, ...others])] };
+  }
   const errors = validateFormula(formula, scope);
   return {
     valid: errors.length === 0, errors, dependencies,
@@ -284,12 +287,21 @@ export function explainFormulaTool(args: Args<typeof shapes.explainFormula>): Ca
   if (isResult(v)) return v;
   const check = checkFormula(args.formula, v, args.screenId, args.listCollection);
   if (isResult(check)) return check;
-  if (!optional.explainFormula) return ok({ ...check, explanation: null, note: NOT_IN_BUILD('Formula explanations') });
+  // A list filter reads like filter(<collection>, <formula>): bare names are that collection's fields,
+  // and the describer then uses their labels.
+  const wrapped = args.listCollection ? `filter(${args.listCollection}, (${args.formula}))` : args.formula;
+  // ponytail: a filter within ~60 characters of the 300 limit is explained unwrapped, with raw field ids.
+  const source = wrapped.length <= LIMITS.formulaLength ? wrapped : args.formula;
+  return ok({ ...check, explanation: explainFormula(source, v, { screenId: args.screenId }) });
+}
+
+function validZone(timeZone: string | undefined): boolean {
+  if (timeZone === undefined) return true;
   try {
-    const explanation = optional.explainFormula(args.formula, v);
-    return ok({ ...check, explanation: plain(explanation, 5_000) });
+    new Intl.DateTimeFormat('en-US', { timeZone });
+    return true;
   } catch {
-    return ok({ ...check, explanation: null, note: 'Kalam could not explain this formula.' });
+    return false;
   }
 }
 
@@ -300,19 +312,23 @@ export function computeReportTool(args: Args<typeof shapes.report>): CallToolRes
   if (!collection) return fail(`Collection "${args.collection}" does not exist in this app.`);
   const now = args.now ? new Date(args.now) : new Date();
   if (Number.isNaN(now.getTime())) return fail('now is not a date and time.');
-  const fields = new Set(Object.keys(collection.fields));
-  // Only fields the collection defines; anything else in the input is dropped.
-  const records: KalamRecord[] = args.records.map((r, i) => ({
-    id: `r${i + 1}`, appId: v.spec.id, collectionId: args.collection,
-    createdAt: r.createdAt ?? now.getTime(), updatedAt: r.createdAt ?? now.getTime(),
-    values: Object.fromEntries(Object.entries(r.values).filter(([k]) => fields.has(k))),
-  }));
-  if (!optional.computeReport) return fail(NOT_IN_BUILD('Reports'));
-  try {
-    return ok({ report: plain(runReport({ spec: v.spec, collectionId: args.collection, records, definition: args.report, now })) });
-  } catch {
-    return fail('Kalam could not compute this report. Check the report definition against the suggested ones.');
+  if (!validZone(args.timeZone)) return fail(`"${args.timeZone}" is not a time zone. Use a name such as Asia/Kolkata.`);
+  if (args.report && args.report.sourceCollection !== args.collection) {
+    return fail(`The report reads "${String(args.report.sourceCollection)}" but the records are for "${args.collection}".`);
   }
+  // Only fields the collection defines; anything else in the input is dropped.
+  const fields = new Set(Object.keys(collection.fields));
+  const rows: ReportRow[] = args.records.map((r) => ({
+    values: Object.fromEntries(Object.entries(r.values).filter(([k]) => fields.has(k))), createdAt: r.createdAt,
+  }));
+  // runReport parses the definition with its strict Zod schema and checks it against the spec, so the cast is safe.
+  const defs = args.report ? [args.report as ReportDefinition] : suggestReports(v.spec, args.collection);
+  const reports = defs.map((definition) => {
+    const out = runReport(v.spec, definition, rows, { now, timeZone: args.timeZone });
+    return out.ok ? { definition, result: out.result, text: reportToText(out.result) } : { definition, errors: out.errors };
+  });
+  if (args.report && 'errors' in reports[0]) return fail('This report definition is not valid for this app.', { errors: reports[0].errors });
+  return ok({ reports, records: rows.length });
 }
 
 export interface PackageOptions { webBase?: string; now?: () => number }
@@ -325,8 +341,9 @@ export function appFile(spec: KalamSpec, now: number): { spec: KalamSpec; file: 
 }
 
 /**
- * The same file "Export design" makes in the app (a one-app kalam-backup, no records), plus an
- * "Open in Kalam" link. Claims of on-device verification are reset: only Kalam can verify AI blocks.
+ * The same format as the app's "Design only (safe to share)" export (a one-app kalam-backup, no
+ * records), plus an "Open in Kalam" link. Claims of on-device verification are reset: only Kalam can
+ * verify AI blocks.
  */
 export function packageAppTool({ spec }: Args<typeof shapes.packageApp>, opts: PackageOptions = {}): CallToolResult {
   const v = needValid(spec);
@@ -335,18 +352,20 @@ export function packageAppTool({ spec }: Args<typeof shapes.packageApp>, opts: P
   const link = encodeImportLink(clean, DEFAULT_IMPORT_BASE);
   const web = opts.webBase ? encodeImportLink(clean, `${opts.webBase}/import`) : undefined;
   if (!link.ok) return fail('Kalam could not make a link for this app.', { errors: withHints(link.errors) });
+  // An ASCII name, so the same name works for kalam_workspace_write; otherwise the app id.
+  const named = exportFileName(clean.name, '', 'kalam.json');
   return ok({
-    fileName: exportFileName(clean.name, '', 'kalam.json'),
+    fileName: FILE_NAME_RE.test(named) ? named : `${clean.id}.kalam.json`,
     file,
-    fileBytes: file.length,
+    fileBytes: Buffer.byteLength(file),
     openInKalam: link.url,
     webLink: web?.ok ? web.url : undefined,
     linkChars: link.linkChars,
     warnings: withHints(v.warnings),
     howToOpen: [
-      'Save the file and open Kalam: Settings, Storage, Import. Kalam checks it and asks before saving.',
-      'Or open the link on a phone or computer with Kalam. The app travels inside the link after the # sign, which is never sent to a server.',
-      ...(link.linkChars > 8_000 ? ['This link is long. Some chat apps cut long links, so send the file instead.'] : []),
+      'Open the link on a phone or computer with Kalam. The app travels inside the link after the # sign, which is never sent to a server. Kalam checks it, shows a preview and asks before saving.',
+      'The link needs a Kalam build that has the /import screen. A build without it shows "This page isn\'t on your shelf". Kalam has no button yet that opens this file directly, so keep the file as the copy to edit or check again here.',
+      ...(link.linkChars > 8_000 ? ['This link is long. Some chat apps cut long links, so make the app smaller or send the link another way.'] : []),
     ],
   });
 }
@@ -357,7 +376,7 @@ const READ_ONLY = { readOnlyHint: true, openWorldHint: false } as const;
 export function registerCoreTools(server: McpServer, opts: PackageOptions = {}): void {
   server.registerTool('kalam_spec_schema', {
     title: 'KalamSpec schema',
-    description: 'The KalamSpec v1 format: JSON Schema, limits, and a catalogue of components, actions, fields, AI blocks, themes, icons and formula functions. Read it before writing a spec.',
+    description: 'The KalamSpec format (1.0 plus the optional 1.1 parts): JSON Schema, limits, and a catalogue of components, actions, fields, AI blocks, themes, icons, formula functions and the 1.1 chart, timer, reminder, signature, layout, link and style parts. Read it before writing a spec.',
     inputSchema: shapes.schema, annotations: READ_ONLY,
   }, (a) => specSchemaTool(a));
   server.registerTool('kalam_validate_spec', {
@@ -407,7 +426,7 @@ export function registerCoreTools(server: McpServer, opts: PackageOptions = {}):
   }, (a) => computeReportTool(a));
   server.registerTool('kalam_package_app', {
     title: 'Package an app',
-    description: 'Makes the importable app file (the same format as "Export design" in Kalam) and an "Open in Kalam" link for a valid spec.',
+    description: 'Makes the app file (the same format as the "Design only" export in Kalam) and an "Open in Kalam" link for a valid spec.',
     inputSchema: shapes.packageApp, annotations: READ_ONLY,
   }, (a) => packageAppTool(a, opts));
 }

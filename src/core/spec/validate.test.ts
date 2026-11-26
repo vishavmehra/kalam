@@ -3,7 +3,7 @@ import { loadFixture, loadFixtures } from '../../../tests/fixtures/specs/load';
 import { validateSpec } from './index';
 import { MAX_SPEC_BYTES } from './validate';
 
-type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any -- test mutation of fixture JSON
+type Json = Record<string, any>;
 const clone = (name: string, kind: 'valid' | 'invalid' = 'valid'): Json => loadFixture(kind, name) as Json;
 const codes = (input: unknown) => validateSpec(input).errors.map((e) => e.code);
 const warningCodes = (input: unknown) => validateSpec(input).warnings.map((e) => e.code);
@@ -83,7 +83,7 @@ describe('validateSpec — layers', () => {
 
   it('does not read a newer minor document, even when its body is not valid', () => {
     const s = clone('habit-counter');
-    s.schemaVersion = '1.1.0';
+    s.schemaVersion = '1.2.0';
     s.screens = 'garbage';
     expect(codes(s)).toEqual(['UNSUPPORTED_SCHEMA_VERSION']);
   });

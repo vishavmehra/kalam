@@ -98,9 +98,9 @@ describe('model precedence and versioned prompts', () => {
   it('accepts a prompt version only when this build ships it', () => {
     applyRemoteConfig({ prompt_compile_version: 'compile-v9' });
     expect(remoteConfigState().config.promptVersions.compiler).toBe('compile-v9');
-    expect(promptVersionFor('compiler')).toBe('compile-v1');
-    applyRemoteConfig({ prompt_compile_version: 'COMPILE-V1' });
-    expect(promptVersionFor('compiler')).toBe('compile-v1');
+    expect(promptVersionFor('compiler')).toBe('compile-v2');
+    applyRemoteConfig({ prompt_compile_version: 'COMPILE-V2' });
+    expect(promptVersionFor('compiler')).toBe('compile-v2');
   });
 
   it('ships exactly one versioned prompt per role today', () => {
@@ -115,7 +115,7 @@ describe('model precedence and versioned prompts', () => {
     const snap = aiConfigSnapshot();
     expect(snap.schemaVersion).toBe(SCHEMA_VERSION);
     expect(snap.remoteConfig).toEqual({ status: 'remote', fetchedAt: 99, rejected: ['model_judge'] });
-    expect(snap.roles.find((r) => r.role === 'compiler')).toEqual({ role: 'compiler', model: 'gemini-3.9-pro', promptVersion: 'compile-v1' });
+    expect(snap.roles.find((r) => r.role === 'compiler')).toEqual({ role: 'compiler', model: 'gemini-3.9-pro', promptVersion: 'compile-v2' });
     expect(snap.features).toEqual({ videoInput: true, aiBlockVerification: true, bazaar: false });
     expect(JSON.stringify(snap)).not.toContain('nope');
   });

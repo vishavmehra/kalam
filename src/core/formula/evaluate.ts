@@ -5,6 +5,7 @@
  * date strings 'YYYY-MM-DD' compare lexicographically, `today` is the local date, `now` epoch ms.
  */
 import type { FormulaContext, FormulaResult, FormulaValue } from '../contracts';
+import { addDays, parseCivil, startOf } from '../reports/dates';
 import { LIMITS } from '../spec/schema';
 import {
   compileFormula, isIdent, type Bin, type Call, type Cond, type Ident, type Lit, type Member, type Node, type Un,
@@ -115,12 +116,11 @@ class Evaluator {
     if (name === 'today') return localDate(this.ctx.now);
     if (name === 'now') return this.ctx.now.getTime();
     const cols = this.ctx.collections;
-    if (record) {
-      if (own(record, name)) return norm(record[name]);
-      if (own(cols, name)) return cols[name] ?? [];
-      return null; // field without a value on this record
-    }
+    if (record && own(record, name)) return norm(record[name]);
     if (own(cols, name)) return cols[name] ?? [];
+    // The entry opened from a list (its id). A field or collection of that name wins, so old apps keep working.
+    if (name === 'selected') return this.ctx.selected ?? null;
+    if (record) return null; // field without a value on this record
     throw new FormulaError(`Unknown name "${name}"`);
   }
 
@@ -206,6 +206,25 @@ class Evaluator {
         if (typeof v === 'string') return /^\d{4}-\d{2}/.test(v) ? v.slice(0, 7) : null;
         if (typeof v === 'number' && Number.isFinite(v)) return localDate(new Date(v)).slice(0, 7);
         return null;
+      }
+      case 'week': {
+        // The Monday that starts the date's week, 'YYYY-MM-DD', so the year is always part of it.
+        const v = this.eval(args[0] as Node, record);
+        const date = typeof v === 'number' && Number.isFinite(v) ? localDate(new Date(v)) : parseCivil(v);
+        return date ? startOf(date, 'week') : null;
+      }
+      case 'streak': {
+        // Days in a row with an entry, ending today (or yesterday while today has none yet).
+        const days = new Set(this.flatten(args, record).map(parseCivil).filter((d): d is string => !!d));
+        const today = localDate(this.ctx.now);
+        let day = days.has(today) ? today : addDays(today, -1);
+        let n = 0;
+        while (days.has(day)) {
+          this.tick();
+          n++;
+          day = addDays(day, -1);
+        }
+        return n;
       }
       default: throw new FormulaError(`Function "${fn}" is not available`);
     }

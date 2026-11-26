@@ -37,6 +37,7 @@ const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 export function createWebTtsAdapter(): TextToSpeechAdapter {
   let generation = 0;
   // Chrome drops an utterance's events if the object is garbage collected mid-speech.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept only so the object stays reachable
   let holding: SpeechSynthesisUtterance | undefined;
 
   const toVoices = (list: SpeechSynthesisVoice[]): SpeechVoice[] =>

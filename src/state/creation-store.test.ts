@@ -133,4 +133,95 @@ describe('creation session privacy and recovery', () => {
     expect(await app.db.sessions.latest()).toBeUndefined();
     expect((await app.db.blobs.get(blobId))?.ownerId).toBe('app_expenses');
   });
+
+  it('keeps a draft that holds only an attached recording, under the same id as its media session, and restores it', async () => {
+    let app = await boot();
+    let media = await import('@/features/media/media-store');
+    const { addAttachment, setTranscript } = await import('@/core/session');
+    const now = Date.now();
+    media.updateSession((m) => addAttachment(m, { id: 'a1', type: 'audio', mimeType: 'audio/mp4', sizeBytes: 10, status: 'ready', createdAt: now, updatedAt: now }, now).session);
+    media.updateSession((m) => setTranscript(m, { attachmentId: 'a1', text: 'sell milk by the litre', original: 'sell milk by the litre', source: 'device', status: 'complete' }, now));
+    const sessionId = media.mediaSessionId();
+    // No words, photos or drawing: only the attached file keeps this draft alive.
+    app.useCreationStore.getState().setModality('voice');
+    await media.flushMediaSession();
+    await app.flushCreationDraft();
+    expect((await app.db.sessions.latest())?.id).toBe(sessionId);
+
+    app = await boot();
+    media = await import('@/features/media/media-store');
+    await media.hydrateMediaSession();
+    expect(media.useMediaStore.getState().session?.id).toBe(sessionId);
+    expect(media.useMediaStore.getState().session?.transcripts[0]?.text).toBe('sell milk by the litre');
+
+    // Start over removes the media session's row too.
+    app.useCreationStore.getState().resetSession();
+    await app.flushCreationDraft();
+    await media.flushMediaSession();
+    expect(media.useMediaStore.getState().session).toBeUndefined();
+  });
+
+  it('starts a new app in the "Language for new apps" setting, but never over a language the person picked', async () => {
+    let app = await boot();
+    let s = app.useCreationStore.getState();
+    s.resetSession();
+    s.adoptDefaultLanguage('hi');
+    expect(app.useCreationStore.getState().preferences.language).toBe('hi');
+
+    // Picked in App preferences: a later default (another visit to Create) does not undo it.
+    app.useCreationStore.getState().setPreferences({ language: 'ta' });
+    app.useCreationStore.getState().adoptDefaultLanguage('hi');
+    expect(app.useCreationStore.getState().preferences.language).toBe('ta');
+
+    // A draft that already has content keeps its language after a restart.
+    app.useCreationStore.getState().setText('Ledger for my shop');
+    await app.flushCreationDraft();
+    app = await boot();
+    s = app.useCreationStore.getState();
+    s.adoptDefaultLanguage('gu');
+    expect(app.useCreationStore.getState().preferences.language).toBe('ta');
+
+    // After starting over, the next app defaults again.
+    s.resetSession();
+    app.useCreationStore.getState().adoptDefaultLanguage('gu');
+    expect(app.useCreationStore.getState().preferences.language).toBe('gu');
+    await app.flushCreationDraft();
+  });
+});
+
+describe('who the app is for and what it must do (docs/15 §8.2)', () => {
+  it('keeps the two notes with the session only, restores them, and drops them when the app is saved or the person starts over', async () => {
+    let app = await boot();
+    const s = app.useCreationStore.getState();
+    s.setText('Credit book for my kirana shop');
+    s.setPreferences({ language: 'hi', currency: 'INR', targetUser: 'Shop owner KIRANA-NOTE', constraints: 'No sign in, big buttons' });
+    await app.flushCreationDraft();
+    // Shared preferences are remembered between sessions; the notes about one app are not stored with them.
+    const stored = [...asyncData().values()].join(' ');
+    expect(stored).toContain('INR');
+    expect(stored).not.toContain('KIRANA-NOTE');
+    expect(stored).not.toContain('big buttons');
+    expect((await app.db.sessions.latest())?.draft).toMatchObject({ brief: { targetUser: 'Shop owner KIRANA-NOTE', constraints: 'No sign in, big buttons' } });
+
+    app = await boot();
+    expect(app.useCreationStore.getState().preferences).toEqual({ language: 'hi', currency: 'INR', targetUser: 'Shop owner KIRANA-NOTE', constraints: 'No sign in, big buttons' });
+    const { buildNormalizedInput } = await import('@/features/input/normalize');
+    expect(buildNormalizedInput(app.selectDraft(app.useCreationStore.getState())).preferences).toMatchObject({ currency: 'INR', targetUser: 'Shop owner KIRANA-NOTE', constraints: 'No sign in, big buttons' });
+
+    app.useCreationStore.getState().resetSession();
+    expect(app.useCreationStore.getState().preferences).toEqual({ language: 'hi', currency: 'INR' });
+    await app.flushCreationDraft();
+  });
+
+  it('keeps a note as typed up to its limit, and an empty note is no note', async () => {
+    const app = await boot();
+    const { MAX_BRIEF_CHARS } = await import('@/features/input/normalize');
+    app.useCreationStore.getState().setPreferences({ targetUser: 'a '.repeat(MAX_BRIEF_CHARS) });
+    expect(app.useCreationStore.getState().preferences.targetUser).toHaveLength(MAX_BRIEF_CHARS);
+    app.useCreationStore.getState().setPreferences({ targetUser: 'Tailors ' });
+    expect(app.useCreationStore.getState().preferences.targetUser).toBe('Tailors ');
+    app.useCreationStore.getState().setPreferences({ targetUser: '' });
+    expect(app.useCreationStore.getState().preferences.targetUser).toBeUndefined();
+    expect(app.useCreationStore.getState().preferences.language).toBeDefined();
+  });
 });

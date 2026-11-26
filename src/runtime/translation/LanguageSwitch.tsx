@@ -13,7 +13,9 @@ import {
   baseLang, collectTranslatableLabels, languageLabel, nativeLanguageName, sensitiveKinds, sensitiveNotice,
   type TranslatableLabel,
 } from '@/core/i18n-labels';
-import { Button, Sheet, SourceBadge, Text, useKalamTheme } from '@/design';
+import { Button, IconButton, Sheet, SourceBadge, Text, useKalamTheme } from '@/design';
+import { QueueOffer } from '@/features/queue/QueueOffer';
+import { useT } from '@/i18n/react';
 import { CorrectionSheet } from './CorrectionSheet';
 import { TranslationReviewSheet } from './TranslationReviewSheet';
 import type { AppTranslation } from './use-app-translation';
@@ -22,9 +24,12 @@ type Panel = 'closed' | 'pick' | 'review' | 'correct';
 
 export interface LanguageSwitchProps {
   translation: AppTranslation;
+  /** An icon only (its name is the language), for a bar with no room for the language name, such as a phone. */
+  compact?: boolean;
 }
 
-export function LanguageSwitch({ translation: tr }: LanguageSwitchProps) {
+export function LanguageSwitch({ translation: tr, compact }: LanguageSwitchProps) {
+  const t = useT();
   const [panel, setPanel] = useState<Panel>('closed');
   const [editing, setEditing] = useState<TranslatableLabel | null>(null);
   const labels = useMemo(() => (tr.original ? collectTranslatableLabels(tr.original) : []), [tr.original]);
@@ -35,25 +40,29 @@ export function LanguageSwitch({ translation: tr }: LanguageSwitchProps) {
 
   return (
     <>
-      <Button
-        label={nativeLanguageName(tr.lang)}
-        icon={Languages}
-        variant="ghost"
-        size="sm"
-        loading={tr.status === 'translating'}
-        accessibilityHint="Change the language of this app"
-        onPress={() => setPanel('pick')}
-        testID="language-switch"
-      />
+      {compact ? (
+        <IconButton icon={Languages} label={nativeLanguageName(tr.lang)} onPress={() => setPanel('pick')} testID="language-switch" />
+      ) : (
+        <Button
+          label={nativeLanguageName(tr.lang)}
+          icon={Languages}
+          variant="ghost"
+          size="sm"
+          loading={tr.status === 'translating'}
+          accessibilityHint={t('runtime.translate.changeHint')}
+          onPress={() => setPanel('pick')}
+          testID="language-switch"
+        />
+      )}
 
       <Sheet
         visible={panel === 'pick'}
         onClose={() => setPanel('closed')}
-        title="Language of this app"
-        description="Kalam changes the labels and buttons. Your entries stay exactly as you typed them."
+        title={t('runtime.translate.title')}
+        description={t('runtime.translate.description')}
         maxWidth={520}
       >
-        <View role="radiogroup" aria-label="App language" style={{ gap: 2 }}>
+        <View role="radiogroup" aria-label={t('runtime.translate.group')} style={{ gap: 2 }}>
           {languageCodes(tr).map((code) => (
             <LanguageRow key={code} code={code} tr={tr} />
           ))}
@@ -97,11 +106,12 @@ function languageCodes(tr: AppTranslation): string[] {
 
 function LanguageRow({ code, tr }: { code: string; tr: AppTranslation }) {
   const theme = useKalamTheme();
+  const t = useT();
   const isOwn = code === tr.ownLang;
   const selected = code === baseLang(tr.lang);
   const saved = tr.savedLangs.includes(code);
   const needsInternet = !isOwn && !saved && !tr.online;
-  const note = isOwn ? 'Original language of this app' : saved ? 'Saved on this device' : needsInternet ? 'Needs internet' : 'Translate this app';
+  const note = t(isOwn ? 'runtime.translate.noteOwn' : saved ? 'runtime.translate.noteSaved' : needsInternet ? 'runtime.translate.noteNeedsInternet' : 'runtime.translate.noteTranslate');
   const disabled = tr.busy || (needsInternet && !selected);
   return (
     <Pressable
@@ -136,6 +146,7 @@ function LanguageRow({ code, tr }: { code: string; tr: AppTranslation }) {
 
 function StatusBlock({ tr, canReview, notice, onReview }: { tr: AppTranslation; canReview: boolean; notice?: string; onReview(): void }) {
   const theme = useKalamTheme();
+  const t = useT();
   if (tr.isOriginal) return <View style={{ height: 8 }} />;
   const name = languageLabel(tr.lang);
   const gap = { gap: 10, marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: theme.colors.border } as const;
@@ -144,7 +155,7 @@ function StatusBlock({ tr, canReview, notice, onReview }: { tr: AppTranslation; 
     return (
       <View style={{ ...gap, flexDirection: 'row', alignItems: 'center' }} aria-live="polite">
         <ActivityIndicator color={theme.colors.primary} />
-        <Text style={{ flex: 1 }}>{tr.status === 'translating' ? `Translating into ${name}. This takes a few seconds.` : 'Looking for a saved translation.'}</Text>
+        <Text style={{ flex: 1 }}>{tr.status === 'translating' ? t('runtime.translate.translating', { name }) : t('runtime.translate.checking')}</Text>
       </View>
     );
   }
@@ -155,36 +166,38 @@ function StatusBlock({ tr, canReview, notice, onReview }: { tr: AppTranslation; 
       {done && tr.source ? (
         <SourceBadge
           source={tr.source === 'on_device' ? 'on_device' : 'cloud'}
-          label={`${tr.cached ? 'Saved translation' : 'Translated'}, made ${tr.source === 'on_device' ? 'on this device' : 'in the cloud'}`}
+          label={t(tr.cached ? (tr.source === 'on_device' ? 'runtime.translate.savedOnDevice' : 'runtime.translate.savedInCloud') : tr.source === 'on_device' ? 'runtime.translate.newOnDevice' : 'runtime.translate.newInCloud')}
         />
       ) : null}
       {tr.message ? <Text tone={tr.status === 'failed' ? 'danger' : 'secondary'}>{tr.message}</Text> : null}
       {tr.status === 'needs_translation' ? (
         <Button
-          label={`Translate into ${name}`}
+          label={t('runtime.translate.translateInto', { name })}
           icon={Languages}
           disabled={!tr.online}
           onPress={() => void tr.translate(false)}
-          accessibilityHint={tr.online ? undefined : 'Needs an internet connection'}
+          accessibilityHint={tr.online ? undefined : t('runtime.translate.needsInternetHint')}
         />
       ) : null}
+      {/* No signal: keep the request on this device and translate when it is back (the queue asks before it sends the labels). */}
+      {tr.status === 'needs_translation' && !tr.online && tr.original ? <QueueOffer request={{ kind: 'translate', appId: tr.original.id, lang: tr.lang }} /> : null}
       {tr.status === 'failed' || tr.status === 'partial' ? (
-        <Button label="Try again" variant="outline" icon={RefreshCw} disabled={!tr.online} onPress={() => void tr.retry()} />
+        <Button label={t('common.tryAgain')} variant="outline" icon={RefreshCw} disabled={!tr.online} onPress={() => void tr.retry()} />
       ) : null}
       {done && notice && !tr.reviewed ? <Text tone="warning">{notice}</Text> : null}
       {canReview ? (
-        <Button label="Review and change labels" variant={done && notice && !tr.reviewed ? 'primary' : 'secondary'} icon={ListChecks} onPress={onReview} />
+        <Button label={t('runtime.translate.review')} variant={done && notice && !tr.reviewed ? 'primary' : 'secondary'} icon={ListChecks} onPress={onReview} />
       ) : null}
       {done && tr.source === 'on_device' ? (
-        <Button label="Translate again in the cloud" variant="outline" icon={Languages} disabled={!tr.online} onPress={() => void tr.translate(true, true)} />
+        <Button label={t('runtime.translate.cloudAgain')} variant="outline" icon={Languages} disabled={!tr.online} onPress={() => void tr.translate(true, true)} />
       ) : null}
       {done && tr.status === 'ready' ? (
         <>
-          <Button label="Translate again" variant="ghost" icon={RefreshCw} disabled={!tr.online} onPress={() => void tr.retry()} />
-          {tr.reviewed ? <Text variant="caption" tone="secondary">Translating again replaces the wording you changed.</Text> : null}
+          <Button label={t('runtime.translate.again')} variant="ghost" icon={RefreshCw} disabled={!tr.online} onPress={() => void tr.retry()} />
+          {tr.reviewed ? <Text variant="caption" tone="secondary">{t('runtime.translate.againReplaces')}</Text> : null}
         </>
       ) : null}
-      {!tr.online && tr.status !== 'ready' ? <Text variant="caption" tone="secondary">You are offline. Saved translations still work.</Text> : null}
+      {!tr.online && tr.status !== 'ready' ? <Text variant="caption" tone="secondary">{t('runtime.translate.offline')}</Text> : null}
     </View>
   );
 }

@@ -8,18 +8,33 @@
  *    that looks like one is counted and left out.
  *  - A DOCTYPE with an internal subset (entity definitions) is refused. Only the five built in entities and
  *    numbered character references are decoded.
- *  - Size caps: 1 million characters, 5000 tags, 32 levels deep, 2000 points per path, 50,000 points in
- *    all, and no more objects than the page can still hold.
+ *  - Size caps: 1 million characters, 5000 tags, 32 levels deep, 2000 characters per attribute (200,000 for
+ *    path data and point lists), 2000 points per path, 50,000 points in all, and no more objects than the
+ *    page can still hold.
+ *  - Numbers are bounded. A shape with a coordinate that is not a finite number within 100,000 of the origin
+ *    after its transforms is counted as skipped, so one hostile value cannot reach the drawing.
+ *  - Every pattern below runs in time proportional to the length of its input. There is no nested or
+ *    ambiguous repetition in a pattern that is matched against a whole attribute.
  */
 import type { DrawingElement } from '@/core/contracts';
 import { INK_COLORS, PAGE_HEIGHT, PAGE_OBJECT_CAP, PAGE_WIDTH } from './constants';
 import { dropOrphanGroups, newId, STAMPS } from './document';
 import { elementAABB, normalizeAngle, scaleElement, textSize, translateElement, unionBounds } from './geometry';
-import { withProperties } from './properties';
+import { withProperties, type FontChoice } from './properties';
 
 export const SVG_IMPORT_LIMITS = {
   maxChars: 1_000_000, maxNodes: 5000, maxDepth: 32, maxAttrs: 40, maxPathPoints: 2000, maxTotalPoints: 50_000, strokePoints: 400,
+  /** Longest attribute value kept, except path data and point lists. */
+  maxAttrChars: 2000,
+  /** Longest `d`, `points` or `data-kalam-points` value kept. */
+  maxLongAttrChars: 200_000,
+  /** Largest coordinate, in either direction, that survives the import. */
+  maxCoord: 100_000,
 } as const;
+const LONG_ATTRS = new Set(['d', 'points', 'data-kalam-points']);
+const COORD = SVG_IMPORT_LIMITS.maxCoord;
+/** A finite number that is no further than `maxCoord` from zero. */
+const bounded = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= COORD;
 
 export type SvgImportResult =
   | { ok: true; elements: DrawingElement[]; notices: string[]; skipped: number }
@@ -108,7 +123,9 @@ function parseXml(src: string): XNode {
         need(q === '"' || q === "'");
         const end = src.indexOf(q!, i + 1);
         need(end >= 0);
-        if (count < SVG_IMPORT_LIMITS.maxAttrs) { attrs[attr] = decode(src.slice(i + 1, end)); count += 1; }
+        // A value over its cap is dropped before it is decoded, so a huge attribute costs one indexOf and nothing more.
+        const cap = LONG_ATTRS.has(attr) ? SVG_IMPORT_LIMITS.maxLongAttrChars : SVG_IMPORT_LIMITS.maxAttrChars;
+        if (count < SVG_IMPORT_LIMITS.maxAttrs && end - i - 1 <= cap) { attrs[attr] = decode(src.slice(i + 1, end)); count += 1; }
         i = end + 1;
       }
       need(++nodes <= SVG_IMPORT_LIMITS.maxNodes);
@@ -126,15 +143,15 @@ function parseXml(src: string): XNode {
 
 // ── Numbers, colours, transforms ───────────────────────────────────────────────────────────────────
 
-const NUMBER = /[-+]?(?:[0-9]+[.]?[0-9]*|[.][0-9]+)(?:e[-+]?[0-9]+)?/gi;
+const NUMBER = /[-+]?(?:[0-9]+(?:[.][0-9]*)?|[.][0-9]+)(?:e[-+]?[0-9]+)?/gi;
 
 /** A length in user units. Plain numbers and `px` only; percentages and font units are not understood. */
 function length(v: string | undefined): number | undefined {
   if (v === undefined) return undefined;
-  const m = /^\s*([-+]?(?:[0-9]+[.]?[0-9]*|[.][0-9]+)(?:e[-+]?[0-9]+)?)(px)?\s*$/i.exec(v);
+  const m = /^\s*([-+]?(?:[0-9]+(?:[.][0-9]*)?|[.][0-9]+)(?:e[-+]?[0-9]+)?)(px)?\s*$/i.exec(v);
   if (!m) return undefined;
   const n = parseFloat(m[1]!);
-  return Number.isFinite(n) && Math.abs(n) <= 100_000 ? n : undefined;
+  return bounded(n) ? n : undefined;
 }
 
 const NAMED: Record<string, string> = {
@@ -150,10 +167,13 @@ export function parseSvgColor(value: string): string | null | undefined {
   if (/^#[0-9a-f]{3}$/.test(t)) return `#${t[1]}${t[1]}${t[2]}${t[2]}${t[3]}${t[3]}`;
   if (/^#[0-9a-f]{6}$/.test(t)) return t;
   if (/^#[0-9a-f]{8}$/.test(t)) return t.slice(0, 7);
-  const rgb = /^rgba?[(]\s*([0-9.]+%?)\s*[, ]\s*([0-9.]+%?)\s*[, ]\s*([0-9.]+%?)\s*(?:[,/]\s*[0-9.]+%?\s*)?[)]$/.exec(t);
-  if (rgb) {
-    const part = (s: string) => Math.max(0, Math.min(255, Math.round(s.endsWith('%') ? (parseFloat(s) / 100) * 255 : parseFloat(s))));
-    const vals = [rgb[1]!, rgb[2]!, rgb[3]!].map(part);
+  // The inside of the brackets is split on separators, not matched with one long pattern, so spaces cannot make it slow.
+  const fn = /^rgba?[(]([^)]*)[)]$/.exec(t);
+  if (fn) {
+    const parts = fn[1]!.split(/[\s,/]+/).filter(Boolean);
+    if ((parts.length !== 3 && parts.length !== 4) || !parts.every((x) => /^[0-9.]+%?$/.test(x))) return undefined;
+    const part = (x: string) => Math.max(0, Math.min(255, Math.round(x.endsWith('%') ? (parseFloat(x) / 100) * 255 : parseFloat(x))));
+    const vals = [parts[0]!, parts[1]!, parts[2]!].map(part);
     return vals.some((v) => Number.isNaN(v)) ? undefined : `#${vals.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
   }
   return NAMED[t];
@@ -169,19 +189,27 @@ const mul = (m: Matrix, n: Matrix): Matrix => [
 const at = (m: Matrix, x: number, y: number) => ({ x: m[0] * x + m[2] * y + m[4], y: m[1] * x + m[3] * y + m[5] });
 const scaleOf = (m: Matrix): number => Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2])) || 1;
 
-/** `translate`, `scale`, `rotate` and `matrix`. Skews and anything else make the transform unusable (undefined). */
+/**
+ * `translate`, `scale`, `rotate` and `matrix`. Skews and anything else make the transform unusable (undefined).
+ * Read by walking from bracket to bracket with `indexOf`, so no pattern ever runs over a whole attribute.
+ */
 function parseTransform(value: string | undefined): Matrix | undefined {
   if (!value) return IDENTITY;
   let m: Matrix = IDENTITY;
-  const re = /([a-zA-Z]+)\s*[(]([^)]*)[)]/g;
   let found = 0; let last = 0;
-  for (let hit = re.exec(value); hit; hit = re.exec(value)) {
-    if (value.slice(last, hit.index).replace(/[\s,]/g, '')) return undefined;
-    last = re.lastIndex; found += 1;
-    const nums = (hit[2]!.match(NUMBER) ?? []).map(Number);
+  while (last < value.length) {
+    const open = value.indexOf('(', last);
+    if (open < 0) break;
+    const close = value.indexOf(')', open + 1);
+    if (close < 0) return undefined;
+    // What sits before the bracket must be separators and one name.
+    const head = /^[\s,]*([a-zA-Z]+)\s*$/.exec(value.slice(last, open));
+    if (!head) return undefined;
+    last = close + 1; found += 1;
+    const nums = (value.slice(open + 1, close).match(NUMBER) ?? []).map(Number);
     const [a = 0, b, c, d, e, f] = nums;
     let t: Matrix;
-    switch (hit[1]) {
+    switch (head[1]) {
       case 'translate': t = [1, 0, 0, 1, a, b ?? 0]; break;
       case 'scale': t = [a, 0, 0, b ?? a, 0, 0]; break;
       case 'rotate': {
@@ -198,6 +226,7 @@ function parseTransform(value: string | undefined): Matrix | undefined {
     }
     if (t.some((v) => !Number.isFinite(v))) return undefined;
     m = mul(m, t);
+    if (!m.every(Number.isFinite)) return undefined;
   }
   if (value.slice(last).replace(/[\s,]/g, '') || found === 0) return undefined;
   return m;
@@ -215,9 +244,18 @@ function placeBox(m: Matrix, x: number, y: number, w: number, h: number): { x: n
 
 // ── Style ──────────────────────────────────────────────────────────────────────────────────────────
 
-interface Style { fill?: string; stroke?: string; strokeWidth: number; fontSize: number; bold: boolean; anchor: 'start' | 'middle' | 'end' }
-const ROOT_STYLE: Style = { fill: '#000000', strokeWidth: 1, fontSize: 16, bold: false, anchor: 'start' };
-const STYLE_KEYS = ['fill', 'stroke', 'stroke-width', 'font-size', 'font-weight', 'text-anchor'] as const;
+interface Style { fill?: string; stroke?: string; strokeWidth: number; fontSize: number; bold: boolean; font: FontChoice; anchor: 'start' | 'middle' | 'end' }
+const ROOT_STYLE: Style = { fill: '#000000', strokeWidth: 1, fontSize: 16, bold: false, font: 'sans', anchor: 'start' };
+const STYLE_KEYS = ['fill', 'stroke', 'stroke-width', 'font-size', 'font-weight', 'font-family', 'text-anchor'] as const;
+
+/** Which of Kalam's three typefaces a `font-family` list means, read from its generic family. Undefined when unclear. */
+function fontOf(value: string): FontChoice | undefined {
+  const names = value.toLowerCase().split(',').map((x) => x.trim().replace(/^["']|["']$/g, ''));
+  if (names.includes('monospace') || names.includes('ui-monospace')) return 'mono';
+  if (names.includes('sans-serif')) return 'sans';
+  if (names.includes('serif')) return 'serif';
+  return undefined;
+}
 
 /** Presentation attributes plus a short `style="..."` list. Anything not on the list is ignored. */
 function styleOf(node: XNode, parent: Style): Style {
@@ -236,6 +274,7 @@ function styleOf(node: XNode, parent: Style): Style {
   const sw = length(raw['stroke-width']); if (sw !== undefined && sw >= 0) next.strokeWidth = sw;
   const fs = length(raw['font-size']); if (fs !== undefined && fs > 0) next.fontSize = fs;
   if (raw['font-weight'] !== undefined) next.bold = raw['font-weight'] === 'bold' || Number(raw['font-weight']) >= 600;
+  if (raw['font-family'] !== undefined) next.font = fontOf(raw['font-family']) ?? next.font;
   const anchor = raw['text-anchor']; if (anchor === 'start' || anchor === 'middle' || anchor === 'end') next.anchor = anchor;
   return next;
 }
@@ -260,8 +299,16 @@ interface Ctx {
 const INK = INK_COLORS[0]!.value;
 const clampSize = (v: number): number => Math.min(60, Math.max(0.5, Math.round(v * 100) / 100));
 
+const NUMERIC_FIELDS = ['x', 'y', 'w', 'h', 'size', 'fontSize', 'rotation', 'radius', 'headSize'] as const;
+/** Every number the element carries is finite and within range. Hostile values (1e999, a huge scale) stop here. */
+function inRange(el: DrawingElement): boolean {
+  const fields = el as unknown as Record<string, unknown>;
+  for (const k of NUMERIC_FIELDS) if (fields[k] !== undefined && !bounded(fields[k])) return false;
+  return el.kind !== 'stroke' || el.points.every((p) => bounded(p.x) && bounded(p.y));
+}
+
 function push(ctx: Ctx, el: DrawingElement | undefined): void {
-  if (!el) { ctx.skipped += 1; return; }
+  if (!el || !inRange(el)) { ctx.skipped += 1; return; }
   if (ctx.out.length >= ctx.room) { ctx.skipped += 1; return; }
   ctx.out.push(el);
 }
@@ -280,13 +327,18 @@ function strokeElement(ctx: Ctx, pts: Array<{ x: number; y: number }>, st: Style
 
 /** Flattens `d` into one point list per sub-path. Curves become short straight pieces; arcs become one straight piece. */
 export function flattenPath(d: string): Array<Array<{ x: number; y: number }>> {
-  const tokens = d.match(/[a-zA-Z]|[-+]?(?:[0-9]+[.]?[0-9]*|[.][0-9]+)(?:e[-+]?[0-9]+)?/gi) ?? [];
+  const tokens = d.match(/[a-zA-Z]|[-+]?(?:[0-9]+(?:[.][0-9]*)?|[.][0-9]+)(?:e[-+]?[0-9]+)?/gi) ?? [];
   const subs: Array<Array<{ x: number; y: number }>> = [];
   let cur: Array<{ x: number; y: number }> = [];
   let x = 0; let y = 0; let sx = 0; let sy = 0; let cmd = ''; let k = 0;
   let lastCtl: { x: number; y: number; kind: 'c' | 'q' } | undefined;
   let total = 0;
-  const num = (): number | undefined => (k < tokens.length && !/[a-zA-Z]/.test(tokens[k]!) ? Number(tokens[k++]) : undefined);
+  // A number that is not finite or is absurdly large ends the path there, as a broken number does in a browser.
+  const num = (): number | undefined => {
+    if (k >= tokens.length || /[a-zA-Z]/.test(tokens[k]!)) return undefined;
+    const v = Number(tokens[k++]);
+    return Number.isFinite(v) && Math.abs(v) <= COORD * 10 ? v : undefined;
+  };
   const add = (px: number, py: number) => { if (total++ < SVG_IMPORT_LIMITS.maxPathPoints * 8) cur.push({ x: px, y: py }); x = px; y = py; };
   const flush = () => { if (cur.length > 1) subs.push(cur); cur = []; };
   const cubic = (x1: number, y1: number, x2: number, y2: number, x3: number, y3: number) => {
@@ -365,6 +417,20 @@ function nativeStroke(node: XNode, m: Matrix, ctx: Ctx, group?: string): Drawing
   };
 }
 
+/** An arrow that Kalam wrote itself. Other programs see a line and two head strokes; Kalam gets one arrow back. */
+function nativeArrow(node: XNode, m: Matrix, group?: string): DrawingElement | undefined {
+  const box = (node.attrs['data-kalam-box'] ?? '').match(NUMBER)?.map(Number);
+  if (!box || box.length !== 4 || box.some((n) => !Number.isFinite(n) || Math.abs(n) > 100_000)) return undefined;
+  const p = at(m, box[0]!, box[1]!); const q = at(m, box[0]! + box[2]!, box[1]! + box[3]!);
+  const size = length(node.attrs['data-kalam-size']);
+  const head = length(node.attrs['data-kalam-head']);
+  const el: DrawingElement = {
+    id: newId('el'), kind: 'arrow', x: p.x, y: p.y, w: q.x - p.x, h: q.y - p.y, color: parseSvgColor(node.attrs['data-kalam-color'] ?? '') ?? INK,
+    size: clampSize((size ?? 4) * scaleOf(m)), ...(group ? { groupId: group } : {}),
+  };
+  return withProperties(el, head !== undefined ? { headSize: head * scaleOf(m) } : {});
+}
+
 /** A component stamp that Kalam wrote itself, so a round trip keeps what the person meant by it. */
 function nativeStamp(node: XNode, m: Matrix, group?: string): DrawingElement | undefined {
   const component = node.attrs['data-kalam-component'];
@@ -396,6 +462,7 @@ function walk(node: XNode, parent: Style, parentM: Matrix, ctx: Ctx, depth: numb
     const t = parseTransform(child.attrs.transform);
     if (!t) { ctx.skipped += 1; continue; }
     const m = mul(parentM, t);
+    if (!m.every(Number.isFinite)) { ctx.skipped += 1; continue; }
     const st = styleOf(child, parent);
     const rawGroup = child.attrs['data-kalam-group'];
     const group = rawGroup && GROUP_ID.test(rawGroup)
@@ -403,8 +470,10 @@ function walk(node: XNode, parent: Style, parentM: Matrix, ctx: Ctx, depth: numb
       : inheritedGroup;
     const common = group ? { groupId: group } : {};
     const native = tag === 'g' ? child.attrs['data-kalam-kind'] : undefined;
+    if (native === 'paper') continue; // the page colour and grid are the screen's own, not objects
     if (native === 'stroke') { push(ctx, nativeStroke(child, m, ctx, group)); continue; }
     if (native === 'stamp') { push(ctx, nativeStamp(child, m, group)); continue; }
+    if (native === 'arrow') { push(ctx, nativeArrow(child, m, group)); continue; }
     const sw = st.stroke ? clampSize(st.strokeWidth * scaleOf(m)) : 1;
     const paint = st.stroke ?? st.fill;
     const a = (k: string, fallback = 0): number | undefined => (child.attrs[k] === undefined ? fallback : length(child.attrs[k]));
@@ -451,7 +520,7 @@ function walk(node: XNode, parent: Style, parentM: Matrix, ctx: Ctx, depth: numb
       }
       case 'path': {
         const d = child.attrs.d;
-        if (!d || d.length > 200_000) { ctx.skipped += 1; break; }
+        if (!d) { ctx.skipped += 1; break; }
         const subs = flattenPath(d).slice(0, 40);
         if (subs.length === 0) { ctx.skipped += 1; break; }
         // Several pieces of one path belong together, so they come in as a group.
@@ -463,7 +532,7 @@ function walk(node: XNode, parent: Style, parentM: Matrix, ctx: Ctx, depth: numb
         const text = textContent(child).trim().slice(0, 400);
         const x = a('x'); const y = a('y');
         if (!text || x === undefined || y === undefined || !st.fill) { ctx.skipped += 1; break; }
-        const size = textSize(text, st.fontSize, 'sans', st.bold);
+        const size = textSize(text, st.fontSize, st.font, st.bold);
         const left = st.anchor === 'middle' ? x - size.w / 2 : st.anchor === 'end' ? x - size.w : x;
         const box = placeBox(m, left, y - st.fontSize * 0.82, size.w, size.h);
         if (!box) { ctx.skipped += 1; break; }
@@ -471,7 +540,7 @@ function walk(node: XNode, parent: Style, parentM: Matrix, ctx: Ctx, depth: numb
           id: newId('el'), kind: 'text', x: box.x, y: box.y, text, color: st.fill,
           fontSize: Math.min(160, Math.max(8, st.fontSize * scaleOf(m))), ...(box.rotation ? { rotation: box.rotation } : {}), ...common,
         };
-        push(ctx, withProperties(el, st.bold ? { bold: true } : {}));
+        push(ctx, withProperties(el, { ...(st.bold ? { bold: true } : {}), ...(st.font !== 'sans' ? { font: st.font } : {}) }));
         break;
       }
       default:
@@ -519,7 +588,7 @@ export function importSvg(source: string, room: number = PAGE_OBJECT_CAP): SvgIm
   if (!svg) return { ok: false, reason: 'This does not look like an SVG file.' };
 
   const vb = (svg.attrs.viewBox ?? '').match(NUMBER)?.map(Number);
-  const hasBox = !!vb && vb.length === 4 && vb[2]! > 0 && vb[3]! > 0;
+  const hasBox = !!vb && vb.length === 4 && vb.every(bounded) && vb[2]! > 0 && vb[3]! > 0;
   const origin: Matrix = hasBox ? [1, 0, 0, 1, -vb![0]!, -vb![1]!] : IDENTITY;
   const ctx: Ctx = { out: [], room, skipped: 0, blocked: 0, points: 0, groups: new Map() };
   try {

@@ -1,0 +1,94 @@
+{
+  "id": "app_n0yzzqcm",
+  "schemaVersion": "1.1.0",
+  "version": 1,
+  "name": "Student Fees",
+  "description": "Track students and their fee payments.",
+  "icon": { "glyph": "graduation_cap", "background": "#315C4C", "foreground": "#FFFFFF" },
+  "lang": "en",
+  "theme": {
+    "primary": "#315C4C", "secondary": "#D69B52", "background": "#F8F7F2", "surface": "#FFFFFF", "text": "#202820",
+    "radius": 14, "fontScale": 1, "spacing": "comfortable", "fontFamily": "inter", "preset": "calm_green"
+  },
+  "collections": {
+    "students": {
+      "label": "Students",
+      "fields": {
+        "name": { "type": "text", "label": "Student Name", "required": true },
+        "total_fee": { "type": "number", "label": "Total Fee", "min": 0, "unit": "INR" },
+        "phone": { "type": "text", "label": "Phone" }
+      }
+    },
+    "payments": {
+      "label": "Payments",
+      "fields": {
+        "student": { "type": "text", "label": "Student", "required": true, "ref": { "collection": "students", "display": "name", "onDelete": "cascade" } },
+        "amount": { "type": "number", "label": "Amount", "min": 0, "unit": "INR", "decimals": 0 },
+        "payment_date": { "type": "date", "label": "Date", "defaultValue": "today" },
+        "mode_of_payment": { "type": "enum", "label": "Mode of payment", "options": ["Cash", "UPI", "Bank Transfer", "Cheque"] }
+      }
+    }
+  },
+  "screens": [
+    {
+      "id": "students_screen",
+      "title": "Students",
+      "children": [
+        { "id": "heading_students", "type": "heading", "label": "Students" },
+        { "id": "stat_pending_fees", "type": "stat", "label": "Pending fees", "expr": "sum(students.total_fee) - sum(payments.amount)", "format": "currency", "currency": "INR" },
+        { "id": "list_students", "type": "list", "source": "students", "primary": "name", "secondary": "phone", "detailScreen": "student_detail_screen" },
+        { "id": "btn_new_student", "type": "bigButton", "label": "New student", "action": "act_go_new_student", "tone": "primary" }
+      ]
+    },
+    {
+      "id": "new_student_screen",
+      "title": "New student",
+      "form": "students",
+      "children": [
+        { "id": "input_student_name", "type": "textInput", "label": "Student Name", "field": "name", "required": true },
+        { "id": "input_total_fee", "type": "number", "label": "Total Fee", "field": "total_fee" },
+        { "id": "input_phone", "type": "textInput", "label": "Phone", "field": "phone" },
+        { "id": "btn_save_student", "type": "bigButton", "label": "Save", "action": "act_save_student", "tone": "primary" }
+      ]
+    },
+    {
+      "id": "student_detail_screen",
+      "title": "Student",
+      "children": [
+        { "id": "heading_student_fees", "type": "heading", "label": "Student fees" },
+        {
+          "id": "stat_balance", "type": "stat", "label": "Balance", "format": "currency", "currency": "INR",
+          "expr": "sum(filter(students, id == selected).total_fee) - sum(filter(payments, student == selected).amount)"
+        },
+        { "id": "list_payments", "type": "list", "source": "payments", "primary": "mode_of_payment", "secondary": "payment_date", "filter": "student == selected", "emptyText": "No payments recorded yet" },
+        { "id": "btn_collect_fee", "type": "bigButton", "label": "Collect fee", "action": "act_go_collect_fee", "tone": "primary" }
+      ]
+    },
+    {
+      "id": "collect_fee_screen",
+      "title": "Collect fee",
+      "form": "payments",
+      "children": [
+        { "id": "heading_collect_fee", "type": "heading", "label": "Collect fee" },
+        { "id": "input_student", "type": "textInput", "label": "Student", "field": "student", "required": true },
+        { "id": "input_amount", "type": "number", "label": "Amount", "field": "amount", "required": true },
+        { "id": "input_date", "type": "date", "label": "Date", "field": "payment_date" },
+        { "id": "input_mode", "type": "choice", "label": "Mode of payment", "field": "mode_of_payment", "required": true },
+        { "id": "btn_save_payment", "type": "bigButton", "label": "Save", "action": "act_save_payment", "tone": "primary" }
+      ]
+    }
+  ],
+  "initialScreen": "students_screen",
+  "actions": {
+    "act_go_new_student": { "type": "navigate", "screen": "new_student_screen" },
+    "act_save_student": { "type": "insert", "collection": "students", "then": { "feedback": "Student saved" } },
+    "act_go_collect_fee": { "type": "navigate", "screen": "collect_fee_screen" },
+    "act_save_payment": { "type": "insert", "collection": "payments", "then": { "feedback": "Payment collected" } }
+  },
+  "aiBlocks": {},
+  "intents": {
+    "act_go_new_student": ["add student", "new student"],
+    "act_go_collect_fee": ["collect fee", "add payment"]
+  },
+  "meta": { "createdAt": 1795596579505, "description": "Track students and their fee payments.", "source": "compiler" }
+}

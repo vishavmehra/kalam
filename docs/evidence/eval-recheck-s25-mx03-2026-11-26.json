@@ -1,0 +1,80 @@
+{
+  "kind": "eval-recheck",
+  "recordedAt": "2026-11-26T01:02:43.820Z",
+  "command": "node scripts/eval.mjs --live --budget 6 --case s25-shop-sales-stock --case mx03-sketch-tailor-plus-hindi",
+  "why": "These two cases timed out at 90 s in the 2026-11-25 live run (s25: repair pass; mx03: first pass, both retried once, 180 s). The compile and repair calls now wait 150 s and do not retry a timeout.",
+  "promptVersion": "compiler-prompt@cc6ed5c69312",
+  "models": [
+    "gemini-3.8-flash"
+  ],
+  "cloudRequests": 3,
+  "cases": [
+    {
+      "id": "s25-shop-sales-stock",
+      "dataset": "sketch",
+      "built": true,
+      "valid": true,
+      "route": "cloud+repair",
+      "model": "gemini-3.8-flash",
+      "firstPassValid": false,
+      "totalMs": 70133,
+      "passes": [
+        {
+          "pass": "first",
+          "stage": "validation",
+          "issues": [
+            "UNKNOWN_SCREEN screens[5].children[1].detailScreen",
+            "UNKNOWN_ACTION screens[5].children[3].action"
+          ]
+        },
+        {
+          "pass": "repair",
+          "stage": "ok",
+          "issues": []
+        }
+      ],
+      "modelRequests": 2,
+      "inputTokens": 18321,
+      "outputTokens": 6870,
+      "events": [
+        {
+          "task": "interpret_sketch",
+          "ok": true,
+          "ms": 25622
+        },
+        {
+          "task": "repair_spec",
+          "ok": true,
+          "ms": 44338
+        }
+      ]
+    },
+    {
+      "id": "mx03-sketch-tailor-plus-hindi",
+      "dataset": "mixed",
+      "built": true,
+      "valid": true,
+      "route": "cloud",
+      "model": "gemini-3.8-flash",
+      "firstPassValid": true,
+      "totalMs": 11559,
+      "passes": [
+        {
+          "pass": "first",
+          "stage": "ok",
+          "issues": []
+        }
+      ],
+      "modelRequests": 1,
+      "inputTokens": 7422,
+      "outputTokens": 1928,
+      "events": [
+        {
+          "task": "interpret_sketch",
+          "ok": true,
+          "ms": 11543
+        }
+      ]
+    }
+  ]
+}

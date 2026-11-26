@@ -9,7 +9,9 @@
  */
 import { classifyRequest } from '../classifier';
 import { compileWithCloud, friendlyAIError, type JsonSchemaFn } from '../compiler/compile';
+import { buildCompilerRequest } from '../compiler/request';
 import { toJsonSchema as defaultToJsonSchema } from '../ai/json-schema';
+import { localStatus, type LocalStatus, type LocalTask } from '../ai/local-ready';
 import { zodParser } from '../compiler/ir';
 import { wrapUntrusted } from '../compiler/prompt';
 import type {
@@ -17,6 +19,8 @@ import type {
   CreateApplication, CreationResult, CreationStage, NormalizedInput, SpecIssue, TaskClassification, TemplateDefinition,
   TemplateId, UnderstandingSummary, ValidateSpec,
 } from '../contracts';
+import { timings } from '../observability';
+import { track } from '../telemetry';
 import { describeSpec } from '../spec/describe';
 import type { KalamSpec } from '../spec/schema';
 import { validateSpec as defaultValidate } from '../spec/validate';
@@ -48,14 +52,26 @@ export interface PipelineDeps {
   cloudConsent?: () => boolean | Promise<boolean>;
   /** Ceiling for the whole 'verifying' stage. Default VERIFY_BUDGET_MS (30 s). */
   verifyBudgetMs?: number;
+  /** The per-task local-ready gate (docs/07 §6.7). Default: the recorded benchmarks (ai/local-ready.ts). */
+  localReady?: (task: LocalTask, platform: 'web' | 'android' | 'ios' | 'other') => LocalStatus;
 }
+
+/**
+ * The same orchestrator, except the first compile pass asks the device model before the cloud (docs/07 §4.2:
+ * a simple request without a template tries local first). Repair stays cloud-first: a device draft that failed
+ * validation is not asked again. The orchestrator still decides whether the device may take it (consent, gate).
+ */
+const preferDevice = (ai: AIOrchestrator): AIOrchestrator => ({
+  ...ai,
+  run: (req, ctx) => ai.run(req.taskType === 'create_app' ? { ...req, mode: 'prefer_on_device' } : req, ctx),
+});
 
 /** A template app builds in milliseconds; Gemini Nano may only add this much on top. */
 const NANO_PARAMS_BUDGET_MS = 6_000;
 
 /** Skipped-check reason → error code on the recorded event (docs/07 §16.4: every decision is observable). */
 const SKIP_CODE: Partial<Record<AIBlockVerificationReason, AIErrorCode>> = {
-  offline: 'offline', cloud_off: 'consent_denied', not_configured: 'not_configured', device_unsupported: 'model_unavailable',
+  offline: 'offline', cloud_off: 'consent_denied', needs_cloud_ok: 'consent_denied', not_configured: 'not_configured', device_unsupported: 'model_unavailable',
   device_not_ready: 'model_unavailable', device_loading: 'model_unavailable', timeout: 'timeout', cancelled: 'cancelled',
 };
 
@@ -137,22 +153,26 @@ export function createApplicationPipeline(deps: PipelineDeps): CreateApplication
         signal, onProgress: (n, total) => stage('verifying', VERIFY_COPY.progress(n, total)),
       });
       if (checked.skipped.length) {
+        // Photo steps wait for sample photos by design: that is a decision, not a failure.
+        const problems = checked.skipped.filter((r) => r !== 'needs_samples');
         await ai.recordDeterministic({
           taskId: generateId('task'), taskType: 'verify_ai_block', appId: spec.id, route: 'deterministic', latencyMs: 0,
-          success: false, errorCode: checked.skipped.map((r) => SKIP_CODE[r]).find(Boolean),
-          escalationReason: `build-time check skipped for ${checked.skipped.length} AI step(s): ${[...new Set(checked.skipped)].join(', ')}`,
+          success: !problems.length, errorCode: problems.map((r) => SKIP_CODE[r]).find(Boolean),
+          escalationReason: `build-time check not done for ${checked.skipped.length} AI step(s): ${[...new Set(checked.skipped)].join(', ')}`,
         });
       }
       if (checked.spec === spec) return checked;
       const v = validate(checked.spec);
       // recordVerification only writes clamped check results, so this is a safety net, not a path.
-      return v.ok && v.spec ? { ...checked, spec: v.spec } : { spec, reports: [], skipped: [] };
+      return v.ok && v.spec ? { ...checked, spec: v.spec } : { spec, reports: [], skipped: [], attempted: [] };
     };
     const fail = (
       classification: TaskClassification,
       message: string,
       extra: Partial<CreationResult> = {},
     ): CreationResult => {
+      // Empty input and a cancel are the person's own doing, not a build that failed.
+      if (hasContent(input) && !signal?.aborted) track('flow', 'compilation_failed');
       stage('failed', message);
       return {
         ok: false, classification, route: 'cloud', provider: 'none', warnings: [], errors: [], message,
@@ -184,7 +204,13 @@ export function createApplicationPipeline(deps: PipelineDeps): CreateApplication
 
     // ── Cloud route ──
     const status = await ai.status();
-    if (!status.online || !status.cloudConfigured) {
+    // docs/07 §4.2: a simple request with no template tries the device first, but only where the model is
+    // loaded now and its benchmark for this task passed (§6.7, §4.5). Otherwise nothing changes: cloud first.
+    const localFirst = classification.complexity === 'simple' && classification.requiresCloudReasoning
+      && !classification.requiresMultimodalReasoning && status.onDevice.availability === 'available'
+      && status.onDevice.warm !== false
+      && (deps.localReady ?? localStatus)('create_simple_app', status.onDevice.platform) === 'ready';
+    if ((!status.online || !status.cloudConfigured) && !localFirst) {
       const code = !status.online ? 'offline' : 'not_configured';
       await ai.recordDeterministic({
         taskId: generateId('task'), taskType: 'create_app', complexity: classification.complexity,
@@ -199,24 +225,33 @@ export function createApplicationPipeline(deps: PipelineDeps): CreateApplication
     }
     const useSpecialistPlan =
       classification.complexity === 'complex' && status.specialistConfigured && !!(await deps.specialistConsent?.());
+    // `request_prepare` (docs/06 §17.3): local time from here until the compiler hands its request to the model.
+    const prepare = timings.start('request_prepare');
     const out = await compile(input, classification, {
-      ai, appId: newAppId(), now, validate, toJsonSchema: toJson, useSpecialistPlan, signal, onStage: stage,
+      ai: localFirst ? preferDevice(ai) : ai, appId: newAppId(), now, validate, toJsonSchema: toJson, useSpecialistPlan, signal,
+      // The typed hand-off (docs/06 §13.2): every model call of this build carries the session id.
+      request: buildCompilerRequest(input, { sessionId: opts.sessionId ?? generateId('create') }),
+      onStage: (s, d) => {
+        if (s === 'planning_specialist' || s === 'generating_cloud') prepare.stop();
+        stage(s, d);
+      },
     });
     if (!out.ok || !out.spec) {
       return fail(classification, out.message ?? friendlyAIError(out.errorCode), {
         route: out.route, provider: out.provider, model: out.model, errors: out.errors, warnings: out.warnings,
-        clarifications: out.clarifications,
+        clarifications: out.clarifications, ...(out.attempts?.length ? { compileAttempts: out.attempts } : {}),
       });
     }
+    // A cancel during 'verifying' keeps the compiled app: the check is optional and its reports say 'cancelled'.
     const checked = await verifyStage(out.spec);
-    if (signal?.aborted) return fail(classification, friendlyAIError('cancelled'));
-    const understanding = withCheckMessages(describe(checked.spec), checked.reports);
+    const understanding = withCheckMessages(describe(checked.spec), checked.reports, checked.spec);
     stage('done');
     return {
       ok: true, spec: checked.spec, classification, route: out.route, provider: out.provider, model: out.model,
       understanding: { ...understanding, assumptions: [...understanding.assumptions, ...out.assumptions] },
       warnings: freshWarnings(out.warnings, checked.spec), errors: [], clarifications: out.clarifications, latencyMs: now() - t0,
       ...(checked.reports.length ? { verification: checked.reports } : {}),
+      ...(out.attempts?.length ? { compileAttempts: out.attempts } : {}),
     };
 
     async function fromTemplate(t: AnyTemplate, inp: NormalizedInput, c: TaskClassification): Promise<CreationResult | undefined> {
@@ -252,7 +287,7 @@ export function createApplicationPipeline(deps: PipelineDeps): CreateApplication
             signal: nanoSignal,
           },
           { taskType: 'extract_template_params', complexity: 'simple', escalationReason: 'template parameters incomplete' },
-        ), budget, signal);
+        ), budget, signal).catch(() => undefined);
         // Deterministic findings win; Nano only fills gaps. Any failure or timeout keeps deterministic params.
         const merged = nano?.success && nano.output ? ok({ ...t.defaults, ...nano.output, ...found }) : undefined;
         if (merged) params = merged;
@@ -289,7 +324,7 @@ export function createApplicationPipeline(deps: PipelineDeps): CreateApplication
       });
       if (!spec) return undefined;
       const checked = await verifyStage(spec);
-      const understanding = withCheckMessages(describe(checked.spec), checked.reports);
+      const understanding = withCheckMessages(describe(checked.spec), checked.reports, checked.spec);
       stage('done');
       return {
         ok: true, spec: checked.spec, classification: c, route, provider,

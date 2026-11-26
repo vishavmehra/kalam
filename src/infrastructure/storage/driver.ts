@@ -6,6 +6,7 @@ import type {
   AppVersion, CreationSession, DrawingDocument, InferenceEvent, InferenceSource, KalamRecord, KalamSettings,
   RecordValue, StoredApp, StoredBlob, TaskType, TranslationCacheEntry,
 } from '@/core/contracts';
+import type { PendingOperation } from '@/core/queue/model';
 import type { ShareLink } from '@/core/share/model';
 
 export type StoreKey = string | number | Array<string | number>;
@@ -40,6 +41,8 @@ export interface AICacheRow {
   lastUsedAt: number;
   /** Approximate size of the JSON value, for the Storage screen. */
   bytes: number;
+  /** Owning app, so deleting the app can drop its answers. Not indexed: the table is capped at a few hundred rows. */
+  appId?: string;
 }
 
 export interface StorageTables {
@@ -57,6 +60,8 @@ export interface StorageTables {
   sessions: StoreTable<CreationSession>;
   // Schema v3 (wave 6): docs/14 §16, §24 `appShares`.
   shareLinks: StoreTable<ShareLink>;
+  // Schema v4: queued-until-online operations (docs/09 §18).
+  pendingOps: StoreTable<PendingOperation>;
 }
 
 export interface StorageDriver {
@@ -81,6 +86,7 @@ export const TABLES = {
   aiCache: { key: 'key', indexes: ['lastUsedAt', 'bytes'] },
   sessions: { key: 'id', indexes: ['updatedAt'] },
   shareLinks: { key: 'id', indexes: ['sourceAppId', 'destinationAppId'] },
+  pendingOps: { key: 'id', indexes: ['appId'] },
 } as const satisfies Record<TableName, { key: string; indexes: readonly string[] }>;
 
 export const TABLE_NAMES = Object.keys(TABLES) as TableName[];

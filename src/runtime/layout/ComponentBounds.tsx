@@ -21,7 +21,9 @@ export function ComponentBoundsProvider({ registry, tracking, children }: {
   tracking: boolean;
   children: ReactNode;
 }) {
-  return <BoundsContext.Provider value={tracking ? registry : null}>{children}</BoundsContext.Provider>;
+  // Not tracking: hand on the outer provider's registry, so two overlays can wrap one app and only the active one measures.
+  const outer = useContext(BoundsContext);
+  return <BoundsContext.Provider value={tracking ? registry : outer}>{children}</BoundsContext.Provider>;
 }
 
 /** Props for the root host view of the component with this KalamSpec id. Call unconditionally. */

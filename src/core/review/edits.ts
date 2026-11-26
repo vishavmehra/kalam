@@ -9,7 +9,8 @@
 import type { SpecIssue, SpecPatchOp } from '../contracts';
 import { applyPatchOps } from '../edit';
 import {
-  INPUT_COMPONENT_TYPES, LIMITS, type KalamComponent, type KalamField, type KalamFieldType, type KalamSpec, type ThemePreset,
+  INPUT_COMPONENT_TYPES, LIMITS, type KalamAIBlock, type KalamComponent, type KalamField, type KalamFieldType, type KalamSpec,
+  type ThemePreset,
 } from '../spec/schema';
 import { validateSpec } from '../spec/validate';
 import { toIdentifier } from '../templates/extract';
@@ -47,7 +48,12 @@ export type ReviewEdit =
   | { kind: 'setRole'; componentId: string; role: 'heading' | 'text' }
   | { kind: 'removeComponent'; componentId: string }
   | { kind: 'removeCollection'; collectionId: string }
-  | { kind: 'removeAIBlock'; blockId: string };
+  | { kind: 'removeAIBlock'; blockId: string }
+  /** How an AI step runs (docs/00 §11.5): 'none' keeps it on this device; 'manual_entry' asks the person to type the value. */
+  | { kind: 'setAIBlockPolicy'; blockId: string; fallback?: AIBlockFallback; onError?: AIBlockOnError };
+
+export type AIBlockFallback = NonNullable<KalamAIBlock['fallback']>;
+export type AIBlockOnError = NonNullable<KalamAIBlock['onError']>;
 
 export type ReviewResult =
   | { ok: true; spec: KalamSpec }
@@ -138,7 +144,7 @@ function dropActions(d: KalamSpec, ids: ReadonlySet<string>): void {
 type InputType = (typeof INPUT_COMPONENT_TYPES)[number];
 const INPUTS: ReadonlySet<string> = new Set(INPUT_COMPONENT_TYPES);
 /** Input component that edits each field type (docs/05 §13.4). */
-const INPUT_FOR: Record<KalamFieldType, InputType> = { text: 'textInput', number: 'number', date: 'date', enum: 'choice', boolean: 'toggle' };
+const INPUT_FOR: Record<Exclude<KalamFieldType, 'image'>, InputType> = { text: 'textInput', number: 'number', date: 'date', enum: 'choice', boolean: 'toggle' };
 
 interface InputProps {
   id: string; label: string; field: string;
@@ -167,6 +173,7 @@ function makeInput(type: InputType, p: InputProps): KalamComponent {
 function freshField(type: KalamFieldType, label: string, required: boolean, options?: string[]): KalamField {
   const common = { label, ...(required ? { required: true } : {}) };
   switch (type) {
+    case 'image': return { type, ...common };
     case 'text': return { type, ...common };
     case 'number': return { type, ...common };
     case 'date': return { type, ...common };
@@ -272,6 +279,8 @@ export function applyReviewEdit(spec: KalamSpec, edit: ReviewEdit): ReviewResult
       if (options === null) return reject(REVIEW_COPY.optionText);
       if (type === 'enum' && !options?.length) return reject(REVIEW_COPY.needOptions);
       const required = c.required ?? old.required === true;
+      // A photo is filled by a photo part, not an input, so a field never turns into or out of one here.
+      if ((type === 'image') !== (old.type === 'image')) return reject(REVIEW_COPY.photoField);
       const d = clone(spec);
       d.collections[edit.collectionId]!.fields[edit.fieldId] = nextField(old, type, label, required, options);
       for (const s of d.screens) {
@@ -279,7 +288,7 @@ export function applyReviewEdit(spec: KalamSpec, edit: ReviewEdit): ReviewResult
         s.children = s.children.map((comp) => {
           if (!isInputFor(comp, edit.fieldId)) return comp;
           const p = comp as unknown as InputProps;
-          const nextType = INPUT_FOR[type];
+          const nextType = INPUT_FOR[type as Exclude<KalamFieldType, 'image'>];
           return makeInput(nextType, {
             ...p,
             label: label === old.label ? p.label : relabel(p.label, old.label, label),
@@ -300,6 +309,7 @@ export function applyReviewEdit(spec: KalamSpec, edit: ReviewEdit): ReviewResult
       const options = edit.field.options ? cleanOptions(edit.field.options) : undefined;
       if (options === null) return reject(REVIEW_COPY.optionText);
       if (edit.field.type === 'enum' && !options?.length) return reject(REVIEW_COPY.needOptions);
+      if (edit.field.type === 'image') return reject(REVIEW_COPY.photoField);
       if (Object.keys(col.fields).length >= LIMITS.fieldsPerCollection) return reject(REVIEW_COPY.tooManyFields);
       const d = clone(spec);
       const ids = idsIn(d);
@@ -309,7 +319,7 @@ export function applyReviewEdit(spec: KalamSpec, edit: ReviewEdit): ReviewResult
       // Every screen that fills in these entries gets an input for the new field, above its buttons.
       for (const s of d.screens) {
         if (s.form !== edit.collectionId) continue;
-        const input = makeInput(INPUT_FOR[edit.field.type], { id: toIdentifier(`${fieldId}_input`, ids.components, 'input'), label, field: fieldId });
+        const input = makeInput(INPUT_FOR[edit.field.type as Exclude<KalamFieldType, 'image'>], { id: toIdentifier(`${fieldId}_input`, ids.components, 'input'), label, field: fieldId });
         const at = s.children.findIndex((x) => x.type === 'bigButton');
         s.children.splice(at < 0 ? s.children.length : at, 0, input);
       }
@@ -375,6 +385,17 @@ export function applyReviewEdit(spec: KalamSpec, edit: ReviewEdit): ReviewResult
       for (const s of d.screens) for (const x of s.children) if (x.type === 'photo' && x.aiBlock === edit.blockId) delete x.aiBlock;
       return commit(d);
     }
+    case 'setAIBlockPolicy': {
+      if (!own(spec.aiBlocks, edit.blockId)) return reject(REVIEW_COPY.missing);
+      const d = clone(spec);
+      const b = d.aiBlocks[edit.blockId]!;
+      // The defaults ('cloud', 'keep_input') are left out of the spec.
+      if (edit.fallback === 'cloud') delete b.fallback;
+      else if (edit.fallback) b.fallback = edit.fallback;
+      if (edit.onError === 'keep_input') delete b.onError;
+      else if (edit.onError) b.onError = edit.onError;
+      return commit(d);
+    }
   }
 }
 
@@ -391,6 +412,8 @@ export interface ReviewModel {
     id: string; name: string;
     fields: Array<{ id: string; label: string; type: KalamFieldType; required: boolean; options?: string[] }>;
   }>;
+  /** AI steps with how they run, for the setAIBlockPolicy controls. */
+  aiSteps: Array<{ id: string; kind: KalamAIBlock['kind']; fallback: AIBlockFallback; onError: AIBlockOnError }>;
 }
 
 const humanize = (id: string): string => {
@@ -414,5 +437,6 @@ export function reviewModel(spec: KalamSpec): ReviewModel {
         id: fid, label: f.label, type: f.type, required: f.required === true, ...(f.type === 'enum' ? { options: f.options } : {}),
       })),
     })),
+    aiSteps: Object.entries(spec.aiBlocks).map(([id, b]) => ({ id, kind: b.kind, fallback: b.fallback ?? 'cloud', onError: b.onError ?? 'keep_input' })),
   };
 }

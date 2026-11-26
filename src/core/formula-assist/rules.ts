@@ -1,14 +1,20 @@
 /**
  * Rule-based requests, tried before any model (docs/07: deterministic first).
  *  1. Sums, differences, products, quotients and percentages of the values typed on a screen
- *     ("total amount minus amount paid"). Every operand must match exactly one number field.
+ *     ("total amount minus amount paid"), or of the stored number fields of an app that has no typed
+ *     values on the screen ("remaining as total minus paid" gives sum(orders.total) - sum(orders.paid)).
+ *     Every operand must match exactly one number field.
  *  2. Everyday count, total, average, lowest and highest questions about a collection, with today,
  *     this month and choice filters. That is the App Assistant's own planner, reused as it is.
- * Anything left over after matching hands the request to the model instead of being dropped.
+ * The rule that keeps it honest: every word must be accounted for. Anything left over (an extra
+ * qualifier, a percentage of something else, a word the rules do not know) hands the request to the
+ * model instead of being dropped.
  */
 import { namesOf, planFormula, stems, words } from '../assistant';
 import type { KalamSpec } from '../spec/schema';
 import type { AssistScope, NamedField } from './scope';
+
+export { unsupportedPeriod } from './period';
 
 const LEAD = new Set(stems(
   'calculate compute work out find get give me show tell what whats is are the a an my please can you how much many',
@@ -16,32 +22,50 @@ const LEAD = new Set(stems(
 /** Words that end the name of the result: "calculate the remaining balance AS total minus paid". */
 const CONNECTOR = new Set(stems('as is equals equal be by'));
 
+/** A decimal point is swapped for this letter so "1.5" stays one word (words() would split it). */
+const DEC = 'ǂ';
+const NUM = new RegExp(`^\\d+(?:${DEC}\\d+)?$`);
+const plain = (t: string): string => t.replace(DEC, '.');
+
+/** The request as plain words: decimals stay whole, and "%" or "per cent" become the word "percent". */
+const normalise = (request: string): string =>
+  words(
+    request.toLowerCase()
+      .replace(/(\d)\.(?=\d)/g, `$1${DEC}`)
+      .replace(/\bper\s+cent\b/g, ' percent ')
+      .replace(/%/g, ' percent '),
+  ).join(' ');
+
 type Op = '+' | '-' | '*' | '/';
-const PATTERNS: ReadonlyArray<{ re: RegExp; op: Op; swap?: boolean }> = [
-  { re: /\bsubtract(?:ing|ed)? (.+?) from (.+)$/, op: '-', swap: true },
-  { re: /\bmultipl(?:y|ying|ied) (.+?) (?:by|and|with) (.+)$/, op: '*' },
-  { re: /\bdivid(?:e|ing|ed) (.+?) by (.+)$/, op: '/' },
-  { re: /\badd(?:ing)? (.+?) (?:and|to) (.+)$/, op: '+' },
+/** `prefixed` patterns may have words before the operator phrase ("calculate the balance by subtracting ..."). */
+const PATTERNS: ReadonlyArray<{ re: RegExp; op: Op; swap?: boolean; prefixed?: boolean }> = [
+  { re: /^(.*?)\bsubtract(?:ing|ed)? (.+?) from (.+)$/, op: '-', swap: true, prefixed: true },
+  { re: /^(.*?)\bmultipl(?:y|ying|ied) (.+?) (?:by|and|with) (.+)$/, op: '*', prefixed: true },
+  { re: /^(.*?)\bdivid(?:e|ing|ed) (.+?) by (.+)$/, op: '/', prefixed: true },
+  { re: /^(.*?)\badd(?:ing)? (.+?) (?:and|to) (.+)$/, op: '+', prefixed: true },
   { re: /^(.+?) (?:minus|less|take away|without) (.+)$/, op: '-' },
   { re: /^(.+?) (?:plus|added to) (.+)$/, op: '+' },
   { re: /^(.+?) (?:times|multiplied by) (.+)$/, op: '*' },
-  { re: /^(.+?) (?:divided by|over|per) (.+)$/, op: '/' },
+  // "over" is not here on purpose: "the amount over the budget" is a comparison, not a division.
+  { re: /^(.+?) (?:divided by|per) (.+)$/, op: '/' },
 ];
-const PERCENT = /(\d+(?:\.\d+)?)\s*(?:%|percent|per cent)\s+of\s+(.+)$/;
+const PERCENT_OF = new RegExp(`^(.*?)\\b(\\d+(?:${DEC}\\d+)?) percent of (.+)$`);
 
 const isNumeric = (f: NamedField): boolean =>
   f.type === 'number' || (f.type === 'enum' && !!f.options?.length && f.options.every((o) => o.trim() !== '' && Number.isFinite(Number(o))));
 
-/** A typed number field named by these tokens (exactly one), or a plain number. */
-function operand(tokens: string[], fields: NamedField[]): string | undefined {
-  if (!tokens.length) return undefined;
+/** One thing a request can name: a typed value or a stored number field, as the formula writes it. */
+interface Operand { expr: string; /** What it belongs to: `form`, or a collection id. A plain number has none. */ group: string; names: string[][] }
+
+/** A number, or the one operand named by these tokens. */
+function resolve(tokens: string[], cands: readonly Operand[]): Operand | undefined {
   const [first] = tokens;
-  if (tokens.length === 1 && first && /^\d+$/.test(first)) return first;
-  const names = (f: NamedField) => namesOf(f.label, f.id);
-  const within = fields.filter((f) => names(f).some((n) => tokens.every((t) => n.includes(t))));
-  if (within.length === 1) return `form.${(within[0] as NamedField).id}`;
-  const exact = fields.filter((f) => names(f).some((n) => n.length === tokens.length && n.every((t, i) => t === tokens[i])));
-  return exact.length === 1 ? `form.${(exact[0] as NamedField).id}` : undefined;
+  if (!first) return undefined;
+  if (tokens.length === 1 && NUM.test(first)) return { expr: plain(first), group: '', names: [] };
+  const within = cands.filter((c) => c.names.some((n) => tokens.every((t) => n.includes(t))));
+  if (within.length === 1) return within[0];
+  const exact = cands.filter((c) => c.names.some((n) => n.length === tokens.length && n.every((t, i) => t === tokens[i])));
+  return exact.length === 1 ? exact[0] : undefined;
 }
 
 /** Left side: drop the name of the result ("... as") and leading filler words. */
@@ -59,44 +83,60 @@ function right(phrase: string): string[] {
   while (t.length && LEAD.has(t[0] as string)) t.shift();
   return t;
 }
+/** Words before an operator phrase are fine when they are filler, or the name of the result ("remaining balance by"). */
+function prefixOk(before: string): boolean {
+  const t = stems(before);
+  while (t.length && LEAD.has(t[0] as string)) t.shift();
+  return !t.length || CONNECTOR.has(t[t.length - 1] as string);
+}
 
-export function planArithmetic(request: string, a: AssistScope): string | undefined {
-  const fields = Object.values(a.form).filter(isNumeric);
-  if (!fields.length) return undefined;
+const compatible = (x: Operand, y: Operand): boolean => !x.group || !y.group || x.group === y.group;
 
-  const pct = PERCENT.exec(request.toLowerCase());
-  if (pct?.[1] && pct[2]) {
-    const of = operand(right(words(pct[2]).join(' ')), fields);
-    if (of) return `round(${of} * ${pct[1]} / 100, 2)`;
+function plan(request: string, cands: readonly Operand[]): string | undefined {
+  const n = normalise(request);
+
+  // "18 percent of price before tax", with nothing but filler in front of it.
+  const pct = PERCENT_OF.exec(n);
+  if (pct?.[2] && pct[3] && !left(pct[1] ?? '').length) {
+    const of = resolve(right(pct[3]), cands);
+    if (of) return `round(${of.expr} * ${plain(pct[2])} / 100, 2)`;
   }
 
-  const n = words(request).join(' ');
-  for (const { re, op, swap } of PATTERNS) {
+  for (const { re, op, swap, prefixed } of PATTERNS) {
     const m = re.exec(n);
-    if (!m?.[1] || !m[2]) continue;
-    const [l, r] = swap ? [m[2], m[1]] : [m[1], m[2]];
-    const x = operand(swap ? right(l) : left(l), fields);
-    const y = operand(right(r), fields);
-    if (x && y) return op === '/' ? `round(${x} / ${y}, 2)` : `${x} ${op} ${y}`;
+    if (!m) continue;
+    const [before, a, b] = prefixed ? [m[1] ?? '', m[2], m[3]] : ['', m[1], m[2]];
+    if (!a || !b || !prefixOk(before)) continue;
+    const [l, r] = swap ? [b, a] : [a, b];
+    const x = resolve(swap ? right(l) : left(l), cands);
+    const tail = right(r);
+    // "total plus 18%": add or take off a percentage of the first value. Any other use of a percentage is not guessed.
+    if (tail.length === 2 && tail[1] === 'percent' && tail[0] && NUM.test(tail[0])) {
+      if (x?.group && (op === '+' || op === '-')) return `round(${x.expr} * (1 ${op} ${plain(tail[0])} / 100), 2)`;
+      continue;
+    }
+    const y = resolve(tail, cands);
+    if (x && y && compatible(x, y)) return op === '/' ? `round(${x.expr} / ${y.expr}, 2)` : `${x.expr} ${op} ${y.expr}`;
   }
   return undefined;
 }
 
-/** Words for periods a formula cannot express: it has `today` and the current month, nothing else. */
-const PERIOD = /\b(weeks?|weekly|weekdays?|years?|yearly|quarters?|yesterday|tomorrow|fortnight|(?:last|previous|prior|next|past) (?:month|\d+ days?))\b/;
+/** Arithmetic on the values typed on the screen. */
+export function planArithmetic(request: string, a: AssistScope): string | undefined {
+  const cands = Object.values(a.form).filter(isNumeric).map((f): Operand => ({ expr: `form.${f.id}`, group: 'form', names: namesOf(f.label, f.id) }));
+  return cands.length ? plan(request, cands) : undefined;
+}
 
-export function unsupportedPeriod(request: string, spec: KalamSpec): boolean {
-  const m = PERIOD.exec(words(request).join(' '));
-  if (!m?.[1]) return false;
-  // A field or collection that is itself called "Year" or "Week" is fine.
-  const named: string[] = [];
-  for (const [id, c] of Object.entries(spec.collections)) {
-    named.push(id, c.label ?? '');
-    for (const [fid, f] of Object.entries(c.fields)) named.push(fid, f.label);
-  }
-  for (const s of spec.screens) for (const c of s.children) if ('label' in c && typeof c.label === 'string') named.push(c.label);
-  const known = new Set(named.flatMap((x) => stems(x.replace(/_+/g, ' '))));
-  return !stems(m[1]).every((t) => known.has(t));
+/**
+ * Arithmetic on stored number fields of one collection, for a stat on a screen with nothing typed:
+ * "total minus paid" gives sum(orders.total) - sum(orders.paid).
+ */
+export function planStoredArithmetic(spec: KalamSpec, request: string, a: AssistScope): string | undefined {
+  if (Object.keys(a.form).length) return undefined;
+  const cands = Object.entries(spec.collections).flatMap(([cid, c]) =>
+    Object.entries(c.fields).filter(([, f]) => f.type === 'number')
+      .map(([fid, f]): Operand => ({ expr: `sum(${cid}.${fid})`, group: cid, names: namesOf(f.label, fid) })));
+  return cands.length > 1 ? plan(request, cands) : undefined;
 }
 
 /** The App Assistant's planner for collection questions, skipped when the app has no collections. */

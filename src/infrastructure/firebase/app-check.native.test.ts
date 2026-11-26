@@ -65,7 +65,8 @@ describe('App Check (Android): debug token in development builds', () => {
     const mod = await load();
     mod.setupAppCheck(fakeApp);
     expect(g.FIREBASE_APPCHECK_DEBUG_TOKEN).toBe('registered-debug-token');
-    expect(sdk.initializeAppCheck).toHaveBeenCalledWith(fakeApp, expect.objectContaining({ isTokenAutoRefreshEnabled: true }));
+    // Automatic refresh would exchange the debug token right away; the first cloud request asks instead.
+    expect(sdk.initializeAppCheck).toHaveBeenCalledWith(fakeApp, expect.objectContaining({ isTokenAutoRefreshEnabled: false }));
     expect(mod.appCheckStatus()).toEqual({ status: 'debug', detail: undefined });
     expect(JSON.stringify(mod.appCheckStatus())).not.toContain('registered-debug-token');
   });
@@ -76,23 +77,38 @@ describe('App Check (Android): debug token in development builds', () => {
     const mod = await load(native);
     mod.setupAppCheck(fakeApp);
     expect(g.FIREBASE_APPCHECK_DEBUG_TOKEN).toBeUndefined();
+    await providerGetToken()();
     expect(native.installPlayIntegrity).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('App Check (Android): Play Integrity through the native module', () => {
-  it('installs Play Integrity and stays pending (not active) until a real token arrives', async () => {
+  it('only registers when Firebase starts: no Play Integrity, no token, no automatic refresh', async () => {
     const native = fakeNano();
     const mod = await load(native);
     mod.setupAppCheck(fakeApp);
     expect(native.configure).toHaveBeenCalledWith({ apiKey: 'test-api-key', projectId: 'test-project', appId: '1:123:android:def' });
-    expect(native.installPlayIntegrity).toHaveBeenCalledTimes(1);
     expect(sdk.initializeAppCheck).toHaveBeenCalledTimes(1);
+    expect(sdk.initializeAppCheck).toHaveBeenCalledWith(fakeApp, expect.objectContaining({ isTokenAutoRefreshEnabled: false }));
+    expect(native.installPlayIntegrity).not.toHaveBeenCalled();
+    expect(native.getAppCheckToken).not.toHaveBeenCalled();
+    expect(sdk.getToken).not.toHaveBeenCalled();
     expect(mod.appCheckStatus()).toEqual({ status: 'not_configured', detail: undefined });
+  });
 
+  it('installs Play Integrity once, on the first token request, and reports active only after a real token', async () => {
+    const native = fakeNano();
+    const mod = await load(native);
+    mod.setupAppCheck(fakeApp);
     expect(await providerGetToken()()).toEqual({ token: 'play-integrity-token', expireTimeMillis: 1_900_000_000_000 });
+    expect(native.installPlayIntegrity).toHaveBeenCalledTimes(1);
+    expect(native.installPlayIntegrity.mock.invocationCallOrder[0]).toBeLessThan(native.getAppCheckToken.mock.invocationCallOrder[0]!);
     expect(native.getAppCheckToken).toHaveBeenCalledWith(false);
     expect(mod.appCheckStatus()).toEqual({ status: 'active', detail: undefined });
+
+    await providerGetToken()();
+    expect(native.installPlayIntegrity).toHaveBeenCalledTimes(1);
+    expect(native.getAppCheckToken).toHaveBeenCalledTimes(2);
   });
 
   it('reports error with the reason when Play Integrity gives no token, and passes the failure to the SDK', async () => {
@@ -123,12 +139,17 @@ describe('App Check (Android): Play Integrity through the native module', () => 
     expect(sdk.initializeAppCheck).not.toHaveBeenCalled();
   });
 
-  it('reports a native start-up failure as error without throwing', async () => {
+  it('reports a native start-up failure as error, and tries the install again on the next request', async () => {
     const native = fakeNano();
-    native.installPlayIntegrity.mockImplementation(() => { throw new Error('FirebaseApp kalam not initialised'); });
+    native.installPlayIntegrity.mockImplementationOnce(() => { throw new Error('FirebaseApp kalam not initialised'); });
     const mod = await load(native);
     expect(() => mod.setupAppCheck(fakeApp)).not.toThrow();
-    expect(mod.appCheckStatus()).toEqual({ status: 'error', detail: 'FirebaseApp kalam not initialised' });
+    await expect(providerGetToken()()).rejects.toThrow('FirebaseApp kalam not initialised');
+    expect(native.getAppCheckToken).not.toHaveBeenCalled();
+    expect(mod.appCheckStatus()).toEqual({ status: 'error', detail: 'Play Integrity gave no token: FirebaseApp kalam not initialised' });
+    await providerGetToken()();
+    expect(native.installPlayIntegrity).toHaveBeenCalledTimes(2);
+    expect(mod.appCheckStatus().status).toBe('active');
   });
 });
 

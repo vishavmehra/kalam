@@ -3,7 +3,7 @@ export { describeSpecChanges, describeActionText } from './describe';
 export { describePatch } from './patch';
 export { summarizeChanges } from './summary';
 export { colourName } from './colour';
-export { describeFormula, describeCondition } from './formula-text';
+export { describeFormula, describeCondition, type FormulaNames } from './formula-text';
 export {
   buildTimeline, categorizeVersion, diffVersions, filterTimeline, originOf,
   type TimelineDay, type TimelineEntry, type TimelineOptions, type VersionEvent, type VersionOrigin,

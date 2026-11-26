@@ -1,0 +1,125 @@
+{
+  "kind": "provider-comparison",
+  "record": {
+    "task": "summarize",
+    "platform": "web",
+    "model": "gemini-3.5-flash-lite (Firebase AI Logic, cloud)",
+    "date": "2026-11-26",
+    "cases": 20,
+    "schemaValid": 20,
+    "correct": 18,
+    "hallucinated": 0,
+    "p95LatencyMs": 12351,
+    "evidence": "docs/evidence/provider-summarize-cloud-2026-11-26.json"
+  },
+  "verdict": {
+    "status": "unproven",
+    "reasons": [
+      "offline run not checked"
+    ]
+  },
+  "outcomes": [
+    {
+      "id": "s01",
+      "outcome": "right",
+      "ms": 2639
+    },
+    {
+      "id": "s02",
+      "outcome": "right",
+      "ms": 2861
+    },
+    {
+      "id": "s03",
+      "outcome": "right",
+      "ms": 18573
+    },
+    {
+      "id": "s04",
+      "outcome": "right",
+      "ms": 1312
+    },
+    {
+      "id": "s05",
+      "outcome": "right",
+      "ms": 1600
+    },
+    {
+      "id": "s06",
+      "outcome": "right",
+      "ms": 12351
+    },
+    {
+      "id": "s07",
+      "outcome": "right",
+      "ms": 1489
+    },
+    {
+      "id": "s08",
+      "outcome": "right",
+      "ms": 1349
+    },
+    {
+      "id": "s09",
+      "outcome": "right",
+      "ms": 1483
+    },
+    {
+      "id": "s10",
+      "outcome": "right",
+      "ms": 1631
+    },
+    {
+      "id": "s11",
+      "outcome": "right",
+      "ms": 1356
+    },
+    {
+      "id": "s12",
+      "outcome": "right",
+      "ms": 1288
+    },
+    {
+      "id": "s13",
+      "outcome": "wrong",
+      "ms": 1461
+    },
+    {
+      "id": "s14",
+      "outcome": "right",
+      "ms": 1620
+    },
+    {
+      "id": "s15",
+      "outcome": "right",
+      "ms": 1585
+    },
+    {
+      "id": "s16",
+      "outcome": "right",
+      "ms": 5861
+    },
+    {
+      "id": "s17",
+      "outcome": "right",
+      "ms": 3594
+    },
+    {
+      "id": "s18",
+      "outcome": "right",
+      "ms": 1735
+    },
+    {
+      "id": "s19",
+      "outcome": "right",
+      "ms": 1792
+    },
+    {
+      "id": "s20",
+      "outcome": "wrong",
+      "ms": 7446
+    }
+  ],
+  "modelRequests": 20,
+  "note": "Cloud run of the same cases the device model was asked. Not a record for LOCAL_EVIDENCE."
+}

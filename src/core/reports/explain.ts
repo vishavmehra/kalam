@@ -1,8 +1,10 @@
 /**
  * Optional plain-language explanation of a computed report (docs/14 §7.3 step 7, §7.6).
- * Goes through the central orchestrator: Gemini Nano first, with the single Firebase cloud fallback
- * of lead decision 2. The prompt holds only the computed aggregates (labels and numbers). The
- * output is Zod-checked, kept short, and may not state any number that is not in the aggregates.
+ * Goes through the central orchestrator: Gemini Nano first. The single Firebase cloud fallback of
+ * lead decision 2 runs only when the caller allows it, and the UI allows it only after the person
+ * asks for Gemini online (docs/14 §7.6 consent). The prompt holds only the computed aggregates
+ * (labels and numbers). The output is Zod-checked, kept short, and may not state any number that
+ * is not in the aggregates.
  * The deterministic sentence is always the fallback, and is what shows offline.
  */
 import { z } from 'zod';
@@ -10,6 +12,7 @@ import { z } from 'zod';
 import { sanitizeJsonSchema } from '../ai/json-schema';
 import { wrapUntrusted } from '../compiler/prompt';
 import type { AIOrchestrator, InferenceSource, StructuredRequest } from '../contracts';
+import { unitWord } from './copy';
 import { formatValue, plainExplanation } from './describe';
 import type { ReportResult } from './engine';
 
@@ -20,11 +23,16 @@ export interface ReportExplanation {
   plain: boolean;
   model?: string;
   eventId?: string;
+  /**
+   * Set on a plain answer from an on-device-only run when Gemini online could have written it.
+   * The UI may then offer to ask online; the cloud is never used without that second, explicit step.
+   */
+  cloudOffer?: boolean;
 }
 
 export interface ExplainContext {
   appId?: string;
-  /** Never fall back to the cloud. */
+  /** Never fall back to the cloud. The UI sets this until the person asks for Gemini online. */
   onDeviceOnly?: boolean;
   signal?: AbortSignal;
 }
@@ -68,7 +76,7 @@ export function aggregatesText(r: ReportResult): string {
     const c = r.comparison;
     lines.push(`Earlier period ${c.range}: ${formatValue(c.previous, r.metrics[0], 'en')}. Change: ${c.percent === null ? 'none to compare with' : `${c.percent}%`}`);
   }
-  if (r.trend) lines.push(`Trend: ${r.trend}`);
+  if (r.trend && r.unit) lines.push(`Trend over finished ${unitWord(r.unit, 2)}: ${r.trend}`);
   return lines.join('\n');
 }
 
@@ -93,10 +101,12 @@ export async function explainReport(ai: AIOrchestrator, r: ReportResult, ctx: Ex
   // Skip the model when none can answer: no Nano here, and no way to the cloud.
   const status = await ai.status().catch(() => undefined);
   const device = status?.onDevice.availability === 'available';
-  const cloud = !ctx.onDeviceOnly && !!status?.online && !!status.cloudConfigured;
+  const reachable = !!status?.online && !!status.cloudConfigured;
+  const cloud = !ctx.onDeviceOnly && reachable;
+  const fallback: ReportExplanation = ctx.onDeviceOnly && reachable ? { ...plain, cloudOffer: true } : plain;
   if (!device && !cloud) {
     await noteDeterministic(ai, ctx.appId, status?.online === false ? 'offline, plain sentence' : 'no model available, plain sentence', started);
-    return plain;
+    return fallback;
   }
 
   const prompt = wrapUntrusted('report', aggregatesText(r), 4000);
@@ -116,8 +126,8 @@ export async function explainReport(ai: AIOrchestrator, r: ReportResult, ctx: Ex
   try {
     const res = await ai.run(req, { taskType: 'summarize', appId: ctx.appId, complexity: 'simple' });
     if (res.success && res.output) return { text: res.output, source: res.source, plain: false, model: res.model, eventId: res.eventId };
-    return { ...plain, eventId: res.eventId }; // the orchestrator already recorded the failed run
+    return { ...fallback, eventId: res.eventId }; // the orchestrator already recorded the failed run
   } catch {
-    return plain;
+    return fallback;
   }
 }

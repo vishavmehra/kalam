@@ -1,0 +1,60 @@
+# The Drawing Studio on a phone (docs/08 §22, docs/13 §13.1; checklist D08-040, D08-054): draw, see the objects counted,
+# save, hand the drawing to Create, and open it again from there. The canvas names itself to the accessibility
+# service ("Drawing canvas. Screen 1 of 1, Screen 1. Pen tool. 2 objects. ..."), so the object count is the parity
+# check with the web canvas: the same gestures must produce the same number of objects on Skia as on the web.
+appId: com.kalam.app
+name: Drawing studio
+---
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Your shelf.*"
+    timeout: 120000
+- tapOn: "(Create|Make)"
+- extendedWaitUntil:
+    visible: "Describe the app you want to create.*"
+    timeout: 30000
+- tapOn: "Draw.*"
+- tapOn: "Open Drawing Studio"
+- extendedWaitUntil:
+    visible: ".*Drawing canvas.*0 objects.*"
+    timeout: 60000
+- takeScreenshot: 18-studio-empty
+
+# A rectangle and a pen stroke.
+- tapOn: "Rectangle.*"
+- swipe:
+    start: 30%, 30%
+    end: 70%, 45%
+    duration: 600
+- assertVisible: ".*Drawing canvas.*1 object.*"
+- tapOn: "Pen.*"
+- swipe:
+    start: 25%, 60%
+    end: 75%, 62%
+    duration: 600
+- assertVisible: ".*Drawing canvas.*2 objects.*"
+- takeScreenshot: 19-studio-drawn
+
+# Undo and redo.
+- tapOn: "Undo.*"
+- assertVisible: ".*Drawing canvas.*1 object.*"
+- tapOn: "Redo.*"
+- assertVisible: ".*Drawing canvas.*2 objects.*"
+
+# Save, use the drawing, come back to it through Create.
+- tapOn: "Save now.*"
+- extendedWaitUntil:
+    visible: "Saved"
+    timeout: 15000
+- tapOn: "Use this drawing"
+- extendedWaitUntil:
+    visible: "Continue drawing"
+    timeout: 30000
+- takeScreenshot: 20-create-with-drawing
+- tapOn: "Continue drawing"
+- extendedWaitUntil:
+    visible: ".*Drawing canvas.*2 objects.*"
+    timeout: 60000
+- takeScreenshot: 21-studio-reopened
+- runFlow: ../common/pause.yaml

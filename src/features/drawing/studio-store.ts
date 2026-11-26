@@ -9,19 +9,21 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { DrawingDocument, DrawingElement, DrawingPage, DrawingPoint } from '@/core/contracts';
 import {
-  addElement, addPage, canAddElements, canRedo, canUndo, clearPage, commit, createDocument, createHistory,
-  duplicateElements, duplicatePage, elementsInRect, eraseSweep, hitHandle, hitTest, INK_COLORS,
+  addElement, addElements, addPage, canAddElements, canGroup, canRedo, canUndo, canUngroup, clearPage, commit, createDocument,
+  createHistory, dropOrphanGroups, duplicateElements, duplicatePage, elementsInRectFast, eraseSweep, expandToGroups, groupElements,
+  hitHandle, hitTestFast, INK_COLORS,
   constrainDrag, lockAspect, movePage, newId, normalizeBox, PAGE_HEIGHT, PAGE_OBJECT_CAP, PAGE_WIDTH, pasteElements, pickElements,
   pointerAngle, redo, removeElements, removePage, renamePage, reorderElements, replaceElements, resizeElements,
   rotateDrag, rotateElements, scaleSelection, selectionFrame, setFlags, setPageBackground, setPageElements,
-  setTitle, STAMPS, translateElement, undo, updateElements,
-  type Bounds, type DrawingHint, type Frame, type History, type HandleId, type PageBackground, type ReorderMode,
+  setTitle, STAMPS, translateElement, undo, ungroupElements, updateElements, withProperties,
+  type Bounds, type DrawingHint, type Frame, type History, type HandleId, type PageBackground, type PropertyPatch, type ReorderMode,
   type ResizeHandle, type StampComponent,
 } from './model';
 import { clamp, currentPage, fitView } from './studio-view';
 
 export {
-  canvasLabel, currentPage, describeElement, selectBase, selectChrome, selectLive, selectOverlay, selectPrimitives, TOOL_LABELS, toDocPoint,
+  canvasLabel, currentPage, describeElement, describeInPage, selectBase, selectBaseVisible, selectChrome, selectLive, selectOverlay,
+  selectPointerState, selectPrimitives, TOOL_LABELS, toDocPoint,
 } from './studio-view';
 
 export type Tool =
@@ -36,12 +38,18 @@ export const COLOR_NAMES: Readonly<Record<string, string>> = Object.fromEntries(
 export const SIZES = [2, 4, 8, 14] as const;
 export const isInkTool = (t: Tool) => t === 'pen' || t === 'marker' || t === 'highlighter';
 
-export type Gesture =
+/** Gestures that act on the drawing, in document space. */
+export type ToolGesture =
   | { kind: 'draw' | 'erase' | 'shape'; origin: DrawingPoint; last: DrawingPoint }
   | { kind: 'move'; origin: DrawingPoint; last: DrawingPoint; start: readonly DrawingElement[]; key?: string; warned?: boolean }
   | { kind: 'marquee'; origin: DrawingPoint; last: DrawingPoint; base: readonly string[] }
   | { kind: 'resize'; origin: DrawingPoint; last: DrawingPoint; handle: ResizeHandle; start: readonly DrawingElement[]; frame: Frame; keepAspect: boolean }
   | { kind: 'rotate'; origin: DrawingPoint; last: DrawingPoint; start: readonly DrawingElement[]; frame: Frame; angle0: number };
+/** Gestures that move the view, in screen space (docs/08 §8.2 PANNING). `dist` is 0 where the platform gives no finger positions. */
+export type ViewGesture =
+  | { kind: 'pan'; last: { x: number; y: number } }
+  | { kind: 'pinch'; cx: number; cy: number; dist: number };
+export type Gesture = ToolGesture | ViewGesture;
 
 export interface PlacedImage { blobId: string; width: number; height: number; alt?: string }
 
@@ -111,7 +119,22 @@ export interface StudioState {
   nudgeSelected(dx: number, dy: number): void;
   scaleSelected(factor: number): void;
   rotateSelectedBy(deg: number): void;
-  updateSelected(patch: { color?: string; size?: number; label?: string; text?: string; alt?: string }): void;
+  updateSelected(patch: { color?: string; size?: number; label?: string; text?: string; alt?: string } & PropertyPatch): void;
+  /** Puts the selected objects in one group, or lets a group go (docs/08 §10.3). */
+  groupSelected(): void;
+  ungroupSelected(): void;
+  /** Adds objects brought in from a file (docs/08 §14.4) as one step and selects them. Returns how many fit. */
+  importElements(els: readonly DrawingElement[]): number;
+  /** Swaps handwriting for typed text in one undoable step, after the person has confirmed the words. */
+  replaceWithText(ids: readonly string[], text: string, at: { x: number; y: number; fontSize: number; color: string }): void;
+  /** Screen-space view gestures: one finger or the space bar to pan, two fingers to pinch. */
+  beginPan(x: number, y: number): void;
+  panTo(x: number, y: number): void;
+  beginPinch(cx: number, cy: number, dist?: number): void;
+  pinchTo(cx: number, cy: number, dist: number): void;
+  /** Pinch where the platform reports a scale change instead of finger positions (Android). */
+  zoomPinch(factor: number, cx: number, cy: number): void;
+  endView(): void;
   placeImage(img: PlacedImage): void;
   /** Adds a shape or label in the middle of the page without dragging (docs/10 §10.3). */
   insertShape(kind: 'rect' | 'ellipse' | 'line' | 'arrow' | 'text'): void;
@@ -235,6 +258,8 @@ export function createStudioStore(initial: DrawingDocument = createDocument()): 
 
       pointerDown: (p, opts) => {
         const s = get();
+        // A pan or pinch owns the pointers until it ends (docs/08 §8.6).
+        if (s.gesture?.kind === 'pan' || s.gesture?.kind === 'pinch') return;
         if (s.textEdit) s.commitTextEdit();
         const origin = { origin: p, last: p };
         const onPage = p.x >= 0 && p.y >= 0 && p.x <= PAGE_WIDTH && p.y <= PAGE_HEIGHT;
@@ -275,7 +300,7 @@ export function createStudioStore(initial: DrawingDocument = createDocument()): 
             return;
           }
           case 'text': {
-            const hit = hitTest(page(), p);
+            const hit = hitTestFast(page(), p);
             const existing = hit ? page().elements.find((e) => e.id === hit) : undefined;
             if (existing?.kind === 'text') {
               if (existing.locked) { notify('That text is locked. Unlock it to change it.'); return; }
@@ -298,15 +323,17 @@ export function createStudioStore(initial: DrawingDocument = createDocument()): 
               });
               return;
             }
-            const hitId = hitTest(page(), p, 8 / s.view.scale);
+            const hitId = hitTestFast(page(), p, 8 / s.view.scale);
             const additive = !!opts?.additive || s.multiSelect;
             if (hitId) {
+              // Picking one member of a group picks the whole group (docs/08 §10.3).
+              const members = expandToGroups(page(), [hitId]);
               let ids = s.selectedIds;
               if (additive) {
-                if (ids.includes(hitId)) { set({ selectedIds: ids.filter((i) => i !== hitId) }); return; }
-                ids = [...ids, hitId];
+                if (ids.includes(hitId)) { const gone = new Set(members); set({ selectedIds: ids.filter((i) => !gone.has(i)) }); return; }
+                ids = [...ids, ...members.filter((m) => !ids.includes(m))];
               } else if (!ids.includes(hitId)) {
-                ids = [hitId];
+                ids = members;
               }
               const idSet = new Set(ids);
               const start = page().elements.filter((e) => idSet.has(e.id) && !e.locked);
@@ -322,7 +349,7 @@ export function createStudioStore(initial: DrawingDocument = createDocument()): 
       pointerMove: (p, opts) => {
         const s = get();
         const g = s.gesture;
-        if (!g) return;
+        if (!g || g.kind === 'pan' || g.kind === 'pinch') return;
         if (Math.hypot(p.x - g.last.x, p.y - g.last.y) < 0.6 / s.view.scale) return;
         switch (g.kind) {
           case 'draw':
@@ -351,7 +378,7 @@ export function createStudioStore(initial: DrawingDocument = createDocument()): 
           }
           case 'marquee': {
             const rect = rectOf(g.origin, p);
-            const hits = elementsInRect(page(), rect);
+            const hits = expandToGroups(page(), elementsInRectFast(page(), rect));
             const ids = [...g.base, ...hits.filter((id) => !g.base.includes(id))];
             set({ gesture: { ...g, last: p }, marquee: rect, ...(sameIds(ids, s.selectedIds) ? {} : { selectedIds: ids }) });
             return;
@@ -368,6 +395,7 @@ export function createStudioStore(initial: DrawingDocument = createDocument()): 
         const s = get();
         const g = s.gesture;
         if (!g) return;
+        if (g.kind === 'pan' || g.kind === 'pinch') { clearGesture(); return; }
         let doc = s.history.present;
         let key: string | undefined;
         if (g.kind === 'draw' && s.draft) {
@@ -387,7 +415,12 @@ export function createStudioStore(initial: DrawingDocument = createDocument()): 
         apply(doc, key);
       },
 
-      cancelPointer: () => clearGesture(),
+      // A pan or pinch ends only through `endView`, so a stroke cancelled by a second finger cannot clear the pinch that cancelled it.
+      cancelPointer: () => {
+        const k = get().gesture?.kind;
+        if (k === 'pan' || k === 'pinch') return;
+        clearGesture();
+      },
 
       handleAt: (p) => {
         const s = get();
@@ -417,8 +450,12 @@ export function createStudioStore(initial: DrawingDocument = createDocument()): 
       },
       cancelTextEdit: () => set({ textEdit: undefined }),
 
-      select: (ids) => set({ selectedIds: ids }),
-      toggleSelect: (id) => set((s) => ({ selectedIds: s.selectedIds.includes(id) ? s.selectedIds.filter((i) => i !== id) : [...s.selectedIds, id] })),
+      select: (ids) => set({ selectedIds: expandToGroups(page(), ids) }),
+      toggleSelect: (id) => set((s) => {
+        const members = expandToGroups(currentPage(s), [id]);
+        const gone = new Set(members);
+        return { selectedIds: s.selectedIds.includes(id) ? s.selectedIds.filter((i) => !gone.has(i)) : [...s.selectedIds, ...members.filter((m) => !s.selectedIds.includes(m))] };
+      }),
       selectAll: () => set({ selectedIds: page().elements.filter((e) => !e.hidden && !e.locked).map((e) => e.id) }),
       clearSelection: () => set({ selectedIds: [] }),
       setMultiSelect: (multiSelect) => set({ multiSelect }),
@@ -480,11 +517,11 @@ export function createStudioStore(initial: DrawingDocument = createDocument()): 
       },
       toggleLocked: (id) => {
         const el = page().elements.find((e) => e.id === id);
-        if (el) get().setLocked(!el.locked, [id]);
+        if (el) get().setLocked(!el.locked, expandToGroups(page(), [id]));
       },
       toggleHidden: (id) => {
         const el = page().elements.find((e) => e.id === id);
-        if (el) get().setHidden(!el.hidden, [id]);
+        if (el) get().setHidden(!el.hidden, expandToGroups(page(), [id]));
       },
       setHint: (hint) => {
         const ids = new Set(get().selectedIds);
@@ -502,18 +539,22 @@ export function createStudioStore(initial: DrawingDocument = createDocument()): 
         if (ids.size === 0) return;
         const s = get();
         const text = patch.label !== undefined || patch.text !== undefined || patch.alt !== undefined;
+        const props: PropertyPatch = { fill: patch.fill, radius: patch.radius, headSize: patch.headSize, font: patch.font, bold: patch.bold };
         apply(updateElements(s.history.present, s.pageId, ids, (el) => {
-          switch (el.kind) {
-            case 'stamp': return patch.label !== undefined ? { ...el, label: patch.label.slice(0, 60) } : el;
-            case 'image': return patch.alt !== undefined ? { ...el, alt: patch.alt.slice(0, 200) } : el;
-            case 'text': return {
-              ...el,
-              ...(patch.color ? { color: patch.color } : {}),
-              ...(patch.size ? { fontSize: fontSizeFor(patch.size) } : {}),
-              ...(patch.text !== undefined ? { text: patch.text } : {}),
-            };
-            default: return { ...el, ...(patch.color ? { color: patch.color } : {}), ...(patch.size ? { size: patch.size } : {}) };
-          }
+          const base = (() => {
+            switch (el.kind) {
+              case 'stamp': return patch.label !== undefined ? { ...el, label: patch.label.slice(0, 60) } : el;
+              case 'image': return patch.alt !== undefined ? { ...el, alt: patch.alt.slice(0, 200) } : el;
+              case 'text': return {
+                ...el,
+                ...(patch.color ? { color: patch.color } : {}),
+                ...(patch.size ? { fontSize: fontSizeFor(patch.size) } : {}),
+                ...(patch.text !== undefined ? { text: patch.text } : {}),
+              };
+              default: return { ...el, ...(patch.color ? { color: patch.color } : {}), ...(patch.size ? { size: patch.size } : {}) };
+            }
+          })();
+          return withProperties(base, props);
         }), text ? `edit:${[...ids].join(',')}` : undefined);
       },
       insertShape: (kind) => {
@@ -541,6 +582,69 @@ export function createStudioStore(initial: DrawingDocument = createDocument()): 
         apply(addElement(s.history.present, s.pageId, el));
         set({ selectedIds: [el.id], tool: 'select' });
       },
+
+      groupSelected: () => {
+        const s = get();
+        const sel = selectedEls();
+        if (!canGroup(sel)) { notify(sel.length < 2 ? 'Select two or more objects to group them.' : 'Those objects are already one group, or are locked.'); return; }
+        const res = groupElements(s.history.present, s.pageId, new Set(sel.map((e) => e.id)));
+        if (res.doc === s.history.present) return;
+        apply(res.doc);
+        const n = sel.filter((e) => !e.locked).length;
+        notify(`Grouped ${n} objects. They move, resize, lock and hide together.`);
+      },
+      ungroupSelected: () => {
+        const s = get();
+        const sel = selectedEls();
+        if (!canUngroup(sel)) {
+          notify(sel.some((e) => e.locked && e.groupId) ? 'Unlock the group first, then ungroup it.' : 'Nothing selected is in a group.');
+          return;
+        }
+        apply(ungroupElements(s.history.present, s.pageId, new Set(sel.map((e) => e.id))));
+        notify('Ungrouped. Each object can be moved on its own again.');
+      },
+      importElements: (els) => {
+        const s = get();
+        if (els.length === 0) return 0;
+        const room = PAGE_OBJECT_CAP - page().elements.length;
+        if (room <= 0) { notify(capMessage()); return 0; }
+        const fit = els.slice(0, room);
+        apply(addElements(s.history.present, s.pageId, [...dropOrphanGroups(fit)]));
+        set({ selectedIds: fit.map((e) => e.id), tool: 'select' });
+        if (fit.length < els.length) notify(`Only ${fit.length} of ${els.length} objects fit on this screen.`);
+        return fit.length;
+      },
+      replaceWithText: (ids, text, at) => {
+        const s = get();
+        const gone = new Set(ids);
+        const clean = text.replace(/\s+$/, '');
+        if (!clean || gone.size === 0) return;
+        const el: DrawingElement = { id: newId('el'), kind: 'text', x: at.x, y: at.y, text: clean, color: at.color, fontSize: at.fontSize };
+        const without = removeElements(s.history.present, s.pageId, gone);
+        apply(addElement(without, s.pageId, el));
+        set({ selectedIds: [el.id], tool: 'select' });
+      },
+
+      beginPan: (x, y) => { clearGesture(); set({ gesture: { kind: 'pan', last: { x, y } } }); },
+      panTo: (x, y) => {
+        const g = get().gesture;
+        if (g?.kind !== 'pan') return;
+        get().panBy(x - g.last.x, y - g.last.y);
+        set({ gesture: { kind: 'pan', last: { x, y } } });
+      },
+      beginPinch: (cx, cy, dist = 0) => { clearGesture(); set({ gesture: { kind: 'pinch', cx, cy, dist } }); },
+      pinchTo: (cx, cy, dist) => {
+        const g = get().gesture;
+        if (g?.kind !== 'pinch') return;
+        get().panBy(cx - g.cx, cy - g.cy);
+        if (g.dist > 0 && dist > 0) get().zoomBy(dist / g.dist, cx, cy);
+        set({ gesture: { kind: 'pinch', cx, cy, dist } });
+      },
+      zoomPinch: (factor, cx, cy) => {
+        if (get().gesture?.kind !== 'pinch') { clearGesture(); set({ gesture: { kind: 'pinch', cx, cy, dist: 0 } }); }
+        get().zoomBy(factor, cx, cy);
+      },
+      endView: () => { const k = get().gesture?.kind; if (k === 'pan' || k === 'pinch') set({ gesture: undefined }); },
 
       selectPage: (pageId) => { get().commitTextEdit(); set({ pageId }); resetTransient(); },
       addPage: () => {

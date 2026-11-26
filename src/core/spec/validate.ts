@@ -6,15 +6,21 @@
  */
 import type { FormulaScope, SpecIssue, ValidationResult } from '../contracts';
 import { formulaDependencies, validateFormula } from '../formula';
+import { limitsPolicy } from '../limits/policy';
+import { timings } from '../observability';
+import { V11_MESSAGES } from './copy';
 import {
   INPUT_COMPONENT_TYPES, LIMITS, RESERVED_IDS, SCHEMA_VERSION, kalamSpecSchema,
   type KalamComponent, type KalamFieldType, type KalamSpec,
 } from './schema';
+import { usesV11 } from './v11';
+import { checkV11, v11CollectionsUsed } from './validate-v11';
+import { checkQuality } from './validate-quality';
 
 type Path = ReadonlyArray<PropertyKey>;
 /** A spec is at most 100 KB of UTF-8 JSON (docs/11 §11.1, ADR-024). Same cap as a Bazaar listing. */
-export const MAX_SPEC_BYTES = 100_000;
-const MAX_DEPTH = 24;
+export const MAX_SPEC_BYTES = limitsPolicy.spec.specBytes;
+const MAX_DEPTH = limitsPolicy.spec.nestingDepth;
 /** UTF-16 length is a floor for UTF-8 bytes (one unit is at least one byte), so a long string is too large without encoding it. */
 const tooLarge = (text: string): boolean => text.length > MAX_SPEC_BYTES || new TextEncoder().encode(text).length > MAX_SPEC_BYTES;
 const LONG_LABEL = 48;
@@ -168,7 +174,8 @@ function buildIndex(spec: KalamSpec, issues: Issues): Index {
       if (components.has(c.id)) {
         issues.error('DUPLICATE_ID', ['screens', si, 'children', ci, 'id'], `Component id "${c.id}" is used twice.`);
       } else components.set(c.id, { screen: si, child: ci, component: c });
-      if (INPUT_TYPES.has(c.type) || c.type === 'counter') {
+      // v1.1: a timer and a signature also write into the screen form.
+      if (INPUT_TYPES.has(c.type) || c.type === 'counter' || c.type === 'timer' || c.type === 'signature' || c.type === 'photo') {
         const f = (c as { field?: string }).field;
         if (f) fields.add(f);
       }
@@ -227,6 +234,18 @@ function checkActions(spec: KalamSpec, ix: Index, issues: Issues): void {
           issues.error('UNKNOWN_AI_BLOCK', [...base, 'aiBlock'], `AI block "${action.aiBlock}" does not exist.`);
         }
         break;
+      case 'compute': {
+        // v1.1: the same formula language and checks as a stat. `form.<x>` may name any form field of the app.
+        const scope: FormulaScope = {
+          collections: Object.fromEntries(Object.entries(spec.collections).map(([cid, c]) => [cid, Object.keys(c.fields)])),
+          formFields: [...ix.allFormFields], stateKeys: ix.counterIds,
+        };
+        for (const msg of validateFormula(action.formula, scope)) issues.error('INVALID_FORMULA', [...base, 'formula'], msg);
+        if (!ix.counterIds.includes(action.target) && !ix.allFormFields.has(action.target)) {
+          issues.error('UNKNOWN_TARGET', [...base, 'target'], `"${action.target}" is not a counter or a form field.`);
+        }
+        break;
+      }
       default: break;
     }
     if ('then' in action && action.then?.navigate) screenExists(action.then.navigate, [...base, 'then', 'navigate']);
@@ -309,7 +328,10 @@ function checkComponents(spec: KalamSpec, ix: Index, issues: Issues): void {
           if ((action.type === 'update' || action.type === 'delete') && !detailScreens.has(screen.id)) {
             issues.warn('NO_SELECTED_RECORD', [...cp, 'action'], 'This button changes a selected record, but no list opens this screen.');
           }
-          if (action.type === 'insert' && screen.form && screen.form !== action.collection) {
+          // A one-tap add on a parent's page ("Done today" on a habit) is linked to the opened parent by the runtime.
+          const linksToForm = Object.values(get(spec.collections, action.type === 'insert' ? action.collection : '')?.fields ?? {})
+            .some((f) => f.type === 'text' && f.ref?.collection === screen.form);
+          if (action.type === 'insert' && screen.form && screen.form !== action.collection && !linksToForm) {
             issues.warn('FORM_MISMATCH', [...cp, 'action'], `This screen's form is "${screen.form}" but the button saves to "${action.collection}".`);
           }
           break;
@@ -398,13 +420,21 @@ function checkUnusedCollections(spec: KalamSpec, issues: Issues): void {
   }
   for (const a of Object.values(spec.actions)) if ('collection' in a) used.add(a.collection);
   for (const b of Object.values(spec.aiBlocks)) if (b.kind === 'extractFromPhoto') used.add(b.target);
+  for (const id of v11CollectionsUsed(spec)) used.add(id);
   for (const id of Object.keys(spec.collections)) {
     if (!used.has(id)) issues.warn('UNUSED_COLLECTION', ['collections', id], `Nothing in the app uses "${get(spec.collections, id)?.label ?? id}".`);
   }
 }
 
-/** Validates untrusted input (JSON text or object). Returns the parsed spec only when ok. */
+/** Validates untrusted input (JSON text or object). Returns the parsed spec only when ok. Timed with no content (docs/09 §22). */
 export function validateSpec(input: unknown): ValidationResult {
+  const run = timings.start('spec_validate');
+  const result = validateSpecUntimed(input);
+  run.stop({ ok: result.ok });
+  return result;
+}
+
+function validateSpecUntimed(input: unknown): ValidationResult {
   const issues = new Issues();
   let raw: unknown = input;
   if (typeof input === 'string') {
@@ -463,5 +493,15 @@ export function validateSpec(input: unknown): ValidationResult {
   checkComponents(spec, ix, issues);
   checkReachability(spec, ix, issues);
   checkUnusedCollections(spec, issues);
+  const reporter = { error: (c: string, p: Path, m: string) => issues.error(c, p, m), warn: (c: string, p: Path, m: string) => issues.warn(c, p, m) };
+  checkV11(spec, reporter);
+  checkQuality(spec, reporter);
+  // A 1.0 document that picked up 1.1 parts (an edit added a chart) is stored as 1.1, so an older
+  // Kalam refuses it clearly instead of failing on an unknown property. `spec` is Zod's copy, not the input.
+  // Numeric minor: '1.00.0' is format 1.0 too and must be raised, not kept with its old label.
+  if (issues.errors.length === 0 && usesV11(spec) && Number(spec.schemaVersion.split('.')[1]) === 0) {
+    spec.schemaVersion = SCHEMA_VERSION;
+    issues.warn('SCHEMA_VERSION_RAISED', 'schemaVersion', V11_MESSAGES.versionRaised);
+  }
   return issues.result(spec);
 }

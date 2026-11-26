@@ -1,64 +1,95 @@
 import { Link, router } from 'expo-router';
-import { ChevronRight, ClipboardCheck, Flame, type LucideIcon, Plus, Ruler, Wallet } from 'lucide-react-native';
+import { ChevronRight, ClipboardCheck, Flame, LayoutTemplate, type LucideIcon, PenLine, Ruler, Wallet } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 
 import { routes } from '@/components/shell/routes';
-import { Button, Text, useBreakpoint, useKalamTheme, webData } from '@/design';
-import { SketchStatic } from '@/features/landing/SketchStatic';
+import { Button, fontFamily, handFamily, ShelfPlank, Slip, Text, useBreakpoint, useHandwritingFont, useKalamTheme, webData } from '@/design';
+import type { TranslationKey } from '@/i18n/keys';
+import { useT } from '@/i18n/react';
 
-/** Starter ideas (docs/03 §4.4). Selecting one pre-fills Create; it never creates an app by itself. */
-const IDEAS: Array<{ icon: LucideIcon; title: string; prompt: string }> = [
-  { icon: Wallet, title: 'A personal expense tracker', prompt: 'Track my daily expenses with amount, category and date, and show what I spent this month.' },
-  { icon: Ruler, title: 'A customer measurement book', prompt: 'A measurement book for my tailoring customers: name, phone, chest, waist, length and notes.' },
-  { icon: Flame, title: 'A daily habit counter', prompt: 'Count my daily habits like glasses of water and walks, and start fresh every morning.' },
-  { icon: ClipboardCheck, title: 'An attendance register', prompt: 'An attendance register for my class: student name, date, and present or absent, with a count for each student.' },
+import { shelfRoutes } from './routes';
+
+/** Starter ideas (docs/03 §4.4). Choosing one fills in Create; it never makes an app by itself. */
+const IDEAS: Array<{ icon: LucideIcon; title: TranslationKey; prompt: TranslationKey }> = [
+  { icon: Wallet, title: 'shelf.empty.expenses', prompt: 'shelf.empty.prompt.expenses' },
+  { icon: Ruler, title: 'shelf.empty.measurements', prompt: 'shelf.empty.prompt.measurements' },
+  { icon: Flame, title: 'shelf.empty.habits', prompt: 'shelf.empty.prompt.habits' },
+  { icon: ClipboardCheck, title: 'shelf.empty.attendance', prompt: 'shelf.empty.prompt.attendance' },
 ];
 
+/**
+ * The empty shelf (DIRECTION §6): an empty plank with a ghost register outline, one handwritten line on a
+ * blank slip and one action. Starter ideas sit quietly underneath.
+ */
 export function ShelfEmpty() {
   const theme = useKalamTheme();
   const c = theme.colors;
-  const { isDesktop, isPhone } = useBreakpoint();
+  const t = useT(theme.uiLanguage);
+  const { isPhone } = useBreakpoint();
+  useHandwritingFont();
+  const ghostH = Math.round(232 * Math.min(theme.fontScale, 1.25));
+  // Kalam, the hand face, covers Latin and Devanagari only. Other scripts get their own display face, never a fallback.
+  const lineFace = theme.script === 'latin' || theme.script === 'devanagari' ? handFamily() : fontFamily('regular', true, theme.script);
   return (
-    <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: isDesktop ? 56 : 24, alignItems: isDesktop ? 'center' : 'stretch', paddingTop: isPhone ? 8 : 16 }}>
-      <View style={{ flex: isDesktop ? 6 : undefined, gap: 24, maxWidth: 620 }}>
-        <View style={{ gap: 8 }}>
-          <Text variant="h2">Nothing on your shelf yet</Text>
-          <Text variant="bodyLarge" tone="secondary">
-            Apps you make live here and keep working without internet. Describe one in your own words, or start
-            from an idea and change it to fit.
+    <View style={{ gap: 36, paddingTop: isPhone ? 4 : 12 }}>
+      <View style={{ flexDirection: isPhone ? 'column' : 'row', gap: isPhone ? 20 : 40, alignItems: isPhone ? 'stretch' : 'flex-end' }}>
+        <View style={{ width: isPhone ? '100%' : 300, gap: 0 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 14, paddingHorizontal: 12 }}>
+            {/* A ghost register: where the first app will stand. */}
+            <View
+              aria-hidden
+              style={{
+                width: 150, height: ghostH, borderWidth: 1.5, borderStyle: 'dashed', borderColor: c.borderStrong,
+                borderTopStartRadius: 4, borderBottomStartRadius: 4, borderTopEndRadius: 9, borderBottomEndRadius: 9,
+                paddingTop: 30, paddingHorizontal: 16, paddingStart: 24,
+              }}
+            >
+              <View style={{ height: 64, borderWidth: 1.5, borderStyle: 'dashed', borderColor: c.border, borderRadius: 7 }} />
+            </View>
+          </View>
+          <ShelfPlank />
+        </View>
+        <Slip tint="kraft" style={{ flex: isPhone ? undefined : 1, maxWidth: 560 }}>
+          <Text
+            accessibilityRole="header"
+            style={{ fontFamily: lineFace, fontSize: Math.round(26 * theme.fontScale), lineHeight: Math.round(34 * theme.fontScale), color: c.text }}
+          >
+            {t('shelf.empty.line')}
           </Text>
-        </View>
-        <Button label="Create your first app" icon={Plus} size="lg" onPress={() => router.push(routes.create)} fullWidth={isPhone} />
-        <View style={{ gap: 4 }}>
-          <Text variant="bodySmall" weight="medium" tone="secondary" style={{ marginBottom: 4 }}>Or start from an idea</Text>
-          {IDEAS.map(({ icon: Icon, title, prompt }) => (
-            <Link key={title} href={routes.createWithPrompt(prompt)} asChild>
-              <Pressable
-                role="link"
-                accessibilityLabel={`${title}. Opens Create with this idea filled in.`}
-                {...webData({ kPress: '', kHover: 'surface' })}
-                android_ripple={{ color: c.surfaceAlt }}
-                style={{
-                  flexDirection: 'row', alignItems: 'center', gap: 14,
-                  minHeight: theme.touchTarget + 16, paddingVertical: 10, paddingHorizontal: 12, marginHorizontal: -12,
-                  borderRadius: theme.radius.md,
-                }}
-              >
-                <View style={{ width: 40, height: 40, borderRadius: theme.radius.md, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon size={20} color={c.text} strokeWidth={1.9} />
-                </View>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text weight="semibold">{title}</Text>
-                  <Text variant="bodySmall" tone="secondary" numberOfLines={1}>{prompt}</Text>
-                </View>
-                <ChevronRight size={18} color={c.textMuted} />
-              </Pressable>
-            </Link>
-          ))}
-        </View>
+          <Text tone="secondary">{t('shelf.empty.body')}</Text>
+          <View style={{ alignSelf: isPhone ? 'stretch' : 'flex-start', marginTop: 4, gap: 10, flexDirection: isPhone ? 'column' : 'row', flexWrap: 'wrap' }}>
+            <Button label={t('shelf.empty.cta')} icon={PenLine} size="lg" onPress={() => router.push(routes.create)} fullWidth={isPhone} testID="shelf-empty-make" />
+            <Button label={t('shelfMore.browseTemplates')} variant="outline" size="lg" icon={LayoutTemplate} onPress={() => router.push(shelfRoutes.templates)} fullWidth={isPhone} testID="shelf-empty-templates" />
+          </View>
+        </Slip>
       </View>
-      <View style={{ flex: isDesktop ? 5 : undefined, alignItems: 'center' }}>
-        <SketchStatic height={isDesktop ? 440 : 300} label="Example: a pen sketch of an expense app, and the finished app on a phone." />
+
+      <View style={{ gap: 4, maxWidth: 620 }}>
+        <Text variant="bodySmall" weight="semibold" tone="secondary" style={{ marginBottom: 4 }}>{t('shelf.empty.ideas')}</Text>
+        {IDEAS.map(({ icon: Icon, title, prompt }) => (
+          <Link key={title} href={routes.createWithPrompt(t(prompt))} asChild>
+            <Pressable
+              role="link"
+              accessibilityLabel={t('shelf.empty.ideaHint', { title: t(title) })}
+              {...webData({ kPress: '', kHover: 'surface' })}
+              android_ripple={{ color: c.surfaceAlt }}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: 14,
+                minHeight: theme.touchTarget + 12, paddingVertical: 8, paddingHorizontal: 12, marginHorizontal: -12,
+                borderRadius: theme.radius.press,
+              }}
+            >
+              <View style={{ width: 40, height: 40, borderRadius: theme.radius.paper, backgroundColor: theme.tints.haldi, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon size={20} color={c.text} strokeWidth={1.9} />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text weight="semibold">{t(title)}</Text>
+                <Text variant="bodySmall" tone="secondary" numberOfLines={1}>{t(prompt)}</Text>
+              </View>
+              <ChevronRight size={18} color={c.textMuted} />
+            </Pressable>
+          </Link>
+        ))}
       </View>
     </View>
   );

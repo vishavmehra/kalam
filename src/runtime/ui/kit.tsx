@@ -12,6 +12,7 @@ import { fontFamilies, lightColors } from '@/design/tokens';
 import type { RuntimeFont } from '@/i18n/runtime-font';
 import type { ExecutionBadge } from '../engine/types';
 import { ensureContrast, type RuntimeTheme } from '../engine/theme';
+import { useAppT } from '../use-app-t';
 
 export const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 export const NATIVE_DRIVER = Platform.OS !== 'web';
@@ -101,24 +102,26 @@ export const Pressy = memo(function Pressy({
   );
 });
 
-const BADGE: Record<ExecutionBadge, { label: string; color: string }> = {
-  on_device: { label: 'On-device', color: lightColors.sourceOnDevice },
-  cloud: { label: 'Cloud', color: lightColors.sourceCloud },
-  deterministic: { label: 'Deterministic', color: lightColors.sourceDeterministic },
-  offline: { label: 'Offline: AI unavailable', color: lightColors.sourceOffline },
-};
+const BADGE = {
+  on_device: { key: 'runtime.badge.onDevice', color: lightColors.sourceOnDevice },
+  cloud: { key: 'runtime.badge.cloud', color: lightColors.sourceCloud },
+  deterministic: { key: 'runtime.badge.deterministic', color: lightColors.sourceDeterministic },
+  offline: { key: 'runtime.badge.offline', color: lightColors.sourceOffline },
+} as const satisfies Record<ExecutionBadge, { key: string; color: string }>;
 
 /**
  * Honest execution-source badge. Always text + colour (never colour alone). Uses Kalam's
  * fixed source colours so "On-device" means the same thing in every app.
  */
 export function SourceBadge({ source, t, detail }: { source: ExecutionBadge; t: RuntimeTheme; detail?: string }) {
+  const tr = useAppT();
   const b = BADGE[source];
-  const label = detail ? `${b.label} · ${detail}` : b.label;
+  const name = tr(b.key);
+  const label = detail ? `${name} · ${detail}` : name;
   return (
     <View
       accessible
-      accessibilityLabel={`Ran: ${label}`}
+      accessibilityLabel={tr('runtime.badge.ran', { label })}
       style={[styles.badge, { borderColor: b.color, backgroundColor: t.colors.surface }]}
     >
       <View style={[styles.dot, { backgroundColor: b.color }]} />

@@ -5,6 +5,7 @@
  * photos, which are embedded as data URIs when their bytes are supplied.
  */
 import type { DrawingElement, DrawingPage } from '@/core/contracts';
+import { propsOf } from './properties';
 import { canvasFontStack, needsScriptFont } from './text-script';
 import { backdrop, elementPrimitives, type Primitive } from './display';
 
@@ -68,14 +69,25 @@ function primitiveToSvg(p: Primitive, href: SvgOptions['imageHref']): string {
   }
 }
 
+/** Most points of one stroke that travel in `data-kalam-points`. A longer stroke keeps its first and last point and an even spread between. */
+export const SVG_STROKE_POINTS = 2000;
+function thin<T>(points: readonly T[]): readonly T[] {
+  if (points.length <= SVG_STROKE_POINTS) return points;
+  return Array.from({ length: SVG_STROKE_POINTS }, (_, i) => points[Math.round((i * (points.length - 1)) / (SVG_STROKE_POINTS - 1))]!);
+}
+
 /**
  * Extra attributes only Kalam reads back. A pen stroke is drawn as an outline path, which other programs show
  * fine, but only the points can rebuild an editable stroke. Stamps keep what the person meant by them.
  */
 function nativeAttrs(el: DrawingElement): string {
-  if (el.kind === 'stroke' && el.points.length <= 600) {
-    const pts = el.points.map((p) => `${num(p.x)},${num(p.y)}`).join(' ');
+  if (el.kind === 'stroke') {
+    const pts = thin(el.points).map((p) => `${num(p.x)},${num(p.y)}`).join(' ');
     return ` data-kalam-kind="stroke" data-kalam-tool="${el.tool}" data-kalam-size="${num(el.size)}" data-kalam-color="${esc(el.color)}" data-kalam-points="${pts}"`;
+  }
+  if (el.kind === 'arrow') {
+    const head = propsOf(el).headSize;
+    return ` data-kalam-kind="arrow" data-kalam-box="${num(el.x)} ${num(el.y)} ${num(el.w)} ${num(el.h)}" data-kalam-size="${num(el.size)}" data-kalam-color="${esc(el.color)}"${head ? ` data-kalam-head="${num(head)}"` : ''}`;
   }
   if (el.kind === 'stamp') {
     const label = el.label ? ` data-kalam-label="${esc(xmlSafe(el.label))}"` : '';
@@ -92,7 +104,7 @@ export function pageToSvg(page: DrawingPage, options: SvgOptions = {}): string {
     `<svg xmlns="http://www.w3.org/2000/svg" width="${num(page.width)}" height="${num(page.height)}" viewBox="0 0 ${num(page.width)} ${num(page.height)}" role="img" aria-label="${esc(xmlSafe(page.title))}">`,
   );
   out.push(`<title>${esc(xmlSafe(page.title))}</title>`);
-  out.push(`<g id="paper">${backdrop(page).map((p) => primitiveToSvg(p, options.imageHref)).join('')}</g>`);
+  out.push(`<g id="paper" data-kalam-kind="paper">${backdrop(page).map((p) => primitiveToSvg(p, options.imageHref)).join('')}</g>`);
   for (const el of page.elements) {
     if (el.hidden) continue;
     const body = elementPrimitives(el).map((p) => primitiveToSvg(p, options.imageHref)).join('');

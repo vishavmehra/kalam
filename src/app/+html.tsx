@@ -29,8 +29,8 @@ const CSP = [
 
 const BOOT_CSS = `
 html, body, #root { height: 100%; }
-body { margin: 0; background-color: #F8F7F2; color: #202820; overflow: hidden; }
-@media (prefers-color-scheme: dark) { body { background-color: #151A17; color: #F1F4EF; } }
+body { margin: 0; background-color: #F4F5F0; color: #12172E; overflow: hidden; }
+@media (prefers-color-scheme: dark) { body { background-color: #0B1238; color: #EEF0F8; } }
 `;
 
 export default function Root({ children }: PropsWithChildren) {
@@ -41,7 +41,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta httpEquiv="Content-Security-Policy" content={CSP} />
-        <meta name="theme-color" content="#F8F7F2" />
+        <meta name="theme-color" content="#F4F5F0" />
         <meta name="description" content="Kalam: draw the app you need. Own it forever." />
         <meta name="referrer" content="strict-origin-when-cross-origin" />
         <link rel="manifest" href="/manifest.webmanifest" />

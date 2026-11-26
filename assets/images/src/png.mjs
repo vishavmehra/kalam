@@ -66,13 +66,6 @@ export function encodePng({ width, height, rgba, alpha }) {
   ]);
 }
 
-/** Reads width and height from the IHDR without decoding the pixels. */
-export function pngSize(data) {
-  const buf = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
-  if (!buf.subarray(0, 8).equals(SIGNATURE)) throw new Error('not a PNG file');
-  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
-}
-
 /** Decodes an 8-bit non-interlaced RGB or RGBA PNG into RGBA bytes. */
 export function decodePng(data) {
   const buf = Buffer.from(data.buffer, data.byteOffset, data.byteLength);

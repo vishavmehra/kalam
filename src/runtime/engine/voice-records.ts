@@ -13,10 +13,11 @@ import type { AccessModes, KalamRecord } from '@/core/contracts';
 import type { ComponentOf, KalamSpec } from '@/core/spec/schema';
 import { collectionValues, formatFieldValue, formulaContext, queryList } from './data';
 import { collectionFieldDefs } from './fields';
-import { currentScreen } from './state';
+import { currentScreen, selectedId } from './state';
 import { visibleChildren } from './theme';
 import type { DataSnapshot, RuntimeState } from './types';
 import { speechWords } from './voice-intents';
+import { v11FieldText } from './v11';
 
 export type RecordVerb = 'open' | 'delete';
 export type RecordRef = { kind: 'last' | 'first' } | { kind: 'text'; text: string };
@@ -81,20 +82,23 @@ export function planRecordCommand(
     };
   }
 
-  const ctx = formulaContext(collectionValues(spec, data.records), {}, data.state, now);
+  const ctx = formulaContext(collectionValues(spec, data.records), {}, data.state, now, selectedId(spec, state));
   const candidates: RecordTarget[] = [];
   let anyRows = false;
   for (const list of usable) {
     const defs = collectionFieldDefs(spec, list.source);
     const rows = queryList(list, data.records[list.source] ?? [], ctx).rows;
     if (rows.length) anyRows = true;
-    const nameOf = (r: KalamRecord) => formatFieldValue(defs?.[list.primary], r.values[list.primary], spec.lang) || 'this item';
+    // A link is said by the linked entry's name ("open Ramesh"), never its id.
+    const say = (r: KalamRecord, f: string) =>
+      v11FieldText(spec, list.source, f, r.values[f], data.records) ?? formatFieldValue(defs?.[f], r.values[f], spec.lang);
+    const nameOf = (r: KalamRecord) => say(r, list.primary) || 'this item';
     if (cmd.ref.kind === 'text') {
       const collectionWords = new Set(norm(`${spec.collections[list.source]?.label ?? ''} ${list.source}`).split(' ').map(singular));
       const query = norm(cmd.ref.text).split(' ').filter((t) => t && !collectionWords.has(singular(t)));
       if (!query.length) continue;
       for (const r of rows) {
-        const hay = norm(`${nameOf(r)} ${list.secondary ? formatFieldValue(defs?.[list.secondary], r.values[list.secondary], spec.lang) : ''}`);
+        const hay = norm(`${nameOf(r)} ${list.secondary ? say(r, list.secondary) : ''}`);
         if (query.every((t) => hay.includes(t))) candidates.push({ list, record: r, name: nameOf(r) });
       }
     } else if (rows.length && candidates.length === 0) {

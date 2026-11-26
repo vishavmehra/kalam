@@ -1,14 +1,13 @@
-import { readFileSync } from 'node:fs';
 import { gzipSync, strToU8 } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { bytesToBase64 } from '../backup/base64';
 import {
-  DEFAULT_IMPORT_BASE, IMPORT_LINK_PREFIX, MAX_FRAGMENT_CHARS, decodeImportLink, encodeImportLink,
+  DEFAULT_IMPORT_BASE, IMPORT_LINK_PREFIX, MAX_FRAGMENT_CHARS, decodeAppFile, decodeImportLink, encodeImportLink,
 } from './index';
+import expenseTracker from '../../../tests/fixtures/specs/valid/expense-tracker.json';
 
-const spec = JSON.parse(
-  readFileSync(new URL('../../../tests/fixtures/specs/valid/expense-tracker.json', import.meta.url), 'utf8'),
-) as Record<string, unknown>;
+// A JSON import (no node:fs), copied so no test can change the shared module object.
+const spec = JSON.parse(JSON.stringify(expenseTracker)) as Record<string, unknown>;
 
 const b64url = (bytes: Uint8Array) => bytesToBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const linkFor = (bytes: Uint8Array) => `${DEFAULT_IMPORT_BASE}#${IMPORT_LINK_PREFIX}${b64url(bytes)}`;
@@ -88,5 +87,28 @@ describe('import link', () => {
     liar.set([0x10, 0, 0, 0], liar.length - 4);
     const lied = decodeImportLink(linkFor(liar));
     expect(lied.ok === false && /too large/.test(lied.message)).toBe(true);
+  });
+});
+
+describe('app file', () => {
+  it('reads a one-app kalam-backup or a bare spec, with claims reset', () => {
+    for (const file of [{ format: 'kalam-backup', formatVersion: 1, apps: [{ spec }], records: [] }, spec]) {
+      const r = decodeAppFile(file);
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        expect(r.spec.name).toBe(spec.name);
+        expect(r.spec.meta.generator).toEqual({ route: 'deterministic', provider: 'import' });
+        expect(r.spec.aiBlocks.categorise).toMatchObject({ verified: 'unverified' });
+      }
+    }
+  });
+
+  it('refuses other files without throwing', () => {
+    for (const bad of [
+      null, 42, 'text', [], { format: 'kalam-backup', apps: [] }, { format: 'kalam-backup', apps: [{ spec }, { spec }] },
+      { format: 'kalam-backup', apps: [null] }, { ...spec, screens: 'nope' },
+    ]) {
+      expect(decodeAppFile(bad).ok, JSON.stringify(bad)?.slice(0, 40)).toBe(false);
+    }
   });
 });

@@ -126,6 +126,11 @@ export function createSpecialistProvider(): AIProvider {
       }
 
       const provider: AIProviderName = data?.provider === 'nebius' ? 'nebius' : 'claude';
+      try {
+        req.onUsage?.({ input: data?.usage?.inputTokens, output: data?.usage?.outputTokens });
+      } catch {
+        /* accounting must never fail a request */
+      }
       const parsed = req.parse(data?.output);
       if (!parsed.success) return fail('invalid_output', `Specialist output failed validation: ${parsed.error}`, provider, data?.model);
       return {

@@ -18,6 +18,8 @@ export function valueFits(type: KalamFieldType, value: RecordValue | undefined):
       return typeof value === 'boolean';
     case 'date':
       return typeof value === 'string' && DATE_RE.test(value);
+    case 'image':
+      return false; // photos stay on the device that took them
   }
 }
 

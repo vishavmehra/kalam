@@ -20,6 +20,7 @@ vi.mock('@/state/settings-store', async () => {
 
 vi.mock('./use-script-fonts', () => ({
   useScriptFonts: () => ({ ready: true, script: 'latin', error: null }),
+  useShellFonts: () => ({ ready: true, script: 'latin', error: null }),
 }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

@@ -1,0 +1,26 @@
+{
+  "id": "style_injection",
+  "schemaVersion": "1.1.0",
+  "version": 1,
+  "name": "Style injection",
+  "lang": "en",
+  "theme": { "primary": "#315C4C", "radius": 12, "fontScale": 1 },
+  "collections": {},
+  "screens": [
+    {
+      "id": "home",
+      "title": "Home",
+      "children": [
+        { "id": "raw_css", "type": "text", "label": "Hello", "style": { "tone": "primary", "backgroundColor": "red; background:url(javascript:alert(1))" } },
+        { "id": "raw_colour", "type": "heading", "label": "Title", "style": { "tone": "#FF0000" } },
+        { "id": "css_size", "type": "text", "label": "Big", "style": { "size": "999px" } }
+      ],
+      "layout": [{ "type": "card", "title": "<script>alert(1)</script>", "children": ["raw_css"] }]
+    }
+  ],
+  "initialScreen": "home",
+  "actions": {},
+  "aiBlocks": {},
+  "intents": {},
+  "meta": { "createdAt": 1763500000000 }
+}

@@ -16,9 +16,10 @@ import type { CreationResult, CreationSession, CreationStage, NormalizedImage, S
 import { THEME_PRESETS } from '@/core/spec/schema';
 import { validateSpec } from '@/core/spec/validate';
 import { advanceSteps, type ProgressStep } from '@/features/create/stages';
+import { adoptMediaAssets, hydrateMediaSession, mediaHasInputs, mediaSessionId, resetMediaSession } from '@/features/media/media-store';
 import {
-  MAX_PHOTOS, MAX_TEXT_CHARS, type CreationDraft, type CreationPreferences, type DrawingAttachment, type VideoAttachment,
-  type VoiceAttachment,
+  briefOf, MAX_BRIEF_CHARS, MAX_PHOTOS, MAX_TEXT_CHARS, sharedPreferences, type CreationDraft, type CreationPreferences, type DrawingAttachment,
+  type VideoAttachment, type VoiceAttachment,
 } from '@/features/input/normalize';
 import { getDatabase } from '@/infrastructure/storage/database';
 
@@ -51,6 +52,11 @@ interface CreationState extends CreationDraft {
   detachDrawing(): void;
   setDrawingId(id: string | undefined): void;
   setPreferences(p: Partial<CreationPreferences>): void;
+  /**
+   * A new session starts in the "Language for new apps" setting (docs/10 §11.2). Applied once per
+   * session, only while nothing has been added, and never over a language the person picked.
+   */
+  adoptDefaultLanguage(language: string): void;
 
   startRun(): void;
   onStage(stage: CreationStage, detail?: string): void;
@@ -66,6 +72,8 @@ interface CreationState extends CreationDraft {
 }
 
 const IDLE: CreationRun = { status: 'idle', steps: [] };
+/** This session's language was picked or already defaulted. In memory only: each app start defaults again. */
+let languageSettled = false;
 
 // ─── Draft persistence (local database) ───────────────────────────────────────
 const PREFS_KEY = 'kalam.creation-prefs';
@@ -74,7 +82,10 @@ const LEGACY_KEY = 'kalam.creation-session';
 const WRITE_DELAY_MS = 300;
 
 type Persisted = Pick<CreationState, 'text' | 'photos' | 'voice' | 'video' | 'drawing' | 'drawingId' | 'preferences' | 'modality' | 'run' | 'result'>;
-type Restored = Partial<Pick<CreationState, 'text' | 'photos' | 'voice' | 'video' | 'drawing' | 'drawingId' | 'preferences' | 'modality' | 'run' | 'result' | 'resultDraft'>>;
+type Restored = Partial<Pick<CreationState, 'text' | 'photos' | 'voice' | 'video' | 'drawing' | 'drawingId' | 'preferences' | 'modality' | 'run' | 'result' | 'resultDraft'>> & {
+  /** The notes about this app (who it is for, what it must do), kept in the session row, not in the shared preferences. */
+  brief?: { targetUser?: string; constraints?: string };
+};
 type Role = 'photo' | 'frame' | 'drawing';
 
 const MODALITIES = ['text', 'photo', 'voice', 'video', 'draw'] as const;
@@ -118,6 +129,7 @@ const draftSchema = z.object({
     })
     .optional()
     .catch(undefined),
+  brief: z.object({ targetUser: z.string().max(MAX_BRIEF_CHARS).optional(), constraints: z.string().max(MAX_BRIEF_CHARS).optional() }).optional().catch(undefined),
   result: z.unknown().optional(),
 });
 
@@ -128,18 +140,10 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let chain: Promise<void> = Promise.resolve();
 let lastPrefs = '';
 
-function newSessionId(): string {
-  const bytes = new Uint8Array(8);
-  const source = (globalThis as { crypto?: { getRandomValues?: (a: Uint8Array) => Uint8Array } }).crypto;
-  if (source?.getRandomValues) source.getRandomValues(bytes);
-  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
-  return `s_${Date.now().toString(36)}_${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
-}
-
 const fileId = (sessionId: string, image: NormalizedImage) => `${sessionId}.${image.id.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80)}`;
 
 function isEmpty(s: Persisted): boolean {
-  return !s.text.trim() && !s.photos.length && !s.voice?.transcript.trim() && !s.video?.frames.length && !s.drawing && !s.drawingId;
+  return !s.text.trim() && !s.photos.length && !s.voice?.transcript.trim() && !s.video?.frames.length && !s.drawing && !s.drawingId && !mediaHasInputs();
 }
 
 function sessionState(s: Persisted): CreationSession['state'] {
@@ -149,7 +153,8 @@ function sessionState(s: Persisted): CreationSession['state'] {
 }
 
 async function writeDraft(s: Persisted): Promise<void> {
-  const prefs = JSON.stringify({ preferences: s.preferences, modality: s.modality });
+  // The shared preferences only: the notes about one app are personal text and stay in the session row.
+  const prefs = JSON.stringify({ preferences: sharedPreferences(s.preferences), modality: s.modality });
   if (prefs !== lastPrefs) {
     await AsyncStorage.setItem(PREFS_KEY, prefs);
     lastPrefs = prefs;
@@ -161,7 +166,7 @@ async function writeDraft(s: Persisted): Promise<void> {
     current.files.clear();
     return;
   }
-  const id = (current.id ??= newSessionId());
+  const id = (current.id ??= mediaSessionId());
   current.createdAt ||= Date.now();
   const images: Array<{ image: NormalizedImage; role: Role }> = [
     ...s.photos.map((image) => ({ image, role: 'photo' as const })),
@@ -201,6 +206,7 @@ async function writeDraft(s: Persisted): Promise<void> {
     ...(s.run.status === 'failed' && s.result?.message ? { lastError: s.result.message.slice(0, 500) } : {}),
     draft: {
       images: stored,
+      ...(briefOf(s.preferences) ? { brief: briefOf(s.preferences) } : {}),
       ...(s.voice ? { voice: { recognizedBy: s.voice.recognizedBy, ...(s.voice.durationSec !== undefined ? { durationSec: s.voice.durationSec } : {}) } } : {}),
       ...(s.video ? { video: { ...(s.video.name ? { name: s.video.name } : {}), durationSec: s.video.durationSec, droppedFrames: s.video.droppedFrames } } : {}),
       ...(s.drawing ? { drawing: { title: s.drawing.title, summary: drawingSummary } } : {}),
@@ -227,7 +233,10 @@ export function flushCreationDraft(): Promise<void> {
 
 /** Moves this session's photos and pages to `appId`, so they stay (locally) with the saved app. */
 function adoptFiles(appId: string): Promise<void> {
+  // Called now, awaited inside the queued task: originals and thumbnails move before the session row is deleted.
+  const media = adoptMediaAssets(appId);
   return enqueue(async () => {
+    await media;
     const db = getDatabase();
     for (const blobId of current.files) {
       const blob = await db.blobs.get(blobId);
@@ -256,6 +265,7 @@ async function restoreSession(): Promise<Restored | undefined> {
     });
   }
   current.id = session.id;
+  void hydrateMediaSession(session.id);
   current.createdAt = session.createdAt;
   current.files = files;
 
@@ -275,6 +285,7 @@ async function restoreSession(): Promise<Restored | undefined> {
     restored.video = { ...(extras.video.name ? { name: extras.video.name } : {}), durationSec: extras.video.durationSec, frames: byRole.frame, droppedFrames: extras.video.droppedFrames };
   }
   if (extras.drawing) restored.drawing = { title: extras.drawing.title, summary: { ...extras.drawing.summary, images: byRole.drawing } };
+  if (extras.brief) restored.brief = extras.brief;
   const result = extras.result as CreationResult | undefined;
   if (session.state === 'review' && result?.ok === true && validateSpec(result.spec).ok) {
     restored.result = result;
@@ -322,6 +333,10 @@ const draftStorage: PersistStorage<Persisted> = {
         ...(prefs.success && prefs.data.modality ? { modality: prefs.data.modality } : {}),
         ...restored,
       };
+      if (restored?.brief) {
+        state.preferences = { language: 'en', ...state.preferences, ...restored.brief };
+        delete (state as Restored).brief;
+      }
       if (state.result) state.resultDraft = draftOf({ text: '', photos: [], preferences: { language: 'en' }, ...state });
       // Hydration merges this partial state over the defaults (see `merge` below).
       return { state: state as Persisted, version: 2 };
@@ -366,7 +381,20 @@ export const useCreationStore = create<CreationState>()(
       attachDrawing: (drawing) => set({ drawing, drawingId: drawing.summary.drawingId }),
       detachDrawing: () => set({ drawing: undefined }),
       setDrawingId: (drawingId) => set({ drawingId }),
-      setPreferences: (p) => set((s) => ({ preferences: { ...s.preferences, ...p } })),
+      setPreferences: (p) => {
+        if (p.language) languageSettled = true;
+        // A note is kept as typed (spaces and all) up to its limit; an empty one is no note.
+        const next: Partial<CreationPreferences> = { ...p };
+        for (const key of ['targetUser', 'constraints'] as const) {
+          if (key in next) next[key] = next[key]?.slice(0, MAX_BRIEF_CHARS) || undefined;
+        }
+        set((s) => ({ preferences: { ...s.preferences, ...next } }));
+      },
+      adoptDefaultLanguage: (language) => {
+        if (languageSettled) return;
+        languageSettled = true;
+        set((s) => (!isEmpty(s) || s.preferences.language === language ? s : { preferences: { ...s.preferences, language } }));
+      },
 
       startRun: () => set({ run: { status: 'running', steps: [], startedAt: Date.now() }, result: undefined }),
       onStage: (stage, detail) => set((s) => (s.run.status !== 'running' ? s : {
@@ -380,10 +408,12 @@ export const useCreationStore = create<CreationState>()(
       cancelRun: () => set((s) => ({ run: { ...s.run, status: 'cancelled' } })),
       clearResult: () => set({ result: undefined, resultDraft: undefined, run: IDLE }),
       resetSession: (opts) => {
+        languageSettled = false;
         if (opts?.keepInputsWith) void adoptFiles(opts.keepInputsWith);
+        void resetMediaSession();
         set((s) => ({
           text: '', photos: [], voice: undefined, video: undefined, drawing: undefined, drawingId: undefined,
-          modality: 'text', run: IDLE, result: undefined, resultDraft: undefined, preferences: s.preferences,
+          modality: 'text', run: IDLE, result: undefined, resultDraft: undefined, preferences: sharedPreferences(s.preferences),
         }));
         // Delete the stored draft now, not after the write delay: a quick reload must not bring it back.
         void flushCreationDraft();

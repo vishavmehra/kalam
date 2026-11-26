@@ -8,18 +8,17 @@ import { useEffect, useRef } from 'react';
 import { View } from 'react-native';
 import type { StoreApi } from 'zustand/vanilla';
 import { useStore } from 'zustand';
-import { useKalamTheme, withAlpha } from '@/design';
+import { useKalamTheme } from '@/design';
 import { images } from './image-cache.web';
 import { DEFAULT_PAGE_COLOR, PAGE_HEIGHT, PAGE_WIDTH, type HandleId } from './model';
 import { drawPrimitives } from './render-canvas';
 import {
-  canvasLabel, currentPage, isInkTool, selectBase, selectChrome, selectLive, toDocPoint, type StudioState, type Tool,
+  canvasLabel, currentPage, isInkTool, selectBaseVisible, selectChrome, selectLive, toDocPoint, type StudioState, type Tool,
 } from './studio-store';
+import { TOOL_KEYS } from './shortcuts';
+import { subscribeTextFonts } from './text-fonts';
 import { TextEditOverlay } from './TextEditOverlay';
 
-const SHORTCUTS: Record<string, Tool> = {
-  v: 'select', p: 'pen', m: 'marker', h: 'highlighter', e: 'eraser', r: 'rect', o: 'ellipse', l: 'line', a: 'arrow', t: 'text',
-};
 const INK_SCALE: Partial<Record<Tool, number>> = { pen: 1, marker: 1.6, highlighter: 3 };
 const HANDLE_CURSOR: Record<HandleId, string> = {
   nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize', n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', rotate: 'grab',
@@ -37,7 +36,7 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 export function DrawingCanvas({ store }: { store: StoreApi<StudioState> }) {
-  const { colors } = useKalamTheme();
+  const { colors, scheme } = useKalamTheme();
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
@@ -45,7 +44,8 @@ export function DrawingCanvas({ store }: { store: StoreApi<StudioState> }) {
   const tool = useStore(store, (s) => s.tool);
   const workspace = colors.surfaceAlt;
   const border = colors.borderStrong;
-  const shadow = withAlpha(colors.text, 0.14);
+  // Tinted to the ink with a y-offset, never a glow (DIRECTION §2.4): at ink night the shadow is darker, not light.
+  const shadow = `rgb(${colors.shadowRgb} / ${scheme === 'dark' ? 0.55 : 0.22})`;
 
   // Size + render loop.
   useEffect(() => {
@@ -75,7 +75,7 @@ export function DrawingCanvas({ store }: { store: StoreApi<StudioState> }) {
       ctx.beginPath();
       ctx.rect(0, 0, PAGE_WIDTH, PAGE_HEIGHT);
       ctx.clip();
-      drawPrimitives(ctx, selectBase(s));
+      drawPrimitives(ctx, selectBaseVisible(s));
       drawPrimitives(ctx, selectLive(s));
       ctx.restore();
       ctx.strokeStyle = border;
@@ -99,7 +99,9 @@ export function DrawingCanvas({ store }: { store: StoreApi<StudioState> }) {
     resize();
     const unsub = store.subscribe(schedule);
     const unsubImages = images.subscribe(schedule);
-    return () => { ro.disconnect(); unsub(); unsubImages(); if (frame) cancelAnimationFrame(frame); };
+    // Hindi, Tamil and the other scripts draw again once their Noto font has loaded.
+    const unsubFonts = subscribeTextFonts(schedule);
+    return () => { ro.disconnect(); unsub(); unsubImages(); unsubFonts(); if (frame) cancelAnimationFrame(frame); };
   }, [store, workspace, border, shadow]);
 
   // Spoken description: page, tool, selection (docs/10 §10.4). Set on the element, not through React.
@@ -120,15 +122,15 @@ export function DrawingCanvas({ store }: { store: StoreApi<StudioState> }) {
     const canvas = canvasRef.current; const cursor = cursorRef.current;
     if (!canvas || !cursor) return;
     const pointers = new Map<number, { x: number; y: number }>();
-    let pinch: { dist: number; cx: number; cy: number } | undefined;
-    let pan: { x: number; y: number } | undefined;
+    // Pan and pinch state lives in the store's gesture (docs/08 §8.2); only raw pointer bookkeeping stays here.
+    const viewGesture = () => store.getState().gesture?.kind;
     let space = false;
     let drawing = false;
     let lastPenAt = -Infinity;
     let hover = '';
 
     const applyCursor = () => {
-      canvas.style.cursor = pan ? 'grabbing' : space ? 'grab' : hover || toolCursor(store.getState().tool);
+      canvas.style.cursor = viewGesture() === 'pan' ? 'grabbing' : space ? 'grab' : hover || toolCursor(store.getState().tool);
     };
     const local = (e: PointerEvent | WheelEvent) => {
       const r = canvas.getBoundingClientRect();
@@ -144,7 +146,7 @@ export function DrawingCanvas({ store }: { store: StoreApi<StudioState> }) {
     };
     const updateCursor = (e: PointerEvent) => {
       const s = store.getState();
-      const show = e.pointerType !== 'touch' && (isInkTool(s.tool) || s.tool === 'eraser') && !pan && !space;
+      const show = e.pointerType !== 'touch' && (isInkTool(s.tool) || s.tool === 'eraser') && viewGesture() !== 'pan' && !space;
       cursor.style.display = show ? 'block' : 'none';
       if (!show) return;
       const d = s.tool === 'eraser' ? Math.max(12, s.size * 4) : s.size * (INK_SCALE[s.tool] ?? 1) * s.view.scale;
@@ -160,12 +162,14 @@ export function DrawingCanvas({ store }: { store: StoreApi<StudioState> }) {
       canvas.focus({ preventScroll: true });
       pointers.set(e.pointerId, local(e));
       if (pointers.size === 2) {
-        if (drawing) { store.getState().cancelPointer(); drawing = false; }
-        pinch = pinchState();
+        // A second finger turns whatever was happening into a pinch, so it never draws a second stroke.
+        if (drawing) { drawing = false; }
+        const p = pinchState();
+        store.getState().beginPinch(p.cx, p.cy, p.dist);
         return;
       }
       if (pointers.size > 2) return;
-      if (e.button === 1 || space) { pan = local(e); applyCursor(); return; }
+      if (e.button === 1 || space) { const l = local(e); store.getState().beginPan(l.x, l.y); applyCursor(); return; }
       if (e.button !== 0) return;
       e.preventDefault();
       drawing = true;
@@ -182,15 +186,13 @@ export function DrawingCanvas({ store }: { store: StoreApi<StudioState> }) {
       }
       pointers.set(e.pointerId, local(e));
       const s = store.getState();
-      if (pinch && pointers.size >= 2) {
+      const kind = s.gesture?.kind;
+      if (kind === 'pinch' && pointers.size >= 2) {
         const next = pinchState();
-        s.panBy(next.cx - pinch.cx, next.cy - pinch.cy);
-        if (pinch.dist > 0) s.zoomBy(next.dist / pinch.dist, next.cx, next.cy);
-        pinch = next;
-      } else if (pan) {
+        s.pinchTo(next.cx, next.cy, next.dist);
+      } else if (kind === 'pan') {
         const p = local(e);
-        s.panBy(p.x - pan.x, p.y - pan.y);
-        pan = p;
+        s.panTo(p.x, p.y);
       } else if (drawing) {
         const events = e.getCoalescedEvents?.() ?? [];
         for (const ce of events.length ? events : [e]) s.pointerMove(docPoint(ce), { constrain: e.shiftKey });
@@ -199,8 +201,9 @@ export function DrawingCanvas({ store }: { store: StoreApi<StudioState> }) {
     const up = (e: PointerEvent) => {
       if (!pointers.has(e.pointerId)) return;
       pointers.delete(e.pointerId);
-      if (pinch) { if (pointers.size < 2) pinch = undefined; return; }
-      if (pan) { pan = undefined; applyCursor(); return; }
+      const kind = viewGesture();
+      if (kind === 'pinch') { if (pointers.size < 2) store.getState().endView(); return; }
+      if (kind === 'pan') { store.getState().endView(); applyCursor(); return; }
       if (drawing) {
         drawing = false;
         if (e.type === 'pointercancel') store.getState().cancelPointer(); else store.getState().pointerUp();
@@ -232,6 +235,7 @@ export function DrawingCanvas({ store }: { store: StoreApi<StudioState> }) {
         else if (k === 'x') { e.preventDefault(); s.cutSelected(); }
         else if (k === 'v') { e.preventDefault(); s.paste(); }
         else if (k === 'd') { e.preventDefault(); s.duplicateSelected(); }
+        else if (k === 'g') { e.preventDefault(); if (e.shiftKey) s.ungroupSelected(); else s.groupSelected(); }
         else if (k === 'a') { e.preventDefault(); s.setTool('select'); store.getState().selectAll(); }
         else if (k === ']' || k === '[') { e.preventDefault(); s.reorderSelected(k === ']' ? 'front' : 'back'); }
         return;
@@ -253,7 +257,7 @@ export function DrawingCanvas({ store }: { store: StoreApi<StudioState> }) {
       if (k === '0') { s.fitPage(); return; }
       if (k === ']') { s.reorderSelected('forward'); return; }
       if (k === '[') { s.reorderSelected('backward'); return; }
-      const t = SHORTCUTS[k];
+      const t = TOOL_KEYS[k];
       if (t) s.setTool(t);
     };
     const keyUp = (e: KeyboardEvent) => { if (e.key === ' ') { space = false; applyCursor(); } };

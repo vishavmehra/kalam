@@ -1,0 +1,4103 @@
+{
+ "source": "tests/evaluation/reports/eval-2026-11-25T08-55-34-664Z-live.json (built specs) and -live-final.json (reviewer verdicts). Live Firebase compile output, unchanged.",
+ "cases": [
+  {
+   "id": "t16-udhaar-khata-hinglish",
+   "reviewer": "partly: Usable ledger (customer, given or received, amount, date), but no per-customer outstanding balance, only shop-wide totals, and the Customers collection can never be filled or shown.",
+   "request": "Kirana dukaan ka udhaar khata banao, har grahak ka naam, kitna udhaar aur kab wapas diya",
+   "spec": {
+    "id": "app_ldn0p9t8",
+    "schemaVersion": "1.0.0",
+    "version": 1,
+    "name": "Kirana Udhaar Khata",
+    "description": "Dukaan ke grahakon ka udhaar aur wapas milne ka hisaab kitab.",
+    "icon": {
+     "glyph": "notebook",
+     "background": "#8A4B2A",
+     "foreground": "#FFFFFF"
+    },
+    "lang": "en",
+    "theme": {
+     "primary": "#8A4B2A",
+     "secondary": "#C99A3B",
+     "background": "#FBF6EC",
+     "surface": "#FFFDF8",
+     "text": "#2B2118",
+     "radius": 10,
+     "fontScale": 1,
+     "spacing": "comfortable",
+     "fontFamily": "serif",
+     "preset": "warm_paper"
+    },
+    "collections": {
+     "customers": {
+      "label": "Customers",
+      "fields": {
+       "name": {
+        "type": "text",
+        "label": "Customer Name",
+        "required": true
+       },
+       "phone": {
+        "type": "text",
+        "label": "Phone Number"
+       }
+      }
+     },
+     "transactions": {
+      "label": "Transactions",
+      "fields": {
+       "customer_name": {
+        "type": "text",
+        "label": "Customer Name",
+        "required": true
+       },
+       "type": {
+        "type": "enum",
+        "label": "Entry Type",
+        "options": [
+         "Udhaar Diya (Given)",
+         "Wapas Mila (Received)"
+        ],
+        "defaultValue": "Udhaar Diya (Given)"
+       },
+       "amount": {
+        "type": "number",
+        "label": "Amount",
+        "defaultValue": 0,
+        "min": 1,
+        "unit": "INR",
+        "decimals": 0
+       },
+       "entry_date": {
+        "type": "date",
+        "label": "Date",
+        "defaultValue": "today"
+       },
+       "notes": {
+        "type": "text",
+        "label": "Notes / Item Details"
+       }
+      }
+     }
+    },
+    "screens": [
+     {
+      "id": "home",
+      "title": "Udhaar Khata",
+      "children": [
+       {
+        "id": "total_given",
+        "type": "stat",
+        "label": "Total Udhaar Diya",
+        "expr": "sum(filter(transactions, type == 'Udhaar Diya (Given)').amount)",
+        "format": "currency",
+        "currency": "INR"
+       },
+       {
+        "id": "total_received",
+        "type": "stat",
+        "label": "Total Wapas Mila",
+        "expr": "sum(filter(transactions, type == 'Wapas Mila (Received)').amount)",
+        "format": "currency",
+        "currency": "INR"
+       },
+       {
+        "id": "txn_list",
+        "secondary": "amount",
+        "type": "list",
+        "source": "transactions",
+        "primary": "customer_name",
+        "sort": {
+         "field": "entry_date",
+         "direction": "desc"
+        },
+        "detailScreen": "view_txn",
+        "allowDelete": true
+       },
+       {
+        "id": "add_txn_btn",
+        "type": "bigButton",
+        "label": "Naya Udhaar / Jama Likho",
+        "action": "go_add_txn",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "add_transaction",
+      "title": "Naya Entry Likho",
+      "form": "transactions",
+      "children": [
+       {
+        "id": "input_customer",
+        "type": "textInput",
+        "label": "Customer Name (Grahak ka Naam)",
+        "field": "customer_name",
+        "required": true
+       },
+       {
+        "id": "input_type",
+        "type": "choice",
+        "label": "Type (Udhaar ya Wapas)",
+        "field": "type",
+        "required": true
+       },
+       {
+        "id": "input_amount",
+        "type": "number",
+        "label": "Rakam (Amount in ₹)",
+        "field": "amount",
+        "required": true
+       },
+       {
+        "id": "input_date",
+        "type": "date",
+        "label": "Tareekh (Date)",
+        "field": "entry_date",
+        "required": true
+       },
+       {
+        "id": "input_notes",
+        "type": "textInput",
+        "label": "Item / Kharcha Note",
+        "field": "notes"
+       },
+       {
+        "id": "save_txn_btn",
+        "type": "bigButton",
+        "label": "Hisaab Save Karo",
+        "action": "save_transaction",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "view_txn",
+      "title": "Entry Detail",
+      "form": "transactions",
+      "children": [
+       {
+        "id": "view_customer",
+        "type": "textInput",
+        "label": "Customer Name",
+        "field": "customer_name",
+        "required": true
+       },
+       {
+        "id": "view_type",
+        "type": "choice",
+        "label": "Type",
+        "field": "type",
+        "required": true
+       },
+       {
+        "id": "view_amount",
+        "type": "number",
+        "label": "Amount",
+        "field": "amount",
+        "required": true
+       },
+       {
+        "id": "view_date",
+        "type": "date",
+        "label": "Date",
+        "field": "entry_date",
+        "required": true
+       },
+       {
+        "id": "view_notes",
+        "type": "textInput",
+        "label": "Notes",
+        "field": "notes"
+       },
+       {
+        "id": "update_txn_btn",
+        "type": "bigButton",
+        "label": "Badlaav Save Karo",
+        "action": "update_txn",
+        "tone": "primary"
+       },
+       {
+        "id": "del_txn_btn",
+        "type": "bigButton",
+        "label": "Entry Hatayein",
+        "action": "delete_txn",
+        "tone": "danger"
+       }
+      ]
+     }
+    ],
+    "initialScreen": "home",
+    "actions": {
+     "go_add_txn": {
+      "type": "navigate",
+      "screen": "add_transaction"
+     },
+     "save_transaction": {
+      "type": "insert",
+      "collection": "transactions",
+      "then": {
+       "feedback": "Entry darj ho gayi hai (Saved successfully) via Udhaar Khata kholiye check kariye!"
+      }
+     },
+     "update_txn": {
+      "type": "update",
+      "collection": "transactions",
+      "record": "selected",
+      "then": {
+       "feedback": "Entry update ho gayi hai!"
+      }
+     },
+     "delete_txn": {
+      "type": "delete",
+      "collection": "transactions",
+      "record": "selected",
+      "confirm": "Kya aap is entry ko hatana chahte hain?"
+     }
+    },
+    "aiBlocks": {},
+    "intents": {
+     "go_add_txn": [
+      "naya udhaar",
+      "nayi entry",
+      "add khata",
+      "jama likho",
+      "udhaar likho"
+     ],
+     "save_transaction": [
+      "save karo",
+      "darj karo",
+      "hisaab likh lo",
+      "submit entry"
+     ]
+    },
+    "meta": {
+     "createdAt": 1795595782465,
+     "description": "Dukaan ke grahakon ka udhaar aur wapas milne ka hisaab kitab.",
+     "source": "compiler",
+     "generator": {
+      "route": "cloud",
+      "provider": "firebase",
+      "model": "gemini-3.8-flash"
+     }
+    }
+   }
+  },
+  {
+   "id": "t17-employee-attendance-summary",
+   "reviewer": "partly: Daily present, absent, late and late minutes work, but the monthly summary is factory-wide counts only, with no per-employee totals, and there is no employee list, so names are retyped every day.",
+   "request": "Employee attendance system for my factory with daily present or absent, late marks and a monthly summary",
+   "spec": {
+    "id": "app_ysxg09xl",
+    "schemaVersion": "1.0.0",
+    "version": 1,
+    "name": "Factory Attendance",
+    "description": "Daily attendance tracking with present, absent, late marks, and monthly summaries for factory employees.",
+    "icon": {
+     "glyph": "clipboard",
+     "background": "#1F5F8B",
+     "foreground": "#FFFFFF"
+    },
+    "lang": "en",
+    "theme": {
+     "primary": "#1F5F8B",
+     "secondary": "#2E8C88",
+     "background": "#F4F8FB",
+     "surface": "#FFFFFF",
+     "text": "#14212B",
+     "radius": 14,
+     "fontScale": 1,
+     "spacing": "comfortable",
+     "fontFamily": "inter",
+     "preset": "ocean_blue"
+    },
+    "collections": {
+     "attendance": {
+      "label": "Attendance Records",
+      "fields": {
+       "worker_name": {
+        "type": "text",
+        "label": "Worker Name",
+        "required": true
+       },
+       "shift_date": {
+        "type": "date",
+        "label": "Date",
+        "required": true,
+        "defaultValue": "today"
+       },
+       "status": {
+        "type": "enum",
+        "label": "Status",
+        "required": true,
+        "options": [
+         "Present",
+         "Absent",
+         "Late",
+         "Half Day"
+        ]
+       },
+       "shift": {
+        "type": "enum",
+        "label": "Shift",
+        "options": [
+         "Morning",
+         "Evening",
+         "Night"
+        ]
+       },
+       "late_minutes": {
+        "type": "number",
+        "label": "Late (Minutes)",
+        "min": 0,
+        "unit": "min"
+       },
+       "remarks": {
+        "type": "text",
+        "label": "Remarks"
+       }
+      }
+     }
+    },
+    "screens": [
+     {
+      "id": "dashboard",
+      "title": "Factory Attendance",
+      "children": [
+       {
+        "id": "today_heading",
+        "type": "heading",
+        "label": "Today's Overview"
+       },
+       {
+        "id": "present_today",
+        "type": "stat",
+        "label": "Present Today",
+        "expr": "count(filter(attendance, shift_date == today && (status == 'Present' || status == 'Late' || status == 'Half Day')))",
+        "format": "integer"
+       },
+       {
+        "id": "absent_today",
+        "type": "stat",
+        "label": "Absent Today",
+        "expr": "count(filter(attendance, shift_date == today && status == 'Absent'))",
+        "format": "integer"
+       },
+       {
+        "id": "late_today",
+        "type": "stat",
+        "label": "Late Today",
+        "expr": "count(filter(attendance, shift_date == today && status == 'Late'))",
+        "format": "integer"
+       },
+       {
+        "id": "btn_mark",
+        "type": "bigButton",
+        "label": "Mark Attendance",
+        "action": "go_mark",
+        "tone": "primary"
+       },
+       {
+        "id": "btn_monthly",
+        "type": "bigButton",
+        "label": "Monthly Summary",
+        "action": "go_summary",
+        "tone": "secondary"
+       },
+       {
+        "id": "recent_heading",
+        "type": "heading",
+        "label": "Today's Logs"
+       },
+       {
+        "id": "today_list",
+        "secondary": "status",
+        "type": "list",
+        "source": "attendance",
+        "primary": "worker_name",
+        "filter": "shift_date == today",
+        "sort": {
+         "field": "worker_name",
+         "direction": "asc"
+        },
+        "detailScreen": "detail_record",
+        "allowDelete": true
+       }
+      ]
+     },
+     {
+      "id": "mark_attendance",
+      "title": "Mark Attendance",
+      "form": "attendance",
+      "children": [
+       {
+        "id": "input_name",
+        "type": "textInput",
+        "label": "Worker Name",
+        "field": "worker_name",
+        "required": true,
+        "placeholder": "e.g. Ramesh Kumar"
+       },
+       {
+        "id": "input_date",
+        "type": "date",
+        "label": "Date",
+        "field": "shift_date",
+        "required": true
+       },
+       {
+        "id": "input_status",
+        "type": "choice",
+        "label": "Status",
+        "field": "status",
+        "options": [
+         "Present",
+         "Absent",
+         "Late",
+         "Half Day"
+        ],
+        "required": true
+       },
+       {
+        "id": "input_shift",
+        "type": "choice",
+        "label": "Shift",
+        "field": "shift",
+        "options": [
+         "Morning",
+         "Evening",
+         "Night"
+        ]
+       },
+       {
+        "id": "input_late_mins",
+        "type": "number",
+        "label": "Late Duration (minutes)",
+        "field": "late_minutes"
+       },
+       {
+        "id": "input_remarks",
+        "type": "textInput",
+        "label": "Remarks / Reason",
+        "field": "remarks"
+       },
+       {
+        "id": "btn_save",
+        "type": "bigButton",
+        "label": "Save Attendance",
+        "action": "save_entry",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "monthly_summary",
+      "title": "Monthly Summary",
+      "children": [
+       {
+        "id": "summary_heading",
+        "type": "heading",
+        "label": "This Month Statistics"
+       },
+       {
+        "id": "total_present_month",
+        "type": "stat",
+        "label": "Total Present Records",
+        "expr": "count(filter(attendance, month(shift_date) == month(today) && (status == 'Present' || status == 'Late' || status == 'Half Day')))",
+        "format": "integer"
+       },
+       {
+        "id": "total_absent_month",
+        "type": "stat",
+        "label": "Total Absent Records",
+        "expr": "count(filter(attendance, month(shift_date) == month(today) && status == 'Absent'))",
+        "format": "integer"
+       },
+       {
+        "id": "total_late_month",
+        "type": "stat",
+        "label": "Total Late Marks",
+        "expr": "count(filter(attendance, month(shift_date) == month(today) && status == 'Late'))",
+        "format": "integer"
+       },
+       {
+        "id": "total_late_mins_month",
+        "type": "stat",
+        "label": "Total Late Minutes",
+        "expr": "sum(filter(attendance, month(shift_date) == month(today)).late_minutes)",
+        "format": "integer",
+        "suffix": "mins"
+       },
+       {
+        "id": "month_records_heading",
+        "type": "heading",
+        "label": "All Monthly Logs"
+       },
+       {
+        "id": "monthly_list",
+        "secondary": "shift_date",
+        "type": "list",
+        "source": "attendance",
+        "primary": "worker_name",
+        "filter": "month(shift_date) == month(today)",
+        "sort": {
+         "field": "shift_date",
+         "direction": "desc"
+        },
+        "detailScreen": "detail_record",
+        "allowDelete": true
+       },
+       {
+        "id": "btn_back",
+        "type": "bigButton",
+        "label": "Back to Home",
+        "action": "go_home",
+        "tone": "secondary"
+       }
+      ]
+     },
+     {
+      "id": "detail_record",
+      "title": "Edit Attendance",
+      "form": "attendance",
+      "children": [
+       {
+        "id": "edit_name",
+        "type": "textInput",
+        "label": "Worker Name",
+        "field": "worker_name",
+        "required": true
+       },
+       {
+        "id": "edit_date",
+        "type": "date",
+        "label": "Date",
+        "field": "shift_date",
+        "required": true
+       },
+       {
+        "id": "edit_status",
+        "type": "choice",
+        "label": "Status",
+        "field": "status",
+        "options": [
+         "Present",
+         "Absent",
+         "Late",
+         "Half Day"
+        ],
+        "required": true
+       },
+       {
+        "id": "edit_shift",
+        "type": "choice",
+        "label": "Shift",
+        "field": "shift",
+        "options": [
+         "Morning",
+         "Evening",
+         "Night"
+        ]
+       },
+       {
+        "id": "edit_late_mins",
+        "type": "number",
+        "label": "Late (Minutes)",
+        "field": "late_minutes"
+       },
+       {
+        "id": "edit_remarks",
+        "type": "textInput",
+        "label": "Remarks",
+        "field": "remarks"
+       },
+       {
+        "id": "btn_update",
+        "type": "bigButton",
+        "label": "Update Record",
+        "action": "update_entry",
+        "tone": "primary"
+       },
+       {
+        "id": "btn_delete",
+        "type": "bigButton",
+        "label": "Delete Record",
+        "action": "delete_entry",
+        "tone": "danger"
+       }
+      ]
+     }
+    ],
+    "initialScreen": "dashboard",
+    "actions": {
+     "go_mark": {
+      "type": "navigate",
+      "screen": "mark_attendance"
+     },
+     "go_summary": {
+      "type": "navigate",
+      "screen": "monthly_summary"
+     },
+     "go_home": {
+      "type": "navigate",
+      "screen": "dashboard"
+     },
+     "save_entry": {
+      "type": "insert",
+      "collection": "attendance",
+      "then": {
+       "feedback": "Attendance logged successfully for worker"
+      }
+     },
+     "update_entry": {
+      "type": "update",
+      "collection": "attendance",
+      "record": "selected",
+      "then": {
+       "feedback": "Record updated"
+      }
+     },
+     "delete_entry": {
+      "type": "delete",
+      "collection": "attendance",
+      "record": "selected",
+      "confirm": "Are you sure you want to remove this attendance record?"
+     }
+    },
+    "aiBlocks": {},
+    "intents": {
+     "go_mark": [
+      "mark attendance",
+      "log attendance",
+      "new entry",
+      "add record",
+      "haziri lagao"
+     ],
+     "go_summary": [
+      "monthly summary",
+      "view summary",
+      "show monthly stats",
+      "report dekho"
+     ],
+     "save_entry": [
+      "save attendance",
+      "record haziri",
+      "submit attendance",
+      "done"
+     ]
+    },
+    "meta": {
+     "createdAt": 1795595858571,
+     "description": "Daily attendance tracking with present, absent, late marks, and monthly summaries for factory employees.",
+     "source": "compiler",
+     "generator": {
+      "route": "cloud",
+      "provider": "firebase",
+      "model": "gemini-3.8-flash"
+     }
+    }
+   }
+  },
+  {
+   "id": "t18-clinic-patients-doctors",
+   "reviewer": "partly: Patients, doctors, appointments and visits can be added, but no list opens a record: diagnosis and prescription can never be read back, appointment status cannot be changed, and names are free text.",
+   "request": "Clinic app with patients, doctors, appointments and visit history",
+   "spec": {
+    "id": "app_2f5eb9f9",
+    "schemaVersion": "1.0.0",
+    "version": 1,
+    "name": "Clinic Manager",
+    "description": "Manage clinic patients, doctors, appointments, and medical visit history.",
+    "icon": {
+     "glyph": "heart",
+     "background": "#315C4C",
+     "foreground": "#FFFFFF"
+    },
+    "lang": "en",
+    "theme": {
+     "primary": "#315C4C",
+     "secondary": "#D69B52",
+     "background": "#F8F7F2",
+     "surface": "#FFFFFF",
+     "text": "#202820",
+     "radius": 14,
+     "fontScale": 1,
+     "spacing": "comfortable",
+     "fontFamily": "inter",
+     "preset": "calm_green"
+    },
+    "collections": {
+     "patients": {
+      "label": "Patients",
+      "fields": {
+       "full_name": {
+        "type": "text",
+        "label": "Patient Name",
+        "required": true
+       },
+       "phone": {
+        "type": "text",
+        "label": "Phone Number",
+        "required": true
+       },
+       "age": {
+        "type": "number",
+        "label": "Age",
+        "min": 0,
+        "max": 120
+       },
+       "gender": {
+        "type": "enum",
+        "label": "Gender",
+        "options": [
+         "Female",
+         "Male",
+         "Other"
+        ]
+       }
+      }
+     },
+     "doctors": {
+      "label": "Doctors",
+      "fields": {
+       "doctor_name": {
+        "type": "text",
+        "label": "Doctor Name",
+        "required": true
+       },
+       "specialty": {
+        "type": "text",
+        "label": "Specialty",
+        "required": true
+       },
+       "room_number": {
+        "type": "text",
+        "label": "Room / Cabin"
+       }
+      }
+     },
+     "appointments": {
+      "label": "Appointments",
+      "fields": {
+       "patient_name": {
+        "type": "text",
+        "label": "Patient Name",
+        "required": true
+       },
+       "doctor_name": {
+        "type": "text",
+        "label": "Doctor Name",
+        "required": true
+       },
+       "appt_date": {
+        "type": "date",
+        "label": "Appointment Date",
+        "defaultValue": "today"
+       },
+       "time_slot": {
+        "type": "text",
+        "label": "Time Slot"
+       },
+       "status": {
+        "type": "enum",
+        "label": "Status",
+        "options": [
+         "Scheduled",
+         "Completed",
+         "Cancelled"
+        ]
+       }
+      }
+     },
+     "visits": {
+      "label": "Visit History",
+      "fields": {
+       "patient_name": {
+        "type": "text",
+        "label": "Patient Name",
+        "required": true
+       },
+       "doctor_name": {
+        "type": "text",
+        "label": "Doctor Name",
+        "required": true
+       },
+       "visit_date": {
+        "type": "date",
+        "label": "Visit Date",
+        "defaultValue": "today"
+       },
+       "diagnosis": {
+        "type": "text",
+        "label": "Diagnosis / Symptoms",
+        "multiline": true
+       },
+       "prescription": {
+        "type": "text",
+        "label": "Prescription & Notes",
+        "multiline": true
+       },
+       "fee_charged": {
+        "type": "number",
+        "label": "Consultation Fee",
+        "min": 0,
+        "unit": "USD"
+       }
+      }
+     }
+    },
+    "screens": [
+     {
+      "id": "home",
+      "title": "Clinic Dashboard",
+      "children": [
+       {
+        "id": "stat_today_appts",
+        "type": "stat",
+        "label": "Appointments Today",
+        "expr": "count(filter(appointments, appt_date == today))",
+        "format": "integer"
+       },
+       {
+        "id": "stat_total_patients",
+        "type": "stat",
+        "label": "Registered Patients",
+        "expr": "count(patients)",
+        "format": "integer"
+       },
+       {
+        "id": "btn_new_appt",
+        "type": "bigButton",
+        "label": "Book Appointment",
+        "action": "go_add_appt",
+        "tone": "primary"
+       },
+       {
+        "id": "btn_log_visit",
+        "type": "bigButton",
+        "label": "Record Visit",
+        "action": "go_add_visit"
+       },
+       {
+        "id": "today_appts_list",
+        "secondary": "doctor_name",
+        "type": "list",
+        "label": "Today's Appointments",
+        "source": "appointments",
+        "primary": "patient_name",
+        "filter": "appt_date == today",
+        "emptyText": "No appointments scheduled for today"
+       },
+       {
+        "id": "btn_view_patients",
+        "type": "bigButton",
+        "label": "Manage Patients",
+        "action": "go_patients",
+        "tone": "secondary"
+       },
+       {
+        "id": "btn_view_doctors",
+        "type": "bigButton",
+        "label": "Manage Doctors",
+        "action": "go_doctors",
+        "tone": "secondary"
+       },
+       {
+        "id": "btn_view_visits",
+        "type": "bigButton",
+        "label": "Visit History",
+        "action": "go_visits",
+        "tone": "secondary"
+       }
+      ]
+     },
+     {
+      "id": "patients_screen",
+      "title": "Patients",
+      "children": [
+       {
+        "id": "btn_add_patient",
+        "type": "bigButton",
+        "label": "+ Add New Patient",
+        "action": "go_add_patient",
+        "tone": "primary"
+       },
+       {
+        "id": "patients_list",
+        "secondary": "phone",
+        "type": "list",
+        "label": "All Patients",
+        "source": "patients",
+        "primary": "full_name",
+        "emptyText": "No patients registered yet"
+       },
+       {
+        "id": "btn_back_home_p",
+        "type": "bigButton",
+        "label": "Back to Dashboard",
+        "action": "go_home",
+        "tone": "secondary"
+       }
+      ]
+     },
+     {
+      "id": "add_patient_screen",
+      "title": "Register Patient",
+      "form": "patients",
+      "children": [
+       {
+        "id": "patient_name_input",
+        "type": "textInput",
+        "label": "Full Name",
+        "field": "full_name",
+        "required": true
+       },
+       {
+        "id": "patient_phone_input",
+        "type": "textInput",
+        "label": "Phone Number",
+        "field": "phone",
+        "required": true
+       },
+       {
+        "id": "patient_age_input",
+        "type": "number",
+        "label": "Age",
+        "field": "age"
+       },
+       {
+        "id": "patient_gender_choice",
+        "type": "choice",
+        "label": "Gender",
+        "field": "gender"
+       },
+       {
+        "id": "btn_save_patient",
+        "type": "bigButton",
+        "label": "Save Patient",
+        "action": "save_patient",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "doctors_screen",
+      "title": "Doctors",
+      "children": [
+       {
+        "id": "btn_add_doctor",
+        "type": "bigButton",
+        "label": "+ Add Doctor",
+        "action": "go_add_doctor",
+        "tone": "primary"
+       },
+       {
+        "id": "doctors_list",
+        "secondary": "specialty",
+        "type": "list",
+        "label": "Clinic Doctors",
+        "source": "doctors",
+        "primary": "doctor_name",
+        "emptyText": "No doctors added yet"
+       },
+       {
+        "id": "btn_back_home_d",
+        "type": "bigButton",
+        "label": "Back to Dashboard",
+        "action": "go_home",
+        "tone": "secondary"
+       }
+      ]
+     },
+     {
+      "id": "add_doctor_screen",
+      "title": "Add Doctor",
+      "form": "doctors",
+      "children": [
+       {
+        "id": "doc_name_input",
+        "type": "textInput",
+        "label": "Doctor Name",
+        "field": "doctor_name",
+        "required": true
+       },
+       {
+        "id": "doc_specialty_input",
+        "type": "textInput",
+        "label": "Specialty",
+        "field": "specialty",
+        "required": true
+       },
+       {
+        "id": "doc_room_input",
+        "type": "textInput",
+        "label": "Cabin / Room",
+        "field": "room_number"
+       },
+       {
+        "id": "btn_save_doctor",
+        "type": "bigButton",
+        "label": "Save Doctor",
+        "action": "save_doctor",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "add_appointment_screen",
+      "title": "Book Appointment",
+      "form": "appointments",
+      "children": [
+       {
+        "id": "appt_patient_input",
+        "type": "textInput",
+        "label": "Patient Name",
+        "field": "patient_name",
+        "required": true
+       },
+       {
+        "id": "appt_doctor_input",
+        "type": "textInput",
+        "label": "Doctor Name",
+        "field": "doctor_name",
+        "required": true
+       },
+       {
+        "id": "appt_date_input",
+        "type": "date",
+        "label": "Appointment Date",
+        "field": "appt_date"
+       },
+       {
+        "id": "appt_slot_input",
+        "type": "textInput",
+        "label": "Time (e.g. 10:30 AM)",
+        "field": "time_slot"
+       },
+       {
+        "id": "appt_status_choice",
+        "type": "choice",
+        "label": "Status",
+        "field": "status"
+       },
+       {
+        "id": "btn_save_appt",
+        "type": "bigButton",
+        "label": "Confirm Booking",
+        "action": "save_appointment",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "visits_screen",
+      "title": "Visit History",
+      "children": [
+       {
+        "id": "btn_new_visit_entry",
+        "type": "bigButton",
+        "label": "+ New Visit Record",
+        "action": "go_add_visit",
+        "tone": "primary"
+       },
+       {
+        "id": "visits_list",
+        "secondary": "visit_date",
+        "type": "list",
+        "label": "Past Visits",
+        "source": "visits",
+        "primary": "patient_name",
+        "sort": {
+         "field": "visit_date",
+         "direction": "desc"
+        },
+        "emptyText": "No visit records found"
+       },
+       {
+        "id": "btn_back_home_v",
+        "type": "bigButton",
+        "label": "Back to Dashboard",
+        "action": "go_home",
+        "tone": "secondary"
+       }
+      ]
+     },
+     {
+      "id": "add_visit_screen",
+      "title": "Record Visit",
+      "form": "visits",
+      "children": [
+       {
+        "id": "visit_patient_input",
+        "type": "textInput",
+        "label": "Patient Name",
+        "field": "patient_name",
+        "required": true
+       },
+       {
+        "id": "visit_doctor_input",
+        "type": "textInput",
+        "label": "Doctor Name",
+        "field": "doctor_name",
+        "required": true
+       },
+       {
+        "id": "visit_date_input",
+        "type": "date",
+        "label": "Visit Date",
+        "field": "visit_date"
+       },
+       {
+        "id": "visit_diag_input",
+        "type": "textInput",
+        "label": "Diagnosis / Symptoms",
+        "field": "diagnosis",
+        "multiline": true
+       },
+       {
+        "id": "visit_rx_input",
+        "type": "textInput",
+        "label": "Prescription",
+        "field": "prescription",
+        "multiline": true
+       },
+       {
+        "id": "visit_fee_input",
+        "type": "number",
+        "label": "Consultation Fee",
+        "field": "fee_charged"
+       },
+       {
+        "id": "btn_save_visit",
+        "type": "bigButton",
+        "label": "Save Visit Record",
+        "action": "save_visit",
+        "tone": "primary"
+       }
+      ]
+     }
+    ],
+    "initialScreen": "home",
+    "actions": {
+     "go_home": {
+      "type": "navigate",
+      "screen": "home"
+     },
+     "go_patients": {
+      "type": "navigate",
+      "screen": "patients_screen"
+     },
+     "go_add_patient": {
+      "type": "navigate",
+      "screen": "add_patient_screen"
+     },
+     "save_patient": {
+      "type": "insert",
+      "collection": "patients",
+      "then": {
+       "feedback": "Patient registered successfully."
+      }
+     },
+     "go_doctors": {
+      "type": "navigate",
+      "screen": "doctors_screen"
+     },
+     "go_add_doctor": {
+      "type": "navigate",
+      "screen": "add_doctor_screen"
+     },
+     "save_doctor": {
+      "type": "insert",
+      "collection": "doctors",
+      "then": {
+       "feedback": "Doctor added successfully."
+      }
+     },
+     "go_add_appt": {
+      "type": "navigate",
+      "screen": "add_appointment_screen"
+     },
+     "save_appointment": {
+      "type": "insert",
+      "collection": "appointments",
+      "then": {
+       "feedback": "Appointment booked."
+      }
+     },
+     "go_visits": {
+      "type": "navigate",
+      "screen": "visits_screen"
+     },
+     "go_add_visit": {
+      "type": "navigate",
+      "screen": "add_visit_screen"
+     },
+     "save_visit": {
+      "type": "insert",
+      "collection": "visits",
+      "then": {
+       "feedback": "Visit history recorded."
+      }
+     }
+    },
+    "aiBlocks": {},
+    "intents": {
+     "go_add_appt": [
+      "book appointment",
+      "new appointment",
+      "schedule visit"
+     ],
+     "go_add_patient": [
+      "register patient",
+      "new patient",
+      "add patient"
+     ],
+     "go_add_visit": [
+      "record visit",
+      "log visit",
+      "add clinical note"
+     ]
+    },
+    "meta": {
+     "createdAt": 1795595906930,
+     "description": "Manage clinic patients, doctors, appointments, and medical visit history.",
+     "source": "compiler",
+     "generator": {
+      "route": "cloud",
+      "provider": "firebase",
+      "model": "gemini-3.8-flash"
+     }
+    }
+   }
+  },
+  {
+   "id": "t20-student-fee-register-report",
+   "reviewer": "partly: Students, payments and a monthly report exist, but the core ask, each student's paid and pending fees, is shown nowhere, and payments use a free-text student name.",
+   "request": "Student fee register: each student's fees paid and pending, with a monthly report",
+   "spec": {
+    "id": "app_gwk18kto",
+    "schemaVersion": "1.0.0",
+    "version": 1,
+    "name": "Fee Register",
+    "description": "Track student fee payments, dues, and monthly collections.",
+    "icon": {
+     "glyph": "wallet",
+     "background": "#1F5F8B",
+     "foreground": "#FFFFFF"
+    },
+    "lang": "en",
+    "theme": {
+     "primary": "#1F5F8B",
+     "secondary": "#2E8C88",
+     "background": "#F4F8FB",
+     "surface": "#FFFFFF",
+     "text": "#14212B",
+     "radius": 14,
+     "fontScale": 1,
+     "spacing": "comfortable",
+     "fontFamily": "inter",
+     "preset": "ocean_blue"
+    },
+    "collections": {
+     "students": {
+      "label": "Students",
+      "fields": {
+       "name": {
+        "type": "text",
+        "label": "Student Name",
+        "required": true
+       },
+       "roll_no": {
+        "type": "text",
+        "label": "Roll / ID Number"
+       },
+       "grade": {
+        "type": "text",
+        "label": "Class / Grade"
+       },
+       "total_fee": {
+        "type": "number",
+        "label": "Total Fee Due",
+        "defaultValue": 0,
+        "min": 0,
+        "decimals": 0
+       }
+      }
+     },
+     "payments": {
+      "label": "Fee Payments",
+      "fields": {
+       "student_name": {
+        "type": "text",
+        "label": "Student Name",
+        "required": true
+       },
+       "amount": {
+        "type": "number",
+        "label": "Paid Amount",
+        "defaultValue": 0,
+        "min": 0,
+        "decimals": 0
+       },
+       "payment_date": {
+        "type": "date",
+        "label": "Date Paid",
+        "defaultValue": "today"
+       },
+       "mode": {
+        "type": "enum",
+        "label": "Payment Mode",
+        "options": [
+         "Cash",
+         "Online",
+         "Cheque"
+        ]
+       },
+       "remarks": {
+        "type": "text",
+        "label": "Notes"
+       }
+      }
+     }
+    },
+    "screens": [
+     {
+      "id": "home",
+      "title": "Fee Register",
+      "children": [
+       {
+        "id": "stat_collected_this_month",
+        "type": "stat",
+        "label": "Collected this Month",
+        "expr": "sum(filter(payments, month(payment_date) == month(today)).amount)",
+        "format": "currency",
+        "currency": "INR"
+       },
+       {
+        "id": "stat_total_paid",
+        "type": "stat",
+        "label": "Total Fees Collected",
+        "expr": "sum(payments.amount)",
+        "format": "currency",
+        "currency": "INR"
+       },
+       {
+        "id": "stat_total_expected",
+        "type": "stat",
+        "label": "Total Fees Expected",
+        "expr": "sum(students.total_fee)",
+        "format": "currency",
+        "currency": "INR"
+       },
+       {
+        "id": "heading_students",
+        "type": "heading",
+        "label": "Student Roster"
+       },
+       {
+        "id": "student_list",
+        "secondary": "grade",
+        "type": "list",
+        "source": "students",
+        "primary": "name",
+        "detailScreen": "edit_student",
+        "allowDelete": true
+       },
+       {
+        "id": "btn_add_payment",
+        "type": "bigButton",
+        "label": "Record Payment",
+        "action": "nav_add_payment",
+        "tone": "primary"
+       },
+       {
+        "id": "btn_add_student",
+        "type": "bigButton",
+        "label": "Add New Student",
+        "action": "nav_add_student",
+        "tone": "secondary"
+       },
+       {
+        "id": "btn_monthly_report",
+        "type": "bigButton",
+        "label": "Monthly Payments Report",
+        "action": "nav_report",
+        "tone": "secondary"
+       }
+      ]
+     },
+     {
+      "id": "add_student",
+      "title": "Add Student",
+      "form": "students",
+      "children": [
+       {
+        "id": "input_student_name",
+        "type": "textInput",
+        "label": "Student Name",
+        "field": "name",
+        "required": true
+       },
+       {
+        "id": "input_student_roll",
+        "type": "textInput",
+        "label": "Roll / ID Number",
+        "field": "roll_no"
+       },
+       {
+        "id": "input_student_grade",
+        "type": "textInput",
+        "label": "Class / Grade",
+        "field": "grade"
+       },
+       {
+        "id": "input_student_total_fee",
+        "type": "number",
+        "label": "Annual Fee Due",
+        "field": "total_fee"
+       },
+       {
+        "id": "btn_save_student",
+        "type": "bigButton",
+        "label": "Save Student",
+        "action": "action_save_student",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "edit_student",
+      "title": "Edit Student",
+      "form": "students",
+      "children": [
+       {
+        "id": "edit_student_name",
+        "type": "textInput",
+        "label": "Student Name",
+        "field": "name",
+        "required": true
+       },
+       {
+        "id": "edit_student_roll",
+        "type": "textInput",
+        "label": "Roll / ID Number",
+        "field": "roll_no"
+       },
+       {
+        "id": "edit_student_grade",
+        "type": "textInput",
+        "label": "Class / Grade",
+        "field": "grade"
+       },
+       {
+        "id": "edit_student_total_fee",
+        "type": "number",
+        "label": "Total Fee Due",
+        "field": "total_fee"
+       },
+       {
+        "id": "btn_update_student",
+        "type": "bigButton",
+        "label": "Update Student",
+        "action": "action_update_student",
+        "tone": "primary"
+       },
+       {
+        "id": "btn_delete_student",
+        "type": "bigButton",
+        "label": "Delete Student",
+        "action": "action_delete_student",
+        "tone": "danger"
+       }
+      ]
+     },
+     {
+      "id": "add_payment",
+      "title": "Record Payment",
+      "form": "payments",
+      "children": [
+       {
+        "id": "pay_student_name",
+        "type": "textInput",
+        "label": "Student Name",
+        "field": "student_name",
+        "required": true
+       },
+       {
+        "id": "pay_amount",
+        "type": "number",
+        "label": "Payment Amount",
+        "field": "amount",
+        "required": true
+       },
+       {
+        "id": "pay_date",
+        "type": "date",
+        "label": "Payment Date",
+        "field": "payment_date"
+       },
+       {
+        "id": "pay_mode",
+        "type": "choice",
+        "label": "Payment Mode",
+        "field": "mode"
+       },
+       {
+        "id": "pay_remarks",
+        "type": "textInput",
+        "label": "Remarks",
+        "field": "remarks"
+       },
+       {
+        "id": "btn_save_payment",
+        "type": "bigButton",
+        "label": "Save Payment",
+        "action": "action_save_payment",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "monthly_report",
+      "title": "Monthly Report",
+      "children": [
+       {
+        "id": "report_stat_month_total",
+        "type": "stat",
+        "label": "Collected This Month",
+        "expr": "sum(filter(payments, month(payment_date) == month(today)).amount)",
+        "format": "currency",
+        "currency": "INR"
+       },
+       {
+        "id": "report_stat_month_count",
+        "type": "stat",
+        "label": "Payments This Month",
+        "expr": "count(filter(payments, month(payment_date) == month(today)))",
+        "format": "integer"
+       },
+       {
+        "id": "report_heading",
+        "type": "heading",
+        "label": "This Month's Transactions"
+       },
+       {
+        "id": "report_list",
+        "secondary": "amount",
+        "type": "list",
+        "source": "payments",
+        "primary": "student_name",
+        "filter": "month(payment_date) == month(today)",
+        "sort": {
+         "field": "payment_date",
+         "direction": "desc"
+        },
+        "emptyText": "No payments recorded for this month"
+       },
+       {
+        "id": "btn_back_home",
+        "type": "bigButton",
+        "label": "Back to Home",
+        "action": "nav_home",
+        "tone": "secondary"
+       }
+      ]
+     }
+    ],
+    "initialScreen": "home",
+    "actions": {
+     "nav_add_student": {
+      "type": "navigate",
+      "screen": "add_student"
+     },
+     "nav_add_payment": {
+      "type": "navigate",
+      "screen": "add_payment"
+     },
+     "nav_report": {
+      "type": "navigate",
+      "screen": "monthly_report"
+     },
+     "nav_home": {
+      "type": "navigate",
+      "screen": "home"
+     },
+     "action_save_student": {
+      "type": "insert",
+      "collection": "students",
+      "then": {
+       "feedback": "Student added successfully"
+      }
+     },
+     "action_update_student": {
+      "type": "update",
+      "collection": "students",
+      "record": "selected",
+      "then": {
+       "feedback": "Student updated successfully"
+      }
+     },
+     "action_delete_student": {
+      "type": "delete",
+      "collection": "students",
+      "record": "selected",
+      "confirm": "Are you sure you want to remove this student?",
+      "then": {
+       "feedback": "Student removed"
+      }
+     },
+     "action_save_payment": {
+      "type": "insert",
+      "collection": "payments",
+      "then": {
+       "feedback": "Payment logged successfully"
+      }
+     }
+    },
+    "aiBlocks": {},
+    "intents": {
+     "nav_add_payment": [
+      "add payment",
+      "record fee",
+      "log payment",
+      "fees received"
+     ],
+     "nav_add_student": [
+      "add student",
+      "new student",
+      "register student"
+     ],
+     "nav_report": [
+      "monthly report",
+      "monthly fee",
+      "check collections"
+     ]
+    },
+    "meta": {
+     "createdAt": 1795596006099,
+     "description": "Track student fee payments, dues, and monthly collections.",
+     "source": "compiler",
+     "generator": {
+      "route": "cloud",
+      "provider": "firebase",
+      "model": "gemini-3.8-flash"
+     }
+    }
+   }
+  },
+  {
+   "id": "s07-kirana-credit-book",
+   "reviewer": "wrong: Credit entries are not linked to any customer, so every customer page shows the shop-wide balance and all entries. Per-customer credit, the point of the sketch, does not work.",
+   "request": "Customers\nCustomers\nTotal udhaar\nCustomers\nNew customer\nCustomer\nCustomer name\nBalance\nEntries\nGave credit\nGot payment\nNew entry\nNew entry\nAmount\nNote\nPayment received\nSave",
+   "spec": {
+    "id": "app_iis0kw4c",
+    "schemaVersion": "1.0.0",
+    "version": 1,
+    "name": "Udhaar Khata",
+    "description": "Track customer credit and payments easily.",
+    "icon": {
+     "glyph": "notebook",
+     "background": "#8A4B2A",
+     "foreground": "#FFFFFF"
+    },
+    "lang": "en",
+    "theme": {
+     "primary": "#8A4B2A",
+     "secondary": "#C99A3B",
+     "background": "#FBF6EC",
+     "surface": "#FFFDF8",
+     "text": "#2B2118",
+     "radius": 10,
+     "fontScale": 1,
+     "spacing": "comfortable",
+     "fontFamily": "serif",
+     "preset": "warm_paper"
+    },
+    "collections": {
+     "customers": {
+      "label": "Customers",
+      "fields": {
+       "name": {
+        "type": "text",
+        "label": "Customer Name",
+        "required": true
+       },
+       "phone": {
+        "type": "text",
+        "label": "Phone"
+       }
+      }
+     },
+     "entries": {
+      "label": "Entries",
+      "fields": {
+       "amount": {
+        "type": "number",
+        "label": "Amount",
+        "required": true,
+        "min": 0
+       },
+       "note": {
+        "type": "text",
+        "label": "Note"
+       },
+       "is_payment": {
+        "type": "boolean",
+        "label": "Payment received"
+       },
+       "entry_date": {
+        "type": "date",
+        "label": "Date",
+        "defaultValue": "today"
+       }
+      }
+     }
+    },
+    "screens": [
+     {
+      "id": "customers_screen",
+      "title": "Customers",
+      "children": [
+       {
+        "id": "customers_heading",
+        "type": "heading",
+        "label": "Customers"
+       },
+       {
+        "id": "total_udhaar_stat",
+        "type": "stat",
+        "label": "Total udhaar",
+        "expr": "sum(entries.amount) - sum(filter(entries, is_payment == true).amount) * 2",
+        "format": "currency",
+        "currency": "INR"
+       },
+       {
+        "id": "customers_list",
+        "secondary": "phone",
+        "type": "list",
+        "label": "Customers",
+        "source": "customers",
+        "primary": "name",
+        "detailScreen": "customer_screen",
+        "allowDelete": true
+       },
+       {
+        "id": "new_customer_btn",
+        "type": "bigButton",
+        "label": "New customer",
+        "action": "go_new_customer",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "new_customer_screen",
+      "title": "New Customer",
+      "form": "customers",
+      "children": [
+       {
+        "id": "new_customer_heading",
+        "type": "heading",
+        "label": "New Customer"
+       },
+       {
+        "id": "customer_name_input",
+        "type": "textInput",
+        "label": "Customer name",
+        "field": "name",
+        "required": true
+       },
+       {
+        "id": "customer_phone_input",
+        "type": "textInput",
+        "label": "Phone (optional)",
+        "field": "phone"
+       },
+       {
+        "id": "save_customer_btn",
+        "type": "bigButton",
+        "label": "Save Customer",
+        "action": "save_customer",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "customer_screen",
+      "title": "Customer",
+      "children": [
+       {
+        "id": "customer_detail_heading",
+        "type": "heading",
+        "label": "Customer name"
+       },
+       {
+        "id": "balance_stat",
+        "type": "stat",
+        "label": "Balance",
+        "expr": "sum(entries.amount) - sum(filter(entries, is_payment == true).amount) * 2",
+        "format": "currency",
+        "currency": "INR"
+       },
+       {
+        "id": "entries_list",
+        "secondary": "amount",
+        "type": "list",
+        "label": "Entries",
+        "source": "entries",
+        "primary": "note",
+        "sort": {
+         "field": "entry_date",
+         "direction": "desc"
+        },
+        "allowDelete": true
+       },
+       {
+        "id": "gave_credit_btn",
+        "type": "bigButton",
+        "label": "Gave credit",
+        "action": "go_add_credit",
+        "tone": "danger"
+       },
+       {
+        "id": "got_payment_btn",
+        "type": "bigButton",
+        "label": "Got payment",
+        "action": "go_add_payment",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "new_entry_screen",
+      "title": "New entry",
+      "form": "entries",
+      "children": [
+       {
+        "id": "entry_heading",
+        "type": "heading",
+        "label": "New entry"
+       },
+       {
+        "id": "amount_input",
+        "type": "number",
+        "label": "Amount",
+        "field": "amount",
+        "required": true
+       },
+       {
+        "id": "note_input",
+        "type": "textInput",
+        "label": "Note",
+        "field": "note"
+       },
+       {
+        "id": "payment_toggle",
+        "type": "toggle",
+        "label": "Payment received",
+        "field": "is_payment"
+       },
+       {
+        "id": "save_entry_btn",
+        "type": "bigButton",
+        "label": "Save",
+        "action": "save_entry",
+        "tone": "primary"
+       }
+      ]
+     }
+    ],
+    "initialScreen": "customers_screen",
+    "actions": {
+     "go_new_customer": {
+      "type": "navigate",
+      "screen": "new_customer_screen"
+     },
+     "save_customer": {
+      "type": "insert",
+      "collection": "customers",
+      "then": {
+       "navigate": "customers_screen",
+       "feedback": "Customer saved"
+      }
+     },
+     "go_add_credit": {
+      "type": "navigate",
+      "screen": "new_entry_screen"
+     },
+     "go_add_payment": {
+      "type": "navigate",
+      "screen": "new_entry_screen"
+     },
+     "save_entry": {
+      "type": "insert",
+      "collection": "entries",
+      "then": {
+       "navigate": "customer_screen",
+       "feedback": "Entry saved"
+      }
+     }
+    },
+    "aiBlocks": {},
+    "intents": {
+     "go_new_customer": [
+      "new customer",
+      "add customer",
+      "naya customer"
+     ],
+     "go_add_credit": [
+      "gave credit",
+      "udhaar diya",
+      "add credit"
+     ],
+     "go_add_payment": [
+      "got payment",
+      "jama kiya",
+      "payment received"
+     ],
+     "save_entry": [
+      "save entry",
+      "save",
+      "jama karo"
+     ]
+    },
+    "meta": {
+     "createdAt": 1795596352255,
+     "description": "Track customer credit and payments easily.",
+     "source": "compiler",
+     "generator": {
+      "route": "cloud",
+      "provider": "firebase",
+      "model": "gemini-3.8-flash"
+     }
+    }
+   }
+  },
+  {
+   "id": "s15-todo-priority",
+   "reviewer": "partly: Tasks can be added, ticked and counted, but the Important flag is never shown or used to sort, so the priority the sketch asks for has no visible effect.",
+   "request": "My tasks\nMy tasks\nTask\nImportant\nAdd task\nTasks\nTasks left",
+   "spec": {
+    "id": "app_h5ikmkdy",
+    "schemaVersion": "1.0.0",
+    "version": 1,
+    "name": "My Tasks",
+    "description": "Simple task tracker to add and manage everyday tasks.",
+    "icon": {
+     "glyph": "check",
+     "background": "#315C4C",
+     "foreground": "#FFFFFF"
+    },
+    "lang": "en",
+    "theme": {
+     "primary": "#315C4C",
+     "secondary": "#D69B52",
+     "background": "#F8F7F2",
+     "surface": "#FFFFFF",
+     "text": "#202820",
+     "radius": 14,
+     "fontScale": 1,
+     "spacing": "comfortable",
+     "fontFamily": "inter",
+     "preset": "calm_green"
+    },
+    "collections": {
+     "tasks": {
+      "label": "Tasks",
+      "fields": {
+       "title": {
+        "type": "text",
+        "label": "Task",
+        "required": true
+       },
+       "important": {
+        "type": "boolean",
+        "label": "Important"
+       },
+       "completed": {
+        "type": "boolean",
+        "label": "Completed"
+       }
+      }
+     }
+    },
+    "screens": [
+     {
+      "id": "home",
+      "title": "My tasks",
+      "form": "tasks",
+      "children": [
+       {
+        "id": "header_title",
+        "type": "heading",
+        "label": "My tasks"
+       },
+       {
+        "id": "input_task",
+        "type": "textInput",
+        "label": "Task",
+        "field": "title",
+        "placeholder": "What needs to be done?"
+       },
+       {
+        "id": "toggle_important",
+        "type": "toggle",
+        "label": "Important",
+        "field": "important"
+       },
+       {
+        "id": "btn_add_task",
+        "type": "bigButton",
+        "label": "Add task",
+        "action": "act_add_task",
+        "tone": "primary"
+       },
+       {
+        "id": "task_list",
+        "type": "list",
+        "label": "Tasks",
+        "source": "tasks",
+        "primary": "title",
+        "toggleField": "completed",
+        "allowDelete": true
+       },
+       {
+        "id": "stat_tasks_left",
+        "type": "stat",
+        "label": "Tasks left",
+        "expr": "count(filter(tasks, !completed))",
+        "format": "integer"
+       }
+      ]
+     }
+    ],
+    "initialScreen": "home",
+    "actions": {
+     "act_add_task": {
+      "type": "insert",
+      "collection": "tasks",
+      "then": {
+       "feedback": "Task added"
+      }
+     }
+    },
+    "aiBlocks": {},
+    "intents": {
+     "act_add_task": [
+      "add task",
+      "new task",
+      "save task",
+      "create task"
+     ]
+    },
+    "meta": {
+     "createdAt": 1795596487411,
+     "description": "Simple task tracker to add and manage everyday tasks.",
+     "source": "compiler",
+     "generator": {
+      "route": "cloud",
+      "provider": "firebase",
+      "model": "gemini-3.8-flash"
+     }
+    }
+   }
+  },
+  {
+   "id": "s19-household-inventory",
+   "reviewer": "partly: Items with name, room and quantity save, but the item photo is never stored, the Rooms list shows items rather than rooms, and quantity is never visible again.",
+   "request": "Rooms\nRooms\nRooms\nAdd room\nAdd item\nAdd item\nItem name\nRoom\nQuantity\nItem photo\nSave",
+   "spec": {
+    "id": "app_i9nrw901",
+    "schemaVersion": "1.0.0",
+    "version": 1,
+    "name": "Room Inventory",
+    "description": "Organize and catalog household items by room.",
+    "icon": {
+     "glyph": "home",
+     "background": "#8A4B2A",
+     "foreground": "#FFFFFF"
+    },
+    "lang": "en",
+    "theme": {
+     "primary": "#8A4B2A",
+     "secondary": "#C99A3B",
+     "background": "#FBF6EC",
+     "surface": "#FFFDF8",
+     "text": "#2B2118",
+     "radius": 10,
+     "fontScale": 1,
+     "spacing": "comfortable",
+     "fontFamily": "serif",
+     "preset": "warm_paper"
+    },
+    "collections": {
+     "items": {
+      "label": "Items",
+      "fields": {
+       "item_name": {
+        "type": "text",
+        "label": "Item name",
+        "required": true
+       },
+       "room": {
+        "type": "text",
+        "label": "Room",
+        "required": true
+       },
+       "quantity": {
+        "type": "number",
+        "label": "Quantity",
+        "defaultValue": 1,
+        "min": 0
+       }
+      }
+     }
+    },
+    "screens": [
+     {
+      "id": "rooms_screen",
+      "title": "Rooms",
+      "children": [
+       {
+        "id": "rooms_heading",
+        "type": "heading",
+        "label": "Rooms"
+       },
+       {
+        "id": "rooms_list",
+        "secondary": "room",
+        "type": "list",
+        "source": "items",
+        "primary": "item_name",
+        "sort": {
+         "field": "room",
+         "direction": "asc"
+        },
+        "emptyText": "No items added yet",
+        "allowDelete": true
+       },
+       {
+        "id": "add_room_button",
+        "type": "bigButton",
+        "label": "Add room",
+        "action": "go_add_item",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "add_item_screen",
+      "title": "Add item",
+      "form": "items",
+      "children": [
+       {
+        "id": "add_item_heading",
+        "type": "heading",
+        "label": "Add item"
+       },
+       {
+        "id": "item_name_input",
+        "type": "textInput",
+        "label": "Item name",
+        "field": "item_name",
+        "placeholder": "e.g. Lamp, Sofa"
+       },
+       {
+        "id": "room_input",
+        "type": "textInput",
+        "label": "Room",
+        "field": "room",
+        "placeholder": "e.g. Living Room, Bedroom"
+       },
+       {
+        "id": "quantity_input",
+        "type": "number",
+        "label": "Quantity",
+        "field": "quantity"
+       },
+       {
+        "id": "item_photo",
+        "type": "photo",
+        "label": "Item photo"
+       },
+       {
+        "id": "save_item_button",
+        "type": "bigButton",
+        "label": "Save",
+        "action": "save_item",
+        "tone": "primary"
+       }
+      ]
+     }
+    ],
+    "initialScreen": "rooms_screen",
+    "actions": {
+     "go_add_item": {
+      "type": "navigate",
+      "screen": "add_item_screen"
+     },
+     "save_item": {
+      "type": "insert",
+      "collection": "items",
+      "then": {
+       "navigate": "rooms_screen",
+       "feedback": "Item added successfully"
+      }
+     }
+    },
+    "aiBlocks": {},
+    "intents": {
+     "go_add_item": [
+      "add room",
+      "add item",
+      "new item",
+      "add new"
+     ],
+     "save_item": [
+      "save",
+      "save item",
+      "done"
+     ]
+    },
+    "meta": {
+     "createdAt": 1795596520543,
+     "description": "Organize and catalog household items by room.",
+     "source": "compiler",
+     "generator": {
+      "route": "cloud",
+      "provider": "firebase",
+      "model": "gemini-3.8-flash"
+     }
+    }
+   }
+  },
+  {
+   "id": "s20-appointment-register",
+   "reviewer": "partly: Booking and today's list work, but Mark done saves nothing (no status is set), the Details page does not show the appointment, and Cancel deletes it.",
+   "request": "Today\nAppointments today\nBooked\nAppointments\nBook\nBook\nBook appointment\nClient name\nPhone\nDate\nTime\nReason\nSave\nDetails\nDetails\nStatus\nMark done\nCancel",
+   "spec": {
+    "id": "app_3h64l6mn",
+    "schemaVersion": "1.0.0",
+    "version": 1,
+    "name": "Appointment Book",
+    "description": "Schedule, track, and manage client appointments for today and upcoming dates.",
+    "icon": {
+     "glyph": "calendar",
+     "background": "#1F5F8B",
+     "foreground": "#FFFFFF"
+    },
+    "lang": "en",
+    "theme": {
+     "primary": "#1F5F8B",
+     "secondary": "#2E8C88",
+     "background": "#F4F8FB",
+     "surface": "#FFFFFF",
+     "text": "#14212B",
+     "radius": 14,
+     "fontScale": 1,
+     "spacing": "comfortable",
+     "fontFamily": "inter",
+     "preset": "ocean_blue"
+    },
+    "collections": {
+     "appointments": {
+      "label": "Appointments",
+      "fields": {
+       "client_name": {
+        "type": "text",
+        "label": "Client name",
+        "required": true
+       },
+       "phone": {
+        "type": "text",
+        "label": "Phone"
+       },
+       "appointment_date": {
+        "type": "date",
+        "label": "Date",
+        "defaultValue": "today"
+       },
+       "time": {
+        "type": "text",
+        "label": "Time"
+       },
+       "reason": {
+        "type": "text",
+        "label": "Reason"
+       },
+       "status": {
+        "type": "enum",
+        "label": "Status",
+        "options": [
+         "Booked",
+         "Done",
+         "Cancelled"
+        ]
+       }
+      }
+     }
+    },
+    "screens": [
+     {
+      "id": "today_screen",
+      "title": "Today",
+      "children": [
+       {
+        "id": "heading_today",
+        "type": "heading",
+        "label": "Appointments today"
+       },
+       {
+        "id": "stat_booked_today",
+        "type": "stat",
+        "label": "Booked",
+        "expr": "count(filter(appointments, appointment_date == today && status != 'Cancelled'))",
+        "format": "integer"
+       },
+       {
+        "id": "list_appointments",
+        "secondary": "time",
+        "type": "list",
+        "label": "Appointments",
+        "source": "appointments",
+        "primary": "client_name",
+        "filter": "appointment_date == today",
+        "emptyText": "No appointments today",
+        "detailScreen": "details_screen"
+       },
+       {
+        "id": "btn_book",
+        "type": "bigButton",
+        "label": "Book",
+        "action": "action_go_book",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "book_screen",
+      "title": "Book",
+      "form": "appointments",
+      "children": [
+       {
+        "id": "heading_book",
+        "type": "heading",
+        "label": "Book appointment"
+       },
+       {
+        "id": "input_client_name",
+        "type": "textInput",
+        "label": "Client name",
+        "field": "client_name",
+        "required": true
+       },
+       {
+        "id": "input_phone",
+        "type": "textInput",
+        "label": "Phone",
+        "field": "phone"
+       },
+       {
+        "id": "input_date",
+        "type": "date",
+        "label": "Date",
+        "field": "appointment_date"
+       },
+       {
+        "id": "input_time",
+        "type": "textInput",
+        "label": "Time",
+        "field": "time",
+        "placeholder": "e.g. 10:30 AM"
+       },
+       {
+        "id": "input_reason",
+        "type": "textInput",
+        "label": "Reason",
+        "field": "reason"
+       },
+       {
+        "id": "btn_save",
+        "type": "bigButton",
+        "label": "Save",
+        "action": "action_save_appointment",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "details_screen",
+      "title": "Details",
+      "form": "appointments",
+      "children": [
+       {
+        "id": "heading_details",
+        "type": "heading",
+        "label": "Details"
+       },
+       {
+        "id": "stat_status",
+        "type": "stat",
+        "label": "Status",
+        "expr": "form.status ? form.status : 'Booked'",
+        "format": "text"
+       },
+       {
+        "id": "btn_mark_done",
+        "type": "bigButton",
+        "label": "Mark done",
+        "action": "action_mark_done",
+        "tone": "primary"
+       },
+       {
+        "id": "btn_cancel",
+        "type": "bigButton",
+        "label": "Cancel",
+        "action": "action_cancel_appointment",
+        "tone": "danger"
+       }
+      ]
+     }
+    ],
+    "initialScreen": "today_screen",
+    "actions": {
+     "action_go_book": {
+      "type": "navigate",
+      "screen": "book_screen"
+     },
+     "action_save_appointment": {
+      "type": "insert",
+      "collection": "appointments",
+      "then": {
+       "feedback": "Appointment booked successfully"
+      }
+     },
+     "action_mark_done": {
+      "type": "update",
+      "collection": "appointments",
+      "record": "selected",
+      "then": {
+       "feedback": "Appointment marked done"
+      }
+     },
+     "action_cancel_appointment": {
+      "type": "delete",
+      "collection": "appointments",
+      "record": "selected",
+      "confirm": "Cancel and remove this appointment?",
+      "then": {
+       "feedback": "Appointment cancelled"
+      }
+     }
+    },
+    "aiBlocks": {},
+    "intents": {
+     "action_go_book": [
+      "book appointment",
+      "new appointment",
+      "add booking"
+     ],
+     "action_save_appointment": [
+      "save appointment",
+      "confirm booking",
+      "save"
+     ],
+     "action_mark_done": [
+      "mark done",
+      "complete appointment",
+      "done"
+     ],
+     "action_cancel_appointment": [
+      "cancel appointment",
+      "delete booking"
+     ]
+    },
+    "meta": {
+     "createdAt": 1795596529885,
+     "description": "Schedule, track, and manage client appointments for today and upcoming dates.",
+     "source": "compiler",
+     "generator": {
+      "route": "cloud",
+      "provider": "firebase",
+      "model": "gemini-3.8-flash"
+     }
+    }
+   }
+  },
+  {
+   "id": "s21-habit-tracker",
+   "reviewer": "partly: Habits can be added and ticked, but the drawn Streak is missing and \"done today\" is one flag that never resets, so there is no daily history.",
+   "request": "Today\nHabits today\nHabits\nDone today\nStreak\nAdd habit\nAdd habit\nHabit name\nSave",
+   "spec": {
+    "id": "app_sypdzl6q",
+    "schemaVersion": "1.0.0",
+    "version": 1,
+    "name": "Habit Tracker",
+    "description": "Track daily habits and build your streak.",
+    "icon": {
+     "glyph": "check",
+     "background": "#315C4C",
+     "foreground": "#FFFFFF"
+    },
+    "lang": "en",
+    "theme": {
+     "primary": "#315C4C",
+     "secondary": "#D69B52",
+     "background": "#F8F7F2",
+     "surface": "#FFFFFF",
+     "text": "#202820",
+     "radius": 14,
+     "fontScale": 1,
+     "spacing": "comfortable",
+     "fontFamily": "inter",
+     "preset": "calm_green"
+    },
+    "collections": {
+     "habits": {
+      "label": "Habits",
+      "fields": {
+       "name": {
+        "type": "text",
+        "label": "Habit name",
+        "required": true
+       },
+       "done_today": {
+        "type": "boolean",
+        "label": "Done today",
+        "defaultValue": false
+       }
+      }
+     }
+    },
+    "screens": [
+     {
+      "id": "today_val",
+      "title": "Today",
+      "children": [
+       {
+        "id": "heading_today",
+        "type": "heading",
+        "label": "Habits today"
+       },
+       {
+        "id": "habits_list",
+        "type": "list",
+        "label": "Habits",
+        "source": "habits",
+        "primary": "name",
+        "toggleField": "done_today",
+        "detailScreen": "detail_habit",
+        "allowDelete": true
+       },
+       {
+        "id": "completed_stat",
+        "type": "stat",
+        "label": "Completed today",
+        "expr": "count(filter(habits, done_today == true))",
+        "format": "integer"
+       },
+       {
+        "id": "add_nav_btn",
+        "type": "bigButton",
+        "label": "Add habit",
+        "action": "go_add",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "add_habit",
+      "title": "Add habit",
+      "form": "habits",
+      "children": [
+       {
+        "id": "heading_add",
+        "type": "heading",
+        "label": "Add habit"
+       },
+       {
+        "id": "habit_name_input",
+        "type": "textInput",
+        "label": "Habit name",
+        "field": "name",
+        "placeholder": "e.g. Read 20 mins"
+       },
+       {
+        "id": "save_habit_btn",
+        "type": "bigButton",
+        "label": "Save",
+        "action": "save_habit",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "detail_habit",
+      "title": "Edit habit",
+      "form": "habits",
+      "children": [
+       {
+        "id": "edit_name_input",
+        "type": "textInput",
+        "label": "Habit name",
+        "field": "name"
+       },
+       {
+        "id": "toggle_done",
+        "type": "toggle",
+        "label": "Done today",
+        "field": "done_today"
+       },
+       {
+        "id": "update_habit_btn",
+        "type": "bigButton",
+        "label": "Update",
+        "action": "update_habit",
+        "tone": "primary"
+       },
+       {
+        "id": "delete_habit_btn",
+        "type": "bigButton",
+        "label": "Delete habit",
+        "action": "delete_habit",
+        "tone": "danger"
+       }
+      ]
+     }
+    ],
+    "initialScreen": "today_val",
+    "actions": {
+     "go_add": {
+      "type": "navigate",
+      "screen": "add_habit"
+     },
+     "save_habit": {
+      "type": "insert",
+      "collection": "habits",
+      "then": {
+       "feedback": "Habit added successfully"
+      }
+     },
+     "update_habit": {
+      "type": "update",
+      "collection": "habits",
+      "record": "selected",
+      "then": {
+       "feedback": "Habit updated"
+      }
+     },
+     "delete_habit": {
+      "type": "delete",
+      "collection": "habits",
+      "record": "selected",
+      "confirm": "Are you sure you want to remove this habit?"
+     }
+    },
+    "aiBlocks": {},
+    "intents": {
+     "go_add": [
+      "add habit",
+      "new habit",
+      "create habit"
+     ],
+     "save_habit": [
+      "save habit",
+      "save",
+      "done"
+     ]
+    },
+    "meta": {
+     "createdAt": 1795596549074,
+     "description": "Track daily habits and build your streak.",
+     "source": "compiler",
+     "generator": {
+      "route": "cloud",
+      "provider": "firebase",
+      "model": "gemini-3.8-flash"
+     }
+    }
+   }
+  },
+  {
+   "id": "s22-savings-goals",
+   "reviewer": "partly: Deposits can be logged with a total, but there is no goal record: the Goals list shows each deposit, there is no per-goal total, and money is shown in USD.",
+   "request": "Goals\nSavings goals\nGoals\nTotal saved\nNew goal\nAdd money\nAdd money\nGoal\nAmount\nDate\nSave",
+   "spec": {
+    "id": "app_2vej1i3b",
+    "schemaVersion": "1.0.0",
+    "version": 1,
+    "name": "Savings Goals Tracker",
+    "description": "Track savings goals and log contributions towards them.",
+    "icon": {
+     "glyph": "wallet",
+     "background": "#315C4C",
+     "foreground": "#FFFFFF"
+    },
+    "lang": "en",
+    "theme": {
+     "primary": "#315C4C",
+     "secondary": "#D69B52",
+     "background": "#F8F7F2",
+     "surface": "#FFFFFF",
+     "text": "#202820",
+     "radius": 14,
+     "fontScale": 1,
+     "spacing": "comfortable",
+     "fontFamily": "inter",
+     "preset": "calm_green"
+    },
+    "collections": {
+     "savings_records": {
+      "label": "Savings Records",
+      "fields": {
+       "goal": {
+        "type": "text",
+        "label": "Goal",
+        "required": true
+       },
+       "amount": {
+        "type": "number",
+        "label": "Amount",
+        "defaultValue": 0,
+        "min": 0,
+        "decimals": 2
+       },
+       "saved_date": {
+        "type": "date",
+        "label": "Date",
+        "defaultValue": "today"
+       }
+      }
+     }
+    },
+    "screens": [
+     {
+      "id": "goals_screen",
+      "title": "Goals",
+      "children": [
+       {
+        "id": "savings_heading",
+        "type": "heading",
+        "label": "Savings goals"
+       },
+       {
+        "id": "goals_list",
+        "secondary": "amount",
+        "type": "list",
+        "source": "savings_records",
+        "primary": "goal",
+        "sort": {
+         "field": "saved_date",
+         "direction": "desc"
+        },
+        "emptyText": "No savings goals logged yet",
+        "allowDelete": true
+       },
+       {
+        "id": "total_saved_stat",
+        "type": "stat",
+        "label": "Total saved",
+        "expr": "sum(savings_records.amount)",
+        "format": "currency",
+        "currency": "USD"
+       },
+       {
+        "id": "new_goal_btn",
+        "type": "bigButton",
+        "label": "New goal",
+        "action": "go_add_money",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "add_money_screen",
+      "title": "Add money",
+      "form": "savings_records",
+      "children": [
+       {
+        "id": "add_money_heading",
+        "type": "heading",
+        "label": "Add money"
+       },
+       {
+        "id": "goal_input",
+        "type": "textInput",
+        "label": "Goal",
+        "field": "goal",
+        "required": true,
+        "placeholder": "e.g. Vacation, Emergency fund"
+       },
+       {
+        "id": "amount_input",
+        "type": "number",
+        "label": "Amount",
+        "field": "amount"
+       },
+       {
+        "id": "date_input",
+        "type": "date",
+        "label": "Date",
+        "field": "saved_date"
+       },
+       {
+        "id": "save_money_btn",
+        "type": "bigButton",
+        "label": "Save",
+        "action": "save_record",
+        "tone": "primary"
+       }
+      ]
+     }
+    ],
+    "initialScreen": "goals_screen",
+    "actions": {
+     "go_add_money": {
+      "type": "navigate",
+      "screen": "add_money_screen"
+     },
+     "save_record": {
+      "type": "insert",
+      "collection": "savings_records",
+      "then": {
+       "feedback": "Savings entry saved successfully"
+      }
+     }
+    },
+    "aiBlocks": {},
+    "intents": {
+     "go_add_money": [
+      "new goal",
+      "add money",
+      "save money",
+      "new savings"
+     ],
+     "save_record": [
+      "save",
+      "save goal",
+      "done",
+      "confirm"
+     ]
+    },
+    "meta": {
+     "createdAt": 1795596556609,
+     "description": "Track savings goals and log contributions towards them.",
+     "source": "compiler",
+     "generator": {
+      "route": "cloud",
+      "provider": "firebase",
+      "model": "gemini-3.8-flash"
+     }
+    }
+   }
+  },
+  {
+   "id": "s23-fee-ledger",
+   "reviewer": "wrong: Payments are not linked to any student, so every student page shows the school-wide balance and all payments, and a fee cannot be collected for one student. An unused AI block was added.",
+   "request": "Students\nStudents\nPending fees\nStudents\nNew student\nStudent\nStudent fees\nBalance\nPayments\nCollect fee\nCollect fee\nCollect fee\nAmount\nDate\nMode of payment\nSave",
+   "spec": {
+    "id": "app_n0yzzqcm",
+    "schemaVersion": "1.0.0",
+    "version": 1,
+    "name": "Student Fees",
+    "description": "Track students and their fee payments.",
+    "icon": {
+     "glyph": "graduation_cap",
+     "background": "#315C4C",
+     "foreground": "#FFFFFF"
+    },
+    "lang": "en",
+    "theme": {
+     "primary": "#315C4C",
+     "secondary": "#D69B52",
+     "background": "#F8F7F2",
+     "surface": "#FFFFFF",
+     "text": "#202820",
+     "radius": 14,
+     "fontScale": 1,
+     "spacing": "comfortable",
+     "fontFamily": "inter",
+     "preset": "calm_green"
+    },
+    "collections": {
+     "students": {
+      "label": "Students",
+      "fields": {
+       "name": {
+        "type": "text",
+        "label": "Student Name",
+        "required": true
+       },
+       "total_fee": {
+        "type": "number",
+        "label": "Total Fee",
+        "min": 0,
+        "unit": "INR"
+       },
+       "phone": {
+        "type": "text",
+        "label": "Phone"
+       }
+      }
+     },
+     "payments": {
+      "label": "Payments",
+      "fields": {
+       "amount": {
+        "type": "number",
+        "label": "Amount",
+        "defaultValue": 0,
+        "min": 0,
+        "unit": "INR",
+        "decimals": 0
+       },
+       "payment_date": {
+        "type": "date",
+        "label": "Date",
+        "defaultValue": "today"
+       },
+       "mode_of_payment": {
+        "type": "enum",
+        "label": "Mode of payment",
+        "options": [
+         "Cash",
+         "UPI",
+         "Bank Transfer",
+         "Cheque"
+        ]
+       }
+      }
+     }
+    },
+    "screens": [
+     {
+      "id": "students_screen",
+      "title": "Students",
+      "children": [
+       {
+        "id": "heading_students",
+        "type": "heading",
+        "label": "Students"
+       },
+       {
+        "id": "stat_pending_fees",
+        "type": "stat",
+        "label": "Pending fees",
+        "expr": "sum(students.total_fee) - sum(payments.amount)",
+        "format": "currency",
+        "currency": "INR"
+       },
+       {
+        "id": "list_students",
+        "secondary": "phone",
+        "type": "list",
+        "source": "students",
+        "primary": "name",
+        "detailScreen": "student_detail_screen",
+        "allowDelete": true
+       },
+       {
+        "id": "btn_new_student",
+        "type": "bigButton",
+        "label": "New student",
+        "action": "act_go_new_student",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "new_student_screen",
+      "title": "New student",
+      "form": "students",
+      "children": [
+       {
+        "id": "input_student_name",
+        "type": "textInput",
+        "label": "Student Name",
+        "field": "name",
+        "required": true
+       },
+       {
+        "id": "input_total_fee",
+        "type": "number",
+        "label": "Total Fee",
+        "field": "total_fee"
+       },
+       {
+        "id": "input_phone",
+        "type": "textInput",
+        "label": "Phone",
+        "field": "phone"
+       },
+       {
+        "id": "btn_save_student",
+        "type": "bigButton",
+        "label": "Save",
+        "action": "act_save_student",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "student_detail_screen",
+      "title": "Student",
+      "children": [
+       {
+        "id": "heading_student_fees",
+        "type": "heading",
+        "label": "Student fees"
+       },
+       {
+        "id": "stat_balance",
+        "type": "stat",
+        "label": "Balance",
+        "expr": "sum(students.total_fee) - sum(payments.amount)",
+        "format": "currency",
+        "currency": "INR"
+       },
+       {
+        "id": "list_payments",
+        "secondary": "payment_date",
+        "type": "list",
+        "source": "payments",
+        "primary": "mode_of_payment",
+        "emptyText": "No payments recorded yet",
+        "allowDelete": true
+       },
+       {
+        "id": "btn_collect_fee",
+        "type": "bigButton",
+        "label": "Collect fee",
+        "action": "act_go_collect_fee",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "collect_fee_screen",
+      "title": "Collect fee",
+      "form": "payments",
+      "children": [
+       {
+        "id": "heading_collect_fee",
+        "type": "heading",
+        "label": "Collect fee"
+       },
+       {
+        "id": "input_amount",
+        "type": "number",
+        "label": "Amount",
+        "field": "amount",
+        "required": true
+       },
+       {
+        "id": "input_date",
+        "type": "date",
+        "label": "Date",
+        "field": "payment_date"
+       },
+       {
+        "id": "input_mode",
+        "type": "choice",
+        "label": "Mode of payment",
+        "field": "mode_of_payment",
+        "required": true
+       },
+       {
+        "id": "btn_save_payment",
+        "type": "bigButton",
+        "label": "Save",
+        "action": "act_save_payment",
+        "tone": "primary"
+       }
+      ]
+     }
+    ],
+    "initialScreen": "students_screen",
+    "actions": {
+     "act_go_new_student": {
+      "type": "navigate",
+      "screen": "new_student_screen"
+     },
+     "act_save_student": {
+      "type": "insert",
+      "collection": "students",
+      "then": {
+       "feedback": "Student saved successfully"
+      }
+     },
+     "act_go_collect_fee": {
+      "type": "navigate",
+      "screen": "collect_fee_screen"
+     },
+     "act_save_payment": {
+      "type": "insert",
+      "collection": "payments",
+      "then": {
+       "feedback": "Payment collected"
+      }
+     }
+    },
+    "aiBlocks": {
+     "default_stub": {
+      "kind": "summarise",
+      "prompt": "Summarise payments",
+      "verified": "unverified",
+      "inputField": "mode_of_payment",
+      "outputField": "mode_of_payment",
+      "maxWords": 20
+     }
+    },
+    "intents": {
+     "act_go_new_student": [
+      "add student",
+      "new student",
+      "naya student"
+     ],
+     "act_go_collect_fee": [
+      "collect fee",
+      "pay fee",
+      "fees jama karo",
+      "add payment"
+     ]
+    },
+    "meta": {
+     "createdAt": 1795596579505,
+     "description": "Track students and their fee payments.",
+     "source": "compiler",
+     "generator": {
+      "route": "cloud",
+      "provider": "firebase",
+      "model": "gemini-3.8-flash"
+     }
+    }
+   }
+  },
+  {
+   "id": "s24-workout-log",
+   "reviewer": "partly: Workouts with sets, reps, weight and date save, but \"This week\" counts every workout ever, and sets, reps and weight can never be viewed again.",
+   "request": "Log\nWorkout log\nWorkouts\nThis week\nAdd workout\nAdd workout\nAdd workout\nExercise\nSets\nReps\nWeight in kg\nDate\nSave",
+   "spec": {
+    "id": "app_2lestsfo",
+    "schemaVersion": "1.0.0",
+    "version": 1,
+    "name": "Workout Log",
+    "description": "Track your workouts, sets, reps, and weights.",
+    "icon": {
+     "glyph": "dumbbell",
+     "background": "#315C4C",
+     "foreground": "#FFFFFF"
+    },
+    "lang": "en",
+    "theme": {
+     "primary": "#315C4C",
+     "secondary": "#D69B52",
+     "background": "#F8F7F2",
+     "surface": "#FFFFFF",
+     "text": "#202820",
+     "radius": 14,
+     "fontScale": 1,
+     "spacing": "comfortable",
+     "fontFamily": "inter",
+     "preset": "calm_green"
+    },
+    "collections": {
+     "workouts": {
+      "label": "Workouts",
+      "fields": {
+       "exercise": {
+        "type": "text",
+        "label": "Exercise",
+        "required": true
+       },
+       "sets": {
+        "type": "number",
+        "label": "Sets",
+        "min": 1,
+        "decimals": 0
+       },
+       "reps": {
+        "type": "number",
+        "label": "Reps",
+        "min": 1,
+        "decimals": 0
+       },
+       "weight_kg": {
+        "type": "number",
+        "label": "Weight (kg)",
+        "min": 0,
+        "unit": "kg"
+       },
+       "workout_date": {
+        "type": "date",
+        "label": "Date",
+        "defaultValue": "today"
+       }
+      }
+     }
+    },
+    "screens": [
+     {
+      "id": "log",
+      "title": "Log",
+      "children": [
+       {
+        "id": "heading_log",
+        "type": "heading",
+        "label": "Workout log"
+       },
+       {
+        "id": "workouts_list",
+        "secondary": "workout_date",
+        "type": "list",
+        "label": "Workouts",
+        "source": "workouts",
+        "primary": "exercise",
+        "sort": {
+         "field": "workout_date",
+         "direction": "desc"
+        },
+        "emptyText": "No workouts logged yet",
+        "allowDelete": true
+       },
+       {
+        "id": "stat_this_week",
+        "type": "stat",
+        "label": "This week",
+        "expr": "count(workouts)",
+        "format": "integer"
+       },
+       {
+        "id": "btn_add_workout",
+        "type": "bigButton",
+        "label": "Add workout",
+        "action": "go_to_add",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "add_workout",
+      "title": "Add workout",
+      "form": "workouts",
+      "children": [
+       {
+        "id": "heading_add",
+        "type": "heading",
+        "label": "Add workout"
+       },
+       {
+        "id": "input_exercise",
+        "type": "textInput",
+        "label": "Exercise",
+        "field": "exercise",
+        "required": true,
+        "placeholder": "e.g. Bench Press"
+       },
+       {
+        "id": "input_sets",
+        "type": "number",
+        "label": "Sets",
+        "field": "sets"
+       },
+       {
+        "id": "input_reps",
+        "type": "number",
+        "label": "Reps",
+        "field": "reps"
+       },
+       {
+        "id": "input_weight",
+        "type": "number",
+        "label": "Weight in kg",
+        "field": "weight_kg"
+       },
+       {
+        "id": "input_date",
+        "type": "date",
+        "label": "Date",
+        "field": "workout_date"
+       },
+       {
+        "id": "btn_save",
+        "type": "bigButton",
+        "label": "Save",
+        "action": "save_workout",
+        "tone": "primary"
+       }
+      ]
+     }
+    ],
+    "initialScreen": "log",
+    "actions": {
+     "go_to_add": {
+      "type": "navigate",
+      "screen": "add_workout"
+     },
+     "save_workout": {
+      "type": "insert",
+      "collection": "workouts",
+      "then": {
+       "navigate": "log",
+       "feedback": "Workout saved!"
+      }
+     }
+    },
+    "aiBlocks": {},
+    "intents": {
+     "go_to_add": [
+      "add workout",
+      "new workout",
+      "log workout"
+     ],
+     "save_workout": [
+      "save",
+      "save workout",
+      "done"
+     ]
+    },
+    "meta": {
+     "createdAt": 1795596666431,
+     "description": "Track your workouts, sets, reps, and weights.",
+     "source": "compiler",
+     "generator": {
+      "route": "cloud",
+      "provider": "firebase",
+      "model": "gemini-3.8-flash"
+     }
+    }
+   }
+  },
+  {
+   "id": "mx04-sketch-credit-book-text-and-voice",
+   "reviewer": "wrong: The voice asked to show each customer's credit and repayments separately, but Balance and Entries are shop-wide, and payments are added to the udhaar total instead of subtracted.",
+   "request": "Mere kirana ke liye\nhar grahak ka udhaar aur wapas aaya paisa alag alag dikhana\nCustomers\nCustomers\nTotal udhaar\nCustomers\nNew customer\nCustomer\nCustomer name\nBalance\nEntries\nGave credit\nGot payment\nNew entry\nNew entry\nAmount\nNote\nPayment received\nSave",
+   "spec": {
+    "id": "app_9waw9idr",
+    "schemaVersion": "1.0.0",
+    "version": 1,
+    "name": "Kirana Udhaar Khata",
+    "description": "Track customer credit and payments for your grocery shop.",
+    "icon": {
+     "glyph": "notebook",
+     "background": "#8A4B2A",
+     "foreground": "#FFFFFF"
+    },
+    "lang": "en",
+    "theme": {
+     "primary": "#8A4B2A",
+     "secondary": "#C99A3B",
+     "background": "#FBF6EC",
+     "surface": "#FFFDF8",
+     "text": "#2B2118",
+     "radius": 10,
+     "fontScale": 1,
+     "spacing": "comfortable",
+     "fontFamily": "serif",
+     "preset": "warm_paper"
+    },
+    "collections": {
+     "customers": {
+      "label": "Customers",
+      "fields": {
+       "name": {
+        "type": "text",
+        "label": "Customer name",
+        "required": true
+       },
+       "phone": {
+        "type": "text",
+        "label": "Phone number"
+       },
+       "balance": {
+        "type": "number",
+        "label": "Balance",
+        "defaultValue": 0,
+        "unit": "INR"
+       }
+      }
+     },
+     "entries": {
+      "label": "Entries",
+      "fields": {
+       "customer_name": {
+        "type": "text",
+        "label": "Customer",
+        "required": true
+       },
+       "amount": {
+        "type": "number",
+        "label": "Amount",
+        "defaultValue": 0,
+        "min": 0,
+        "unit": "INR",
+        "decimals": 2
+       },
+       "note": {
+        "type": "text",
+        "label": "Note"
+       },
+       "is_payment": {
+        "type": "boolean",
+        "label": "Payment received",
+        "defaultValue": false
+       },
+       "entry_date": {
+        "type": "date",
+        "label": "Date",
+        "defaultValue": "today"
+       }
+      }
+     }
+    },
+    "screens": [
+     {
+      "id": "customers_screen",
+      "title": "Customers",
+      "children": [
+       {
+        "id": "cust_heading",
+        "type": "heading",
+        "label": "Customers"
+       },
+       {
+        "id": "total_udhaar_stat",
+        "type": "stat",
+        "label": "Total udhaar",
+        "expr": "sum(entries.amount)",
+        "format": "currency",
+        "currency": "INR"
+       },
+       {
+        "id": "customers_list",
+        "secondary": "phone",
+        "type": "list",
+        "label": "Customers",
+        "source": "customers",
+        "primary": "name",
+        "detailScreen": "customer_detail_screen",
+        "allowDelete": true
+       },
+       {
+        "id": "btn_new_customer",
+        "type": "bigButton",
+        "label": "New customer",
+        "action": "go_add_customer",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "add_customer_screen",
+      "title": "New Customer",
+      "form": "customers",
+      "children": [
+       {
+        "id": "add_cust_heading",
+        "type": "heading",
+        "label": "Add New Customer"
+       },
+       {
+        "id": "input_cust_name",
+        "type": "textInput",
+        "label": "Customer name",
+        "field": "name",
+        "required": true,
+        "placeholder": "Enter customer name"
+       },
+       {
+        "id": "input_cust_phone",
+        "type": "textInput",
+        "label": "Phone number",
+        "field": "phone",
+        "placeholder": "Optional phone number"
+       },
+       {
+        "id": "btn_save_customer",
+        "type": "bigButton",
+        "label": "Save Customer",
+        "action": "save_customer",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "customer_detail_screen",
+      "title": "Customer",
+      "form": "customers",
+      "children": [
+       {
+        "id": "cust_name_heading",
+        "type": "heading",
+        "label": "Customer Details"
+       },
+       {
+        "id": "cust_balance_stat",
+        "type": "stat",
+        "label": "Balance",
+        "expr": "sum(entries.amount)",
+        "format": "currency",
+        "currency": "INR"
+       },
+       {
+        "id": "entries_list",
+        "secondary": "amount",
+        "type": "list",
+        "label": "Entries",
+        "source": "entries",
+        "primary": "note",
+        "sort": {
+         "field": "entry_date",
+         "direction": "desc"
+        },
+        "allowDelete": true
+       },
+       {
+        "id": "btn_gave_credit",
+        "type": "bigButton",
+        "label": "Gave credit",
+        "action": "go_add_credit",
+        "tone": "danger"
+       },
+       {
+        "id": "btn_got_payment",
+        "type": "bigButton",
+        "label": "Got payment",
+        "action": "go_add_payment",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "new_entry_screen",
+      "title": "New entry",
+      "form": "entries",
+      "children": [
+       {
+        "id": "new_entry_heading",
+        "type": "heading",
+        "label": "New entry"
+       },
+       {
+        "id": "entry_cust_name",
+        "type": "textInput",
+        "label": "Customer",
+        "field": "customer_name",
+        "required": true
+       },
+       {
+        "id": "entry_amount",
+        "type": "number",
+        "label": "Amount",
+        "field": "amount",
+        "required": true
+       },
+       {
+        "id": "entry_note",
+        "type": "textInput",
+        "label": "Note",
+        "field": "note",
+        "placeholder": "Items or description"
+       },
+       {
+        "id": "entry_payment_toggle",
+        "type": "toggle",
+        "label": "Payment received",
+        "field": "is_payment"
+       },
+       {
+        "id": "entry_date_input",
+        "type": "date",
+        "label": "Date",
+        "field": "entry_date"
+       },
+       {
+        "id": "btn_save_entry",
+        "type": "bigButton",
+        "label": "Save",
+        "action": "save_entry",
+        "tone": "primary"
+       }
+      ]
+     }
+    ],
+    "initialScreen": "customers_screen",
+    "actions": {
+     "go_add_customer": {
+      "type": "navigate",
+      "screen": "add_customer_screen"
+     },
+     "save_customer": {
+      "type": "insert",
+      "collection": "customers",
+      "then": {
+       "navigate": "customers_screen",
+       "feedback": "Customer added"
+      }
+     },
+     "go_add_credit": {
+      "type": "navigate",
+      "screen": "new_entry_screen"
+     },
+     "go_add_payment": {
+      "type": "navigate",
+      "screen": "new_entry_screen"
+     },
+     "save_entry": {
+      "type": "insert",
+      "collection": "entries",
+      "then": {
+       "navigate": "customers_screen",
+       "feedback": "Entry saved"
+      }
+     }
+    },
+    "aiBlocks": {},
+    "intents": {
+     "go_add_customer": [
+      "naya grahak jodo",
+      "new customer",
+      "add customer",
+      "grahak add karo"
+     ],
+     "save_entry": [
+      "save entry",
+      "jama karo",
+      "likh lo",
+      "udhaar likho"
+     ],
+     "go_add_credit": [
+      "udhaar diya",
+      "gave credit",
+      "credit entry"
+     ],
+     "go_add_payment": [
+      "jama kiya",
+      "got payment",
+      "paisa aaya",
+      "payment received"
+     ]
+    },
+    "meta": {
+     "createdAt": 1795596907940,
+     "description": "Track customer credit and payments for your grocery shop.",
+     "source": "compiler",
+     "generator": {
+      "route": "cloud",
+      "provider": "firebase",
+      "model": "gemini-3.8-flash"
+     }
+    }
+   }
+  },
+  {
+   "id": "mx05-sketch-clinic-plus-roles",
+   "reviewer": "partly: Patients, appointments and visit notes work, but the roles ask is dropped with a misleading note that it is a runtime or server policy, there is no doctors list, and allergies can never be viewed.",
+   "request": "Doctors should only see their own patients and the admin should see everything\nHome\nClinic\nAppointments today\nPatients\nNext appointments\nNew appointment\nPatients\nPatients\nPatients\nAdd patient\nAdd patient\nAdd patient\nName\nPhone\nAge\nAllergies\nSave\nAppointments\nAppointments\nAppointments\nTap an appointment to add visit notes\nNew appointment\nNew appointment\nPatient\nDoctor\nDate\nTime\nSave\nVisit notes\nVisit notes\nDiagnosis\nMedicine given\nFollow up needed\nSave notes",
+   "spec": {
+    "id": "app_0bxk1qdr",
+    "schemaVersion": "1.0.0",
+    "version": 1,
+    "name": "Clinic Manager",
+    "description": "Clinic appointments, patient records, and doctor visit notes management.",
+    "icon": {
+     "glyph": "heart",
+     "background": "#315C4C",
+     "foreground": "#FFFFFF"
+    },
+    "lang": "en",
+    "theme": {
+     "primary": "#315C4C",
+     "secondary": "#D69B52",
+     "background": "#F8F7F2",
+     "surface": "#FFFFFF",
+     "text": "#202820",
+     "radius": 14,
+     "fontScale": 1,
+     "spacing": "comfortable",
+     "fontFamily": "inter",
+     "preset": "calm_green"
+    },
+    "collections": {
+     "patients": {
+      "label": "Patients",
+      "fields": {
+       "name": {
+        "type": "text",
+        "label": "Name",
+        "required": true
+       },
+       "phone": {
+        "type": "text",
+        "label": "Phone"
+       },
+       "age": {
+        "type": "number",
+        "label": "Age",
+        "min": 0,
+        "max": 130
+       },
+       "allergies": {
+        "type": "text",
+        "label": "Allergies"
+       }
+      }
+     },
+     "appointments": {
+      "label": "Appointments",
+      "fields": {
+       "patient": {
+        "type": "text",
+        "label": "Patient",
+        "required": true
+       },
+       "doctor": {
+        "type": "text",
+        "label": "Doctor",
+        "required": true
+       },
+       "appt_date": {
+        "type": "date",
+        "label": "Date",
+        "defaultValue": "today"
+       },
+       "appt_time": {
+        "type": "text",
+        "label": "Time"
+       },
+       "diagnosis": {
+        "type": "text",
+        "label": "Diagnosis",
+        "multiline": true
+       },
+       "medicine": {
+        "type": "text",
+        "label": "Medicine given",
+        "multiline": true
+       },
+       "follow_up": {
+        "type": "boolean",
+        "label": "Follow up needed"
+       }
+      }
+     }
+    },
+    "screens": [
+     {
+      "id": "home",
+      "title": "Home",
+      "children": [
+       {
+        "id": "clinic_heading",
+        "type": "heading",
+        "label": "Clinic"
+       },
+       {
+        "id": "stat_today",
+        "type": "stat",
+        "label": "Appointments today",
+        "expr": "count(filter(appointments, appt_date == today))",
+        "format": "integer"
+       },
+       {
+        "id": "stat_patients",
+        "type": "stat",
+        "label": "Patients",
+        "expr": "count(patients)",
+        "format": "integer"
+       },
+       {
+        "id": "next_appts_list",
+        "secondary": "doctor",
+        "type": "list",
+        "source": "appointments",
+        "primary": "patient",
+        "detailScreen": "visit_notes"
+       },
+       {
+        "id": "btn_new_appt",
+        "type": "bigButton",
+        "label": "New appointment",
+        "action": "go_new_appointment",
+        "tone": "primary"
+       },
+       {
+        "id": "btn_go_patients",
+        "type": "bigButton",
+        "label": "Patients",
+        "action": "go_patients",
+        "tone": "secondary"
+       },
+       {
+        "id": "btn_go_appts",
+        "type": "bigButton",
+        "label": "Appointments",
+        "action": "go_appointments",
+        "tone": "secondary"
+       }
+      ]
+     },
+     {
+      "id": "patients_screen",
+      "title": "Patients",
+      "children": [
+       {
+        "id": "patients_heading",
+        "type": "heading",
+        "label": "Patients"
+       },
+       {
+        "id": "patients_list",
+        "secondary": "phone",
+        "type": "list",
+        "source": "patients",
+        "primary": "name",
+        "emptyText": "No patients found"
+       },
+       {
+        "id": "btn_add_patient",
+        "type": "bigButton",
+        "label": "Add patient",
+        "action": "go_add_patient",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "add_patient",
+      "title": "Add patient",
+      "form": "patients",
+      "children": [
+       {
+        "id": "add_patient_heading",
+        "type": "heading",
+        "label": "Add patient"
+       },
+       {
+        "id": "patient_name",
+        "type": "textInput",
+        "label": "Name",
+        "field": "name",
+        "required": true
+       },
+       {
+        "id": "patient_phone",
+        "type": "textInput",
+        "label": "Phone",
+        "field": "phone"
+       },
+       {
+        "id": "patient_age",
+        "type": "number",
+        "label": "Age",
+        "field": "age"
+       },
+       {
+        "id": "patient_allergies",
+        "type": "textInput",
+        "label": "Allergies",
+        "field": "allergies"
+       },
+       {
+        "id": "btn_save_patient",
+        "type": "bigButton",
+        "label": "Save",
+        "action": "save_patient",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "appointments_screen",
+      "title": "Appointments",
+      "children": [
+       {
+        "id": "appts_heading",
+        "type": "heading",
+        "label": "Appointments"
+       },
+       {
+        "id": "all_appts_list",
+        "secondary": "appt_date",
+        "type": "list",
+        "source": "appointments",
+        "primary": "patient",
+        "detailScreen": "visit_notes",
+        "allowDelete": true
+       },
+       {
+        "id": "appts_hint",
+        "type": "text",
+        "label": "Tap an appointment to add visit notes"
+       }
+      ]
+     },
+     {
+      "id": "new_appointment",
+      "title": "New appointment",
+      "form": "appointments",
+      "children": [
+       {
+        "id": "new_appt_heading",
+        "type": "heading",
+        "label": "New appointment"
+       },
+       {
+        "id": "appt_patient",
+        "type": "textInput",
+        "label": "Patient",
+        "field": "patient",
+        "required": true
+       },
+       {
+        "id": "appt_doctor",
+        "type": "textInput",
+        "label": "Doctor",
+        "field": "doctor",
+        "required": true
+       },
+       {
+        "id": "appt_date_input",
+        "type": "date",
+        "label": "Date",
+        "field": "appt_date"
+       },
+       {
+        "id": "appt_time_input",
+        "type": "textInput",
+        "label": "Time",
+        "field": "appt_time"
+       },
+       {
+        "id": "btn_save_appt",
+        "type": "bigButton",
+        "label": "Save",
+        "action": "save_appointment",
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "id": "visit_notes",
+      "title": "Visit notes",
+      "form": "appointments",
+      "children": [
+       {
+        "id": "notes_heading",
+        "type": "heading",
+        "label": "Visit notes"
+       },
+       {
+        "id": "notes_diagnosis",
+        "type": "textInput",
+        "label": "Diagnosis",
+        "field": "diagnosis",
+        "multiline": true
+       },
+       {
+        "id": "notes_medicine",
+        "type": "textInput",
+        "label": "Medicine given",
+        "field": "medicine",
+        "multiline": true
+       },
+       {
+        "id": "notes_follow_up",
+        "type": "toggle",
+        "label": "Follow up needed",
+        "field": "follow_up"
+       },
+       {
+        "id": "btn_save_notes",
+        "type": "bigButton",
+        "label": "Save notes",
+        "action": "update_appointment",
+        "tone": "primary"
+       }
+      ]
+     }
+    ],
+    "initialScreen": "home",
+    "actions": {
+     "go_new_appointment": {
+      "type": "navigate",
+      "screen": "new_appointment"
+     },
+     "go_patients": {
+      "type": "navigate",
+      "screen": "patients_screen"
+     },
+     "go_appointments": {
+      "type": "navigate",
+      "screen": "appointments_screen"
+     },
+     "go_add_patient": {
+      "type": "navigate",
+      "screen": "add_patient"
+     },
+     "save_patient": {
+      "type": "insert",
+      "collection": "patients",
+      "then": {
+       "navigate": "patients_screen",
+       "feedback": "Patient saved"
+      }
+     },
+     "save_appointment": {
+      "type": "insert",
+      "collection": "appointments",
+      "then": {
+       "navigate": "home",
+       "feedback": "Appointment created"
+      }
+     },
+     "update_appointment": {
+      "type": "update",
+      "collection": "appointments",
+      "record": "selected",
+      "then": {
+       "navigate": "appointments_screen",
+       "feedback": "Visit notes updated"
+      }
+     }
+    },
+    "aiBlocks": {},
+    "intents": {
+     "go_new_appointment": [
+      "new appointment",
+      "book appointment",
+      "add appointment"
+     ],
+     "go_add_patient": [
+      "add patient",
+      "new patient",
+      "create patient"
+     ],
+     "save_patient": [
+      "save patient",
+      "save"
+     ],
+     "save_appointment": [
+      "save appointment",
+      "book"
+     ],
+     "update_appointment": [
+      "save notes",
+      "update notes"
+     ]
+    },
+    "meta": {
+     "createdAt": 1795596922630,
+     "description": "Clinic appointments, patient records, and doctor visit notes management.",
+     "source": "compiler",
+     "generator": {
+      "route": "cloud",
+      "provider": "firebase",
+      "model": "gemini-3.8-flash"
+     }
+    }
+   }
+  }
+ ]
+}

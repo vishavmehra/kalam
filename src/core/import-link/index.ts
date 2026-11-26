@@ -84,11 +84,32 @@ export function decodeImportLink(urlOrFragment: string): DecodeLinkResult {
     return broken(DAMAGED);
   }
 
-  const checked = validateSpec(text);
-  // A link can claim AI blocks were verified or a cloud model made the app. Reset that, as file import does.
+  return checkApp(text, 'link');
+}
+
+/** Full validation, then the AI-verification and provenance claims are reset and checked again. */
+function checkApp(input: unknown, from: 'link' | 'file'): DecodeLinkResult {
+  const checked = validateSpec(input);
+  // An app from outside can claim AI blocks were verified or a cloud model made it. Reset that, as backup import does.
   const final = checked.ok && checked.spec ? validateSpec(stripImportedClaims(checked.spec)) : checked;
   if (!final.ok || !final.spec) {
-    return { ok: false, message: 'The app in this link did not pass Kalam checks, so it was not opened.', errors: final.errors };
+    return { ok: false, message: `The app in this ${from} did not pass Kalam checks, so it was not opened.`, errors: final.errors };
   }
   return { ok: true, spec: final.spec, warnings: final.warnings };
+}
+
+/**
+ * The app in an app file: what kalam_package_app and kalam_workspace_write make, and what the app's
+ * "Design only" export makes (a kalam-backup with exactly one app), or a bare spec. The same checks
+ * as a link. Records in the file are ignored. Never throws. The caller previews and asks before saving.
+ */
+export function decodeAppFile(json: unknown): DecodeLinkResult {
+  const file = json as { format?: unknown; apps?: unknown } | null;
+  if (file && typeof file === 'object' && file.format === 'kalam-backup') {
+    const apps = Array.isArray(file.apps) ? file.apps : [];
+    const app = apps.length === 1 ? (apps[0] as { spec?: unknown } | null) : null;
+    if (!app || typeof app !== 'object' || app.spec === undefined) return broken('This file does not hold exactly one Kalam app.');
+    return checkApp(app.spec, 'file');
+  }
+  return checkApp(json, 'file');
 }

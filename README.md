@@ -2,497 +2,473 @@
 
 **Draw the app you need. Own it forever.**
 
-Kalam is an app that creates other apps. Describe what you need (text, a photo of a sketch, your voice, a video, or the built-in Drawing Studio) and Kalam turns it into a validated, declarative **KalamSpec** (JSON data, never code). One shared runtime renders and runs it, with the data stored on your device.
+Kalam is an app that creates other apps. You describe what you need by typing, speaking, photographing a sketch, recording a video or drawing in the built-in Drawing Studio. Kalam turns the request into a **KalamSpec**: a validated JSON description of the app. It is data, never code. One shared runtime renders and runs it. The app and its records stay on your device and keep working with no network.
 
 > Building may need the cloud. **Using your app should not.**
 
-Built for **#BuildHybridAI 2026** on **Firebase AI Logic hybrid inference**: Gemini Nano on the device when it can do the job, Gemini in the cloud when it cannot, ordinary deterministic code for everything that never needed a model. Targets: **Web (PWA), Android and iOS**, plus an MCP server. The judging build demonstrates hybrid inference on Web and Android. iOS is code and configuration only so far. See [Platforms](#platforms) for the status of each.
+Built for **#BuildHybridAI 2026** on **Firebase AI Logic** hybrid inference. Targets: Web (PWA), Android, iOS and an MCP server. Source: <https://github.com/vishavmehra/kalam>. Licence: MIT.
 
-- [Status at a glance](#status-at-a-glance)
-- [Platforms](#platforms)
-- [How it works](#how-it-works)
-- [Where the Firebase AI Logic code lives](#where-the-firebase-ai-logic-code-lives)
-- [Tech stack](#tech-stack)
-- [Quickstart](#quickstart)
-- [Environment variables](#environment-variables)
-- [Specialist providers (Claude, Nebius) and the Functions emulator](#specialist-providers-claude-nebius-and-the-functions-emulator)
-- [Running tests](#running-tests)
-- [Three-minute hybrid demo](#three-minute-hybrid-demo)
-- [Project structure](#project-structure)
-- [Security and privacy](#security-and-privacy)
-- [Known limitations](#known-limitations)
-- [Documentation map](#documentation-map)
-- [License](#license)
-- [Existing work and how Kalam was built](#existing-work-and-how-kalam-was-built)
+**Honest summary of the state today (2026-11-26).** Cloud inference through Firebase AI Logic and on-device Gemini Nano in Chrome are verified with real runs, and a 75-case live evaluation of the cloud compiler was run on 2026-11-25. The Android and iOS apps build and pass six smoke flows in CI, but no phone has produced an on-device answer yet, and the in-app hybrid scenarios are not recorded in a browser. [Status](#3-status) lists each claim with its evidence, `docs/PERFORMANCE_REPORT.md` has the measured numbers, and `docs/SECURITY_REVIEW.md` the security status.
 
 ---
 
-## Status at a glance
+## 1. What Kalam is
 
-Honest, evidence-based. Per-checkpoint detail lives in `docs/07_HYBRID_AI.md` section 22 and `docs/17_FIREBASE_HYBRID_AI_REQUIREMENTS_TRACEABILITY.md` section 15.1.
+You can start an app from text, a photo of a sketch, your voice, a video or the Drawing Studio. Kalam normalizes the input, decides how hard the request is, builds the app, validates it and shows a plain-language summary before you save it. Saved apps live in a local shelf. You can edit them, back them up with encryption and export them. Signing in with Google or with an email and password is required to use Kalam. The session is kept on the device, so after you sign in everything works offline.
 
-| Area | Status | Evidence |
-|---|---|---|
-| Gemini Nano (on-device) structured output | **Verified** | Chrome 157.0.8103.79, Prompt API with the session options Firebase's on-device adapter sends. Recorded 2026-11-18 in `docs/evidence/on-device-inference-2026-11-18.json`. Not yet recorded: the same call through `getGenerativeModel` inside the running app |
-| Firebase AI Logic cloud inference | **Verified** | One real structured-output request through the SDK (`gemini-3.8-flash`, `inferenceSource: in_cloud`, App Check debug token exchanged, 3383 ms). Recorded 2026-11-18 in `docs/evidence/cloud-inference-2026-11-18.json`. A complex app compiled through the app UI is not yet verified |
-| Six-scenario hybrid check in a real browser (docs/17 section 12.1) | **Pending** | Runs next session in the Kalam Chrome profile. See `docs/FIREBASE_HYBRID_AI_VERIFICATION.md` section 9 |
-| Claude and Nebius specialists | **Verified locally, not deployed** | Real calls through `functions/scripts/verify-providers.mjs` and the Functions emulator with an App Check token |
-| Template app: create, save, run (web) | **Verified** | Exercised in a real browser |
-| Offline web app (PWA service worker) | **Verified** | Chromium: precache, offline reload, offline deep link |
-| Unit tests | **3668 of 3675 passing** | `npm test`, 57 files, measured 2026-11-18 19:52 (see [Running tests](#running-tests)) |
-| `tsc --noEmit` | **Not re-measured here** | Other work was still in progress when these numbers were taken |
-| Android build, end-to-end, security review | **Not verified** | In progress |
-| Gemini Nano on Android | **Blocked** | No native bridge or device yet (see [Known limitations](#known-limitations)) |
+**Why hybrid.** Most requests do not need a large model. A counter, an expense tracker or a checklist is a template with a few parameters. Small tasks such as classifying a note, extracting fields or reading a voice command fit a small model that runs on the device. Only whole-app generation from a vague request, sketch understanding and hard repairs need a large cloud model. Kalam sends each task to the cheapest place that can do it well, and it tells you where it ran.
 
----
+What is in the repository:
 
-## Platforms
+- 11 deterministic templates (calculator, counter, checklist, notes, expense tracker, habit tracker, inventory, contact book, measurement log, reminder list, simple form) and a rule-based complexity classifier. No model is called to classify. A gallery at `/templates` offers 31 ready-made apps, among them the five showcase apps, a kirana credit book and an attendance register.
+- A cloud compiler for complex requests, with one repair pass, and AI blocks inside apps (classify, summarize, extract, translate) that run on the device when they can.
+- A restricted formula language. No `eval`, no `new Function`.
+- Offline-first storage: Dexie over IndexedDB on the web, `expo-sqlite` on Android and iOS.
+- Kalam Bazaar, a share and install space for apps (Firebase Auth and Firestore). Free listings only. Paid credits are off unless `EXPO_PUBLIC_BAZAAR_PAYMENTS=on`.
+- A visible, opt-in queue for builds, translations and AI steps started while offline. Nothing is queued unless you confirm what will be sent, and structural edits are never queued.
+- Collaborative apps and teams (Firestore rules and the `kalamCollabJoin` function), app cloning, version history with restore, reports, reminders, an assistant, backup and account sync. Native home-screen widgets are not built yet; web shortcuts work.
 
-Kalam is one Expo codebase for Web, Android and iOS, plus an MCP server for AI assistants. The owner added iOS and the MCP server to the scope on 2026-11-18 (ADR-039 in `docs/16`). Web and Android stay the platforms the judging build demonstrates.
-
-| Platform | Status | What is true today |
-|---|---|---|
-| Web (PWA) | **Partly verified** | Template create, save and run, and the offline PWA, were checked in a real browser. On-device Gemini Nano through Chrome's Prompt API is recorded in `docs/evidence/`. The full six-scenario check is pending |
-| Android | **Built, not verified end to end** | Native Expo build. No on-device Gemini Nano and no Play Integrity App Check yet, so on-device-only requests fail with a clear message |
-| iOS | **Code and configuration only. Not verified** | Same codebase as Android. No iOS build has been made and nothing has run on a simulator or a device. The `ios` block in `app.json` and an `eas.json` are still to be added. Checking it needs a Mac with Xcode, or EAS Build. On-device AI on iOS would use Apple Foundation Models through Firebase AI Logic and needs a Swift native module that does not exist. Until then iOS shows the on-device model as unavailable and labels cloud work as cloud |
-| MCP server | **See `docs/18`** | A separate Node process that reuses the pure code in `src/core`, so assistants can validate, explain and edit KalamSpec files. It adds no AI provider and reads no user data unless the person passes a workspace folder. Its tools and status are in `docs/18` |
+KalamSpec limits keep generated apps small: at most 8 screens, 10 collections and 15 AI blocks. Features Kalam cannot do (logins, payments, servers) are mapped to the closest offline equivalent.
 
 ---
 
-## How it works
+## 2. How the hybrid AI works
 
 ```mermaid
 flowchart TD
-  IN["Text | Photo | Voice | Video | Drawing Studio"] --> NORM["Normalize to one input contract<br/>(raw audio/video never leave the device; video becomes keyframes, audio a transcript)"]
-  NORM --> CLS{"Complexity classifier<br/>deterministic, no model"}
-  CLS -->|"simple + template match"| TPL["Template builder<br/>no model; Gemini Nano may only fill gaps"]
-  CLS -->|"medium, complex, sketch"| ORCH
-  subgraph ORCH["AI orchestrator: the single router (consent + connectivity aware)"]
-    direction LR
-    FB["Firebase AI Logic hybrid<br/>Gemini Nano on-device or Gemini in the cloud"]
-    SP["Specialist via Cloud Function<br/>Claude / Nebius: opt-in, App Check, server-side keys"]
-  end
-  TPL --> VAL
-  ORCH --> VAL["Zod + semantic validation<br/>one repair pass, never invalid output"]
+  IN["Text, photo, voice, video, Drawing Studio"] --> NORM["Normalize to one input format"]
+  NORM --> CLS{"Complexity classifier (rules, no model)"}
+  CLS -->|"simple, template matches"| TPL["Template builder (no model)"]
+  CLS -->|"medium, complex, sketch"| ORCH["AI orchestrator: consent and connectivity aware"]
+  ORCH --> FB["Firebase AI Logic hybrid: Gemini Nano on the device, or Gemini in the cloud"]
+  ORCH -.->|"opt-in, escalation only"| SP["Specialist Cloud Function: Claude or Nebius"]
+  TPL --> VAL["Zod and semantic validation, one repair pass"]
+  FB --> VAL
+  SP --> VAL
   VAL --> SPEC["KalamSpec: data, never code"]
-  SPEC --> RT["Kalam runtime<br/>Dexie (web) / expo-sqlite (Android)<br/>works fully offline"]
-  RT -->|"AI block (classify, summarise, extract, translate)"| ORCH
-  ORCH -.->|"every decision"| LOG["Activity log (local): source, provider, latency, why"]
+  SPEC --> RT["Kalam runtime: works offline"]
+  RT -->|"AI block"| ORCH
 ```
 
 **Rules the code enforces**
 
-1. **Deterministic first.** Calculations, CRUD, navigation, formulas and theming never call a model.
-2. **Local AI first where it can do the job.** Small, typed tasks (extract, classify, summarise, translate, voice command, small edits) prefer Gemini Nano.
-3. **Cloud when justified.** Whole-app generation, sketch understanding and difficult repair go to Gemini through Firebase AI Logic.
-4. **Specialists only with consent and a reason.** Claude and Nebius run in a Cloud Function, behind a separate "Allow specialist models" switch that is off by default.
-5. **No silent fallbacks.** If a provider fails, the orchestrator does not quietly try another. A request that must stay on-device is never widened to the cloud.
-6. **Honest source badges.** Every AI result is labelled **On-device**, **Cloud**, **Deterministic** or **Offline**, taken from the SDK's own `inferenceSource`, never assumed.
+1. **Deterministic first.** Calculations, CRUD, navigation, formulas, theming and templates never call a model.
+2. **On-device first for small typed tasks.** Extract, classify, summarize, translate, voice commands and small edits prefer Gemini Nano.
+3. **Cloud when the task needs it.** Whole-app generation, sketch understanding and difficult repair go to Gemini through Firebase AI Logic.
+4. **At most one cloud fallback.** If a small task fails on the device, the orchestrator may make one Firebase cloud attempt. It does so only when cloud is allowed and the request was not marked on-device-only. There is no cascade of providers and no retry loop across providers.
+5. **Consent clamps every decision.** Settings has **Hybrid** and **Offline only**, plus "Use cloud AI when needed" and "Allow specialist models". A request that must stay on the device is never widened to the cloud.
+6. **Honest source labels.** Every AI result is labelled **On-device**, **Cloud**, **Deterministic** or **Offline**. The label comes from the SDK's own `inferenceSource`, not from the mode that was requested.
+7. **Validate everything.** Every model output is checked with Zod and semantic rules before it renders. Invalid output is repaired once or rejected. The previous valid version of an app is kept.
 
-Routing policy per task (from `src/core/ai/routing.ts`):
+**Routing per task** (`src/core/ai/routing.ts`)
 
 | Task | Where it can run |
 |---|---|
-| `create_app`, `plan_app`, `modify_app`, `interpret_sketch`, `repair_spec` | Firebase cloud only; specialist when escalated with consent |
+| `create_app`, `plan_app`, `modify_app`, `interpret_sketch`, `repair_spec` | Firebase cloud only. A specialist only when escalated with consent |
 | `verify_ai_block`, `safety_review` | Firebase cloud only |
-| `generate_patch`, `extract_template_params`, `extract_data`, `classify`, `summarize`, `translate`, `voice_action` | Gemini Nano first; cloud only if the user allows it |
+| `generate_patch`, `extract_data`, `classify`, `summarize`, `translate`, `voice_action` | Gemini Nano first, then at most one cloud attempt if cloud is allowed |
+| `extract_template_params` | Gemini Nano only. The deterministic template is the fallback |
 
-Settings (**Hybrid** or **Offline only**, "Use cloud AI when needed", "Allow specialist models") clamp every decision.
+**Models.** The cloud models are set in `src/core/ai/model-config.ts`, the only place model ids live. `gemini-3.8-flash` handles compile, repair and AI-block verification. `gemini-3.5-flash-lite` handles the small roles. Each role can be overridden with `EXPO_PUBLIC_AI_MODEL_<ROLE>`. The cloud backend is Firebase AI Logic on the **Agent Platform** backend, location `global`. The Gemini Developer API backend also works.
 
----
+**Where the on-device model runs**
 
-## Where the Firebase AI Logic code lives
+| Platform | On-device model | How it reaches Firebase AI Logic |
+|---|---|---|
+| Web | Gemini Nano in desktop Chrome, through the Prompt API (`LanguageModel`) | The SDK's hybrid mode drives it directly. `on-device.web.ts` checks availability, starts the download and warms the model |
+| Android | Gemini Nano through Firebase AI Logic's Android on-device SDK (ML Kit Prompt API on AICore), on supported phones | The Expo module `modules/kalam-nano` (Kotlin). `on-device.native.ts` exposes it to the SDK as a Prompt API shaped `LanguageModel` |
+| iOS | Apple Foundation Models (`SystemLanguageModel`), iOS 26 or later with Apple Intelligence on | The Expo module `modules/kalam-apple` (Swift), through the same adapter |
+| MCP server (Node) | None | Optional cloud compile only, off by default |
 
-For judges and reviewers: the SDK is isolated to a few files so it is easy to audit.
+On Android and iOS the device model takes text only, about 4000 input tokens, and runs only while Kalam is on screen. Image requests go to the cloud. Without the native module (for example in Expo Go) or on an unsupported phone, on-device status reads unavailable with the reason, and requests go to the cloud when allowed. They are labelled Cloud.
+
+**App Check**
+
+| Platform | Release builds | Development builds |
+|---|---|---|
+| Web | reCAPTCHA Enterprise (v3 optional) | SDK debug token, registered in the Firebase console |
+| Android | Play Integrity, from `modules/kalam-nano` | Debug token |
+| iOS | App Attest with DeviceCheck fallback, from `modules/kalam-apple` | Debug token |
+
+In the project used to develop Kalam, App Check enforcement is off, so unregistered clients still work. Turn enforcement on in your own project after you register your apps. The Cloud Functions enforce App Check, and the specialist function accepts each token once.
+
+**Specialist providers.** Claude (planning and repair) and Nebius (sketch reading) exist as server-side adapters inside one Cloud Function, `kalamSpecialistReason`. They are off by default, need their own consent switch, never run from the client and are not part of the judging build. Firebase AI Logic remains the primary path. No benchmark yet shows a measurable benefit over Firebase-only generation.
+
+**Where the Firebase AI Logic code lives**
 
 | What | File |
 |---|---|
-| `getAI` + `getGenerativeModel` with hybrid `mode` (`only_on_device`, `prefer_on_device`, `only_in_cloud`, `prefer_in_cloud`), result `inferenceSource` | `src/infrastructure/firebase/firebase-provider.ts` |
-| Chrome Prompt API availability, download and warm-up | `src/infrastructure/firebase/on-device.web.ts` (`on-device.native.ts` is an honest "unavailable" stub) |
-| One Firebase init, lazy, App Check before the first request | `src/infrastructure/firebase/app.ts` |
-| App Check (reCAPTCHA Enterprise or v3, debug token in dev) | `src/infrastructure/firebase/app-check.web.ts` |
+| `getAI`, `getGenerativeModel`, hybrid `mode` (`only_on_device`, `prefer_on_device`, `only_in_cloud`, `prefer_in_cloud`), result `inferenceSource` | `src/infrastructure/firebase/firebase-provider.ts` |
+| One lazy Firebase init, App Check before the first request | `src/infrastructure/firebase/app.ts` |
+| App Check per platform | `app-check.web.ts`, `app-check.native.ts`, `app-check.ios.ts` in the same folder |
+| Chrome Prompt API availability, download, warm-up | `src/infrastructure/firebase/on-device.web.ts` |
+| Native on-device adapters | `on-device.native.ts`, `on-device.ios.ts`, `prompt-api.native.ts` |
 | Routing policy and consent rules | `src/core/ai/routing.ts` |
 | The single orchestrator, retries, event log | `src/core/ai/orchestrator.ts` |
-| Model ids per logical role (the only place they live) | `src/core/ai/model-config.ts` |
 | Cloud compiler with one repair pass | `src/core/compiler/compile.ts` |
-| Composition root | `src/services/index.ts` |
-| Specialist callable (Claude, Nebius) | `functions/src/index.ts`, `functions/src/providers.ts` |
-| Real-call check scripts | `scripts/verify-firebase-ai.mjs`, `functions/scripts/verify-providers.mjs` |
-| Recorded real runs, how to repeat them, and the scenario matrix | `docs/FIREBASE_HYBRID_AI_VERIFICATION.md`, `docs/evidence/`, `scripts/record-evidence.mjs` |
+| Specialist callable | `functions/src/index.ts`, `functions/src/providers.ts` |
+| Real-call check scripts | `scripts/verify-firebase-ai.mjs`, `scripts/verify-cloud-compile.mjs`, `functions/scripts/verify-providers.mjs` |
+| Recorded real runs | `docs/evidence/*.json`, written by `scripts/record-evidence.mjs` |
 
 ---
 
-## Tech stack
+## 3. Status
 
-| Layer | Technology |
-|---|---|
-| App | Expo SDK 58, React Native 0.88, React 19.3, Expo Router, TypeScript (strict). One codebase for Web, Android and iOS (iOS not yet built) |
-| Web motion | GSAP and three.js (`*.web.tsx` files) |
-| Android motion and drawing | Reanimated 4 and Skia (`*.native.tsx` files) |
-| Local storage | Dexie over IndexedDB (web), expo-sqlite (Android and iOS) |
-| Validation and state | Zod 4, Zustand 5 |
-| Formulas | jsep, evaluated by a restricted interpreter (no `eval`) |
-| AI | Firebase JS SDK 13.4, `firebase/ai` hybrid inference (`InferenceMode`), Gemini Nano via Chrome's Prompt API |
-| Abuse protection | Firebase App Check, reCAPTCHA Enterprise |
-| Server | Cloud Functions 2nd gen, Node 22, codebase `kalam`, function `kalamSpecialistReason` |
-| Tests | Vitest 5 (unit), Playwright (end-to-end against the production web build) |
-| Offline web | Generated service worker (`scripts/build-pwa.mjs`) over the Expo web export |
+Only real runs count as verified. Mocked unit tests check Kalam's own logic around the SDK and are never counted as proof that a model ran.
 
-Platform splits use Metro extensions (`foo.web.ts`, `foo.native.ts`, plus a plain `foo.ts` shim so `tsc` resolves). iOS uses the same codebase and is not built yet (ADR-039 in `docs/16`).
+### Platforms
+
+| Platform | Status | What is true today |
+|---|---|---|
+| Web (PWA) | **Partly verified** | Template create, save and run, and offline reload of the production build, were observed in a real browser. On-device Gemini Nano in Chrome and one cloud request are recorded, and the cloud compiler was evaluated live on 2026-11-25 from Node. The in-app hybrid scenarios are not recorded. The production bundle is over its size budgets (see `docs/PERFORMANCE_REPORT.md`) |
+| Android | **Builds and runs, on-device AI not yet seen working** | CI built a 46 MB release APK and passed six Maestro flows on an emulator (run 45615319769, branch `ci/mobile-smoke`, before the redesign). On 2026-11-25 the app was opened on three real phones in Firebase Test Lab (Pixel 9, Pixel 10, Galaxy S25): the `kalam-nano` module linked on all three and AICore was unavailable on all three, so the app correctly refused the on-device-only task. Evidence in `docs/evidence/android-nano-*`. Gemini Nano still needs a supported phone with a working model |
+| iOS | **Builds and runs in the simulator, no device run** | The same CI run built the iOS app on a macOS runner and passed six Maestro flows on the simulator (before the redesign). The `kalam-apple` Swift module compiled there. Nothing has run on an iPhone, so Apple Foundation Models and App Attest are not verified. A device build needs a paid Apple Developer account, and the on-device model needs a device with Apple Intelligence |
+| MCP server | **Code complete, tested through the MCP SDK client** | `mcp/` has 60 tests in 6 files over in-memory, stdio and HTTP transports (run 2026-11-26). No recorded session with Claude Desktop or Claude Code |
+
+### Hybrid AI requirements
+
+| Requirement | Status | Evidence |
+|---|---|---|
+| Firebase AI Logic SDK imported and used at runtime | **Verified** | `firebase` 13.4.0 and `@firebase/ai` 3.1.0. A real request through `getGenerativeModel`, sent by `scripts/verify-firebase-ai.mjs`, reached the cloud model |
+| Cloud inference through Firebase AI Logic | **Verified** | One real structured-output request on 2026-11-17 and 18: `gemini-3.8-flash`, `inferenceSource: in_cloud`, App Check debug token exchanged, 3383 ms, 132 tokens (`docs/evidence/cloud-inference-2026-11-18.json`). A live evaluation on 2026-11-25 sent 56 requests over 75 golden cases: 39 of 42 cloud-routed cases gave a valid app after one repair pass (`docs/evidence/live-eval-2026-11-25.json`) |
+| Gemini Nano on the web | **Verified** | Chrome 157.0.8103.79, `availability: available`. Two schema-valid structured outputs through the Prompt API, using the session options Firebase's on-device adapter sends. The first session after a cold start took about two minutes. File: `docs/evidence/on-device-inference-2026-11-18.json` |
+| The same on-device request through `getGenerativeModel` inside the running app | **Pending** | The recorded run called the Prompt API directly |
+| Local to cloud fallback in a real browser | **Code complete, pending** | Policy in `routing.ts` and `orchestrator.ts`, unit tested with fake providers. No real "on-device unavailable, cloud used" run is recorded |
+| Source labels in the UI | **Code complete, partly seen** | The Deterministic badge was seen in a browser. Real On-device and Cloud badges are not recorded in-app |
+| App Check | **Partly verified** | Debug token exchanged on a real cloud call. The reCAPTCHA Enterprise path in a browser, Play Integrity and App Attest are not recorded |
+| A complex app compiled by the real cloud model through the app UI | **Pending** | The compile path is covered by unit tests with fake providers. `scripts/verify-cloud-compile.mjs` and `scripts/eval.mjs --live` run it against the real model from Node, not through the screens |
+| On-device model on Android (Gemini Nano) and iOS (Apple Foundation Models) | **Not verified** | AICore was unavailable on the three Test Lab phones, and nothing has run on an iPhone. Needs a supported phone, or a device with Apple Intelligence. The dated per-provider table is in `docs/07` section 14.6 |
+| Offline use of saved apps | **Observed on web** | Offline reload and deep link in Chromium. Playwright spec `tests/e2e/04-offline.spec.ts` exists. No result is committed |
+| Specialists (Claude, Nebius) | **Verified locally** | Real calls through `functions/scripts/verify-providers.mjs` and the Functions emulator. Off by default and not part of the judging build |
+| Public repository and open-source licence | **Done** | Public on GitHub, MIT |
+
+### Known limits
+
+- On the web the on-device model is configured for English text, and image input accepts JPEG and PNG only. Android handles English and Korean. On Android and iOS the device takes text only and image requests go to the cloud.
+- Gemini Nano in Chrome needs capable desktop hardware and a multi-gigabyte download that Chrome starts only from a user gesture. The first session after each page load is slow.
+- Capture on real devices (camera, microphone, video) is built but not verified on hardware. Speech recognition may be done by a platform cloud service. Kalam labels where it ran.
+- Kalam Bazaar, accounts and collaboration are built and covered by Firestore rules tests, but not verified end to end, and collaboration was never run with two real accounts.
+- The web bundle is 13.1 MB of JavaScript (8.1 MB on the first screen) and exceeds the size budgets set on 2026-11-18, and the Android release APK is 46 MB against a 25 MB target. Cold start, shelf open time and drawing latency have not been measured. The cloud compiler took a median of about 13 seconds and a 95th percentile of about 114 seconds in the live evaluation. See `docs/PERFORMANCE_REPORT.md`.
+- An internal security review on 2026-11-18, updated on 2026-11-26, covered the web build, hosting headers, the specialist function, the KalamSpec trust boundary and AI routing. It found no critical issues, and the dependency audit reports four high advisories in `firebase` and `@grpc/grpc-js` that no safe upgrade clears; they are not in the web or phone bundles. It was not an external audit and no real Play Integrity or App Attest token has been exchanged. See `docs/SECURITY_REVIEW.md`.
+- Native home-screen widgets (`modules/kalam-widget`) have never been built or registered. Cloud transcription of an audio file is not available, and the sound track of a video is read on iOS only.
 
 ---
 
-## Quickstart
+## 4. Setup
 
-### 1. Prerequisites
+### 4.1 Prerequisites
 
 | Need | For |
 |---|---|
 | Node.js 22 or newer (developed on Node 24) and npm | everything |
-| Desktop Chrome with Gemini Nano | the on-device leg on web (optional; without it Kalam uses templates and the cloud) |
-| A Firebase project | cloud AI (optional for the template-only experience) |
-| Firebase CLI (`npm i -g firebase-tools`, developed with 15.36) | Functions emulator and Hosting |
-| JDK 17, Android SDK, an emulator or device | Android only |
-| A Mac with Xcode, or EAS Build (needs an Expo account) | iOS only. Not yet verified |
+| Desktop Chrome with Gemini Nano | the on-device leg on the web (optional) |
+| A Firebase project | sign-in (required), cloud AI and the Bazaar. Without one, Kalam cannot sign anyone in, so the app stops at the sign-in screen. Use your own project and follow 4.4 |
+| Firebase CLI (`npm i -g firebase-tools`, developed with 15.36) | Functions, Firestore, Hosting, emulators |
+| JDK 17, Android SDK, an emulator or phone | Android |
+| A Mac with Xcode (simulator or local builds), or EAS Build with an Expo account. EAS alone, without a Mac, gives only device builds, which need a paid Apple Developer account and a device | iOS |
+| Java 21 | Firestore emulator (rules tests only) |
 
-### 2. Install
+### 4.2 Clone and install
 
 ```bash
-git clone <your-fork-or-this-repo-url> kalam
+git clone https://github.com/vishavmehra/kalam.git
 cd kalam
 npm ci
+npm --prefix functions ci     # the root type check also reads functions/src, so install its packages first
 ```
 
-### 3. Configure environment
+The `mcp/` folder has its own `package.json`; install it only when you need the MCP server (section 4.11).
+
+### 4.3 Environment
 
 ```bash
 cp .env.example .env.local        # PowerShell: Copy-Item .env.example .env.local
 ```
 
-`.env.local` is gitignored. Only `EXPO_PUBLIC_*` values reach the client bundle and none of them is a secret. Fill them in using step 4. See [Environment variables](#environment-variables). Restart the dev server after editing (values are inlined at bundle time).
+`.env.local` is gitignored. Only `EXPO_PUBLIC_*` values reach the client, and none is a secret. Restart the dev server after editing, because values are inlined at bundle time.
 
-Kalam runs without Firebase configured: you get templates, the runtime, storage and the Drawing Studio, and AI features report "not configured" instead of faking results.
+| Variable | Purpose |
+|---|---|
+| `EXPO_PUBLIC_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_PROJECT_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID`, `_APP_ID` | Firebase web app config. Protect the project with App Check and API key restrictions |
+| `EXPO_PUBLIC_FIREBASE_ANDROID_APP_ID`, `EXPO_PUBLIC_FIREBASE_IOS_APP_ID` | App ids of the Android and iOS apps registered in Firebase. Needed for Play Integrity and App Attest |
+| `EXPO_PUBLIC_AI_BACKEND` | `agent_platform` (needs the Blaze plan) or `google` (Gemini Developer API). Anything else means `google` |
+| `EXPO_PUBLIC_AI_LOCATION` | Region for `agent_platform`. We use `global` |
+| `EXPO_PUBLIC_APPCHECK_PROVIDER` | `enterprise` (default) or `v3` |
+| `EXPO_PUBLIC_RECAPTCHA_SITE_KEY` | reCAPTCHA key. Without it, web App Check is skipped and reported as not configured |
+| `EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN` | Development only. Register it in App Check, Manage debug tokens |
+| `EXPO_PUBLIC_AI_MODEL_<ROLE>` | Optional model override. Roles: `COMPILER`, `REPAIR`, `JUDGE`, `SAFETY`, `LOCAL_ASSISTANT`, `EDIT`, `VOICE`, `AI_BLOCK`, `TRANSLATION` |
+| `EXPO_PUBLIC_SPECIALIST_ENABLED` | `true` turns the specialist adapter on. Default `false` |
+| `EXPO_PUBLIC_FUNCTIONS_EMULATOR` | `host:port` of the Functions emulator, for example `127.0.0.1:5001` |
+| `EXPO_PUBLIC_BAZAAR_PAYMENTS` | `on` shows paid Bazaar listings. Leave empty |
 
-### 4. Firebase setup (one time)
+Server-side names (Cloud Functions only, never in the client): `KALAM_ANTHROPIC_API_KEY` and `KALAM_NEBIUS_API_KEY` (secrets), and the optional `KALAM_CLAUDE_PLAN_MODEL`, `KALAM_CLAUDE_REPAIR_MODEL` and `KALAM_NEBIUS_VISION_MODEL`.
 
-1. **Project.** Create or pick a Firebase project. Blaze (pay as you go) is needed only for the `agent_platform` backend and for deploying Functions. Put your project id in `.firebaserc` (`default`).
-2. **Web app.** Project settings, Your apps, add a **Web** app. Copy its config into the six `EXPO_PUBLIC_FIREBASE_*` values in `.env.local`.
-3. **AI Logic backend.** Firebase console, AI Logic, Get started. Choose one and set `EXPO_PUBLIC_AI_BACKEND` to match:
-   - `google`: Gemini Developer API (`GoogleAIBackend`). Works on the free Spark plan.
-   - `agent_platform`: Agent Platform / Vertex Gemini API (`AgentPlatformBackend`), billed through Cloud Billing, so Blaze. Also set `EXPO_PUBLIC_AI_LOCATION` (we use `global`). Cloud calls cost money; keep experiments small.
-   Both backends support hybrid on-device inference.
-4. **App Check, reCAPTCHA Enterprise.** In Google Cloud console create a reCAPTCHA Enterprise **website** key that allows `localhost` (and your deployed domain). In Firebase console, App Check, Apps, your web app, register it with the **reCAPTCHA Enterprise** provider and that key. Put the site key in `EXPO_PUBLIC_RECAPTCHA_SITE_KEY` and keep `EXPO_PUBLIC_APPCHECK_PROVIDER=enterprise` (`v3` selects reCAPTCHA v3).
-5. **App Check, debug token (local development).** Leave `EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN` empty on first run. The dev build enables the SDK's debug provider, which prints a token in the browser console. Register it in App Check, Manage debug tokens, then paste it into `.env.local`. Do not enforce App Check on a shared project while experimenting. Production builds never use the debug token.
-6. **Check the cloud leg** (makes one tiny real request, prints only outcome, model, latency and tokens):
+### 4.4 Firebase project
+
+1. **Project.** Create or pick a Firebase project. Copy `.firebaserc.example` to `.firebaserc` and fill in your project id and Hosting site id. The Blaze plan is needed for the `agent_platform` backend and for deploying Functions.
+2. **Web app.** Project settings, Your apps, add a **Web** app. Copy its config into the six `EXPO_PUBLIC_FIREBASE_*` values.
+3. **AI Logic.** Firebase console, AI Logic, Get started. Choose a backend and set `EXPO_PUBLIC_AI_BACKEND` to match. Both support hybrid on-device inference. Cloud calls cost money, so keep experiments small.
+4. **App Check on the web.** In Google Cloud console, create a reCAPTCHA Enterprise **website** key that allows `localhost` and your deployed domain. In Firebase console, App Check, Apps, register your web app with the reCAPTCHA Enterprise provider and that key. Put the key in `EXPO_PUBLIC_RECAPTCHA_SITE_KEY`.
+5. **App Check debug token for local development.** Leave `EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN` empty on the first run. The dev build turns on the SDK's debug provider, which prints a token in the browser console. Register it under App Check, Manage debug tokens, then paste it into `.env.local`. Do not enforce App Check on a shared project while experimenting. Production builds never use the debug token.
+6. **Check the cloud leg.** This makes one tiny real request and prints only outcome, model, latency and token counts:
 
    ```bash
    node scripts/verify-firebase-ai.mjs
    ```
 
-To keep a dated, redacted record of a run (API key, App Check token and UUIDs are removed), use `node scripts/record-evidence.mjs cloud` (one billed call) or `node scripts/record-evidence.mjs on-device`. Files go to `docs/evidence/`.
+### 4.5 Gemini Nano in Chrome
 
-### 5. Gemini Nano in Chrome (on-device leg)
+Kalam does not call Gemini Nano directly. Firebase AI Logic's hybrid `GenerativeModel` decides between it and the cloud.
 
-Gemini Nano is Chrome's built-in model, reached through the Prompt API (`LanguageModel`). Kalam does not call it directly: Firebase AI Logic's hybrid `GenerativeModel` decides between it and the cloud.
-
-1. Use desktop Chrome (developed and verified on Chrome 157, Windows 11). Chrome documents the OS, storage and GPU/RAM requirements and the flags that expose the API: <https://developer.chrome.com/docs/ai/built-in>. Flag names change between versions.
-2. Open Kalam, open DevTools, Console, and run:
+1. Use desktop Chrome. The recorded run used Chrome 157 on Windows 11. Chrome documents the hardware requirements and the flags that expose the Prompt API at <https://developer.chrome.com/docs/ai/built-in>. Flag names change between versions.
+2. Open Kalam, then DevTools, Console, and run:
 
    ```js
-   typeof LanguageModel                 // 'undefined' => the API is not exposed in this browser
+   typeof LanguageModel                 // 'undefined' means the API is not exposed here
    await LanguageModel.availability({
      expectedInputs:  [{ type: 'text', languages: ['en'] }],
      expectedOutputs: [{ type: 'text', languages: ['en'] }],
    })                                    // 'available' | 'downloadable' | 'downloading' | 'unavailable'
    ```
 
-   These are the same options Kalam passes, so the answers match.
-3. If it says `downloadable`, open **Settings, On-device AI, Prepare on-device AI**. Chrome only starts the one-time, multi-gigabyte download from a user gesture. The status row then reads "On-device AI ready".
-4. The first on-device session after each page load takes roughly 40 s (model load); later ones are fast. Kalam warms the model early for this reason.
-5. Verify end to end without the UI. Start Chrome with a dedicated profile and remote debugging, then run the script. It opens its own tab and closes it afterwards:
+3. If it says `downloadable`, open **Settings, On-device AI, Prepare on-device AI**. The status row then reads "On-device AI ready".
+4. Without the UI: start Chrome with a dedicated profile and `--remote-debugging-port=9333`, then run `node scripts/verify-firebase-ai.mjs --on-device`. It opens its own tab and closes it afterwards.
 
-   ```bash
-   chrome --remote-debugging-port=9333 --user-data-dir=<a-dedicated-profile-dir>
-   node scripts/verify-firebase-ai.mjs --on-device            # add --cdp-port <n> if not 9333
-   ```
-
-Playwright's bundled Chromium has no Gemini Nano; on-device behaviour can only be checked in real Chrome.
-
-### 6. Run on web
+### 4.6 Run on the web
 
 ```bash
-npm run web                      # Expo dev server (default http://localhost:8081)
+npm run web                      # Expo dev server, http://localhost:8081
 ```
 
-Production build with the offline service worker (needed to test real offline reloads, because `sw.js` only exists in the build):
+For a production build with the offline service worker (`sw.js` exists only in the build):
 
 ```bash
-npm run build:web                # expo export + scripts/build-pwa.mjs, output in dist/
+npm run build:web                # expo export, then scripts/build-pwa.mjs, output in dist/
 node tests/e2e/serve.mjs         # serves dist/ with SPA fallback on http://127.0.0.1:4173
 ```
 
-Chrome treats `localhost` and `127.0.0.1` as secure contexts, which the Prompt API and service workers need.
+To host it: `firebase deploy --only hosting:kalam`. The Content Security Policy in `firebase.json` names the Firebase auth domain of the original project in `frame-src`. Replace it with yours first.
 
-### 7. Run on Android
+### 4.7 Run on Android
 
-Android is built natively (`expo run:android` creates the gitignored `android/` project and builds with Gradle). The first build compiles native modules (Skia and others) and takes a long time.
-
-Requirements used by this project: **JDK 17**, Android SDK **platform 37.0**, **build-tools 37.0.0**, **NDK 27.1.12297006**, **CMake 3.22.1** (install through Android Studio's SDK Manager). A virtual device or phone must be running first.
-
-PowerShell:
+Android builds natively. `expo run:android` creates the gitignored `android/` project. The first build compiles native modules and takes a long time. Versions used: JDK 17, Android SDK platform 37, build-tools 37.0.0, NDK 27.1.12297006, CMake 3.22.1. Start an emulator or connect a phone first.
 
 ```powershell
 $env:JAVA_HOME    = "<path-to-jdk-17>"
 $env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
 $env:Path        += ";$env:ANDROID_HOME\platform-tools;$env:ANDROID_HOME\emulator"
-emulator -list-avds              # we use an API 36 AVD named Kalam_API36
-emulator -avd Kalam_API36        # hardware acceleration (WHPX on Windows); first boot can take minutes
-npm run android
+npm run android                  # on macOS or Linux, set the same variables with export
 ```
 
-macOS / Linux: same variables with `export`. Android caveats: no on-device Gemini Nano and no Play Integrity App Check yet, so cloud AI works only while App Check is not enforced. See [Known limitations](#known-limitations). The Android target is **not yet verified** end to end.
+In Firebase, register an Android app with package `com.kalam.app`, add the SHA-256 fingerprint of your signing key, register Play Integrity under App Check, and set `EXPO_PUBLIC_FIREBASE_ANDROID_APP_ID`. The API key must not be restricted to HTTP referrers, because app requests carry none.
 
----
+Emulators have no AICore, so on-device AI correctly reads unavailable and requests go to the cloud. Gemini Nano needs a supported phone with a locked bootloader and an up-to-date AICore. With EAS, `eas build --profile preview --platform android` makes an internal APK.
 
-## Environment variables
+### 4.8 Run on iOS
 
-### Client (`.env.local`, all `EXPO_PUBLIC_*`, none secret)
-
-| Variable | Purpose |
-|---|---|
-| `EXPO_PUBLIC_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_PROJECT_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID`, `_APP_ID` | Firebase web app config. Protect the project with App Check and API key restrictions |
-| `EXPO_PUBLIC_AI_BACKEND` | `google` (Gemini Developer API) or `agent_platform` (Vertex; needs Blaze). Anything else means `google` |
-| `EXPO_PUBLIC_AI_LOCATION` | Region for `agent_platform` (we use `global`) |
-| `EXPO_PUBLIC_APPCHECK_PROVIDER` | `enterprise` (default) or `v3` |
-| `EXPO_PUBLIC_RECAPTCHA_SITE_KEY` | reCAPTCHA site key. Without it App Check is skipped and reported as not configured |
-| `EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN` | Dev only. Register it in App Check, Manage debug tokens |
-| `EXPO_PUBLIC_AI_MODEL_<ROLE>` | Optional model override. Roles: `COMPILER`, `REPAIR`, `JUDGE`, `SAFETY`, `LOCAL_ASSISTANT`, `EDIT`, `VOICE`, `AI_BLOCK`, `TRANSLATION`. Defaults in `src/core/ai/model-config.ts` |
-| `EXPO_PUBLIC_SPECIALIST_ENABLED` | `true` turns the specialist adapter on (default `false`) |
-| `EXPO_PUBLIC_FUNCTIONS_EMULATOR` | `host:port` of the Functions emulator, e.g. `127.0.0.1:5001` |
-
-### Server (Cloud Functions only, never in the client)
-
-| Name | Purpose |
-|---|---|
-| `KALAM_ANTHROPIC_API_KEY`, `KALAM_NEBIUS_API_KEY` | Secrets. Emulator: `functions/.secret.local`. Deployed: `firebase functions:secrets:set` (Blaze) |
-| `KALAM_CLAUDE_PLAN_MODEL`, `KALAM_CLAUDE_REPAIR_MODEL`, `KALAM_NEBIUS_VISION_MODEL` | Optional model overrides; defaults in `functions/src/providers.ts` |
-
----
-
-## Specialist providers (Claude, Nebius) and the Functions emulator
-
-Claude (planning and repair) and Nebius (sketch reading) are optional and **never called from the client**. The client calls one App Check-protected callable, `kalamSpecialistReason`, which holds the keys, validates the request, calls the provider, validates the reply and logs only task, provider, model, latency and token counts (never user content).
-
-1. Create `functions/.secret.local` (gitignored, **never commit it, never paste its contents anywhere**):
-
-   ```bash
-   KALAM_ANTHROPIC_API_KEY=<your key>
-   KALAM_NEBIUS_API_KEY=<your key>
-   ```
-
-2. Install, build and run the emulator:
-
-   ```bash
-   cd functions && npm ci && cd ..
-   npm run functions:serve          # firebase emulators:start --only functions (port 5001)
-   ```
-
-3. Point the client at it in `.env.local`, then restart Expo:
-
-   ```bash
-   EXPO_PUBLIC_SPECIALIST_ENABLED=true
-   EXPO_PUBLIC_FUNCTIONS_EMULATOR=127.0.0.1:5001
-   ```
-
-   From an Android emulator the host's localhost is `10.0.2.2`. In the app, also turn on **Settings, Allow specialist models**.
-
-4. Optional real-call check of both adapters (one tiny request each; prints status, latency, model, tokens, never secrets):
-
-   ```bash
-   cd functions && npm run build && npm run verify:providers
-   ```
-
-`kalamSpecialistReason` is **not deployed** from this repository's workflow, and Hosting/Functions deploys are left to the project owner. Be aware `.firebaserc` and `firebase.json` hold the project binding, the Hosting target (`kalam`) and the Functions codebase (`kalam`).
-
----
-
-## Running tests
+iOS needs a Mac with Xcode 26 or later. The iOS Simulator is part of Xcode, so without a Mac, EAS gives only device builds, which need a paid Apple Developer account and a device. The `ios` block in `app.json` uses bundle id `com.kalam.app` and the App Attest entitlement, and `ios` must stay in `expo.platforms`. `kalam-apple` adds Firebase through Swift Package Manager.
 
 ```bash
-npm test                  # Vitest: 57 files, 3675 tests
-npm run typecheck         # tsc --noEmit
-cd functions && npm test  # builds, then node --test (request and output schemas)
-npm run build:web && npm run e2e   # Playwright against the production build
+npx expo prebuild --platform ios && npx expo run:ios        # on a Mac
+npx expo install expo-dev-client                            # the EAS development and simulator profiles need it
+eas build --profile simulator --platform ios                # EAS simulator build, to run on a Mac
 ```
 
-Vitest, run once on 2026-11-18 19:52 with two workers: **3668 passed, 7 failed** in 57 files. The failing tests belong to work that was still being changed when the run was taken (the Bazaar install checks and the Android on-device shim). They are listed below so the number is not hidden.
+In Firebase, register an iOS app with bundle id `com.kalam.app`, enter your Apple Team ID, register App Attest under App Check, and set `EXPO_PUBLIC_FIREBASE_IOS_APP_ID`. Apple Foundation Models need a device with Apple Intelligence on. Simulators and unsupported devices read unavailable, and requests go to the cloud. This path is not verified.
 
-| Area | Tests |
+### 4.9 Cloud Functions (specialists and Bazaar)
+
+The codebase is `kalam` in `functions/` (Node 22). It holds the `kalamSpecialistReason` callable and three Bazaar callables (`kalamBazaarWallet`, `kalamBazaarPurchase`, `kalamBazaarModerate`). All enforce App Check. Provider keys live only in Secret Manager when deployed, and in the gitignored `functions/.secret.local` on your machine.
+
+```bash
+cd functions && npm ci && npm run build && cd ..
+# functions/.secret.local (never commit it):
+#   KALAM_ANTHROPIC_API_KEY=<your key>
+#   KALAM_NEBIUS_API_KEY=<your key>
+npm run functions:serve          # emulator on port 5001
+```
+
+Point the client at the emulator with `EXPO_PUBLIC_SPECIALIST_ENABLED=true` and `EXPO_PUBLIC_FUNCTIONS_EMULATOR=127.0.0.1:5001` in `.env.local` (from an Android emulator use `10.0.2.2:5001`). Restart Expo and turn on **Settings, Allow specialist models**. Check both adapters with one tiny real request each: `cd functions && npm run verify:providers`. To deploy (Blaze plan):
+
+```bash
+firebase functions:secrets:set KALAM_ANTHROPIC_API_KEY
+firebase functions:secrets:set KALAM_NEBIUS_API_KEY
+firebase deploy --only functions:kalam
+```
+
+### 4.10 Firestore rules and indexes
+
+Firestore holds Kalam Bazaar listings, shared (collaborative) apps with their entries, and account sync data. The records of an app you have not shared never go there, and with account sync they leave the device only if you set a passphrase, and then only encrypted. Kalam uses a named database `kalam` and never touches `(default)`.
+
+```bash
+firebase firestore:databases:create kalam --location <region>
+firebase deploy --only firestore:kalam
+```
+
+This deploys `firestore.rules` and `firestore.indexes.json` as listed in `firebase.json`. Signing in is required to use Kalam, so enable the Google and Email/Password providers in Firebase Authentication. The Anonymous provider is not needed. Test the rules on the local emulator (needs Java):
+
+```bash
+npx firebase-tools emulators:exec --only firestore --project demo-kalam "npx vitest run --config tests/rules/vitest.config.ts"
+```
+
+### 4.11 MCP server
+
+`mcp/` is a separate Node process that lets an AI assistant build, check and package Kalam apps. It reuses the pure code in `src/core`, so its validation matches the app. It uses no AI model by default, makes no network calls and reads no files unless you allow it.
+
+```bash
+cd mcp && npm ci && npm run build        # writes mcp/dist/server.js
+node dist/server.js --help
+```
+
+Known gap: the build embeds `docs/05_KALAMSPEC.md` as the `kalam://docs/kalamspec` resource. That file belongs to the local planning documents and is not in the public repository, so `npm run build` stops with a missing-file error in a fresh clone until the file is present or the build is changed to skip it. With the file in place the build and `--help` were checked on 2026-11-26.
+
+| Option | Effect |
 |---|---|
-| `src/core/ai` | 2731 |
-| `src/infrastructure` | 247 (2 failing) |
-| `src/features` | 152 |
-| `src/runtime` | 113 |
-| `src/core/tasks` | 78 |
-| `src/core/templates` | 77 |
-| `src/core/edit` | 48 |
-| `src/core/spec` | 44 |
-| `src/core/formula` | 43 |
-| `src/core/i18n-labels` | 36 |
-| `src/core/bazaar` | 27 (5 failing) |
-| `src/core/compiler` | 26 |
-| `src/core/assistant` | 22 |
-| `src/core/pipeline` | 16 |
-| `src/core/classifier` | 9 |
-| `src/core/versioning` | 6 |
+| none | stdio transport. Core tools only. No files, no network |
+| `--workspace <dir>` | Adds tools to list, read and write `*.kalam.json` files directly inside that one folder. No subfolders, no symbolic links, size caps |
+| `--firebase`, `--cloud-calls <n>` | Adds `kalam_compile_with_firebase`. Needs the Firebase web config and an App Check debug token in the environment (the same `EXPO_PUBLIC_*` names as the app). Sends request text to Firebase AI Logic and nothing else. Model calls are capped at `n` (default 5, maximum 50) |
+| `--http`, `--port <n>` | Streamable HTTP on `127.0.0.1` only (default port 3917) instead of stdio. There is no login, so it cannot be combined with `--workspace` or `--firebase` |
+| `--app-url <url>` | Your hosted Kalam web app, for web "Open in Kalam" links |
 
-- Failing: `src/core/bazaar/bazaar.test.ts: preparePublication / listing schema builds a listing that passes the listing schema with derived disclosures`
-- Failing: `src/core/bazaar/bazaar.test.ts: install validation (docs/05 §17) installs a verified copy with a new id, version 1, attribution and no records`
-- Failing: `src/core/bazaar/bazaar.test.ts: install validation (docs/05 §17) refuses a spec whose hash does not match the listing`
-- Failing: `src/core/bazaar/bazaar.test.ts: install validation (docs/05 §17) respects the license: remix only when allowed, and marks remixes`
-- Failing: `src/core/bazaar/bazaar.test.ts: install validation (docs/05 §17) never trusts claimed AI verification or generator provenance (R-09)`
-- Failing: `src/infrastructure/firebase/on-device.test.ts: on-device (Android shim) reports Gemini Nano as unavailable because there is no native bridge yet`
-- Failing: `src/infrastructure/firebase/on-device.test.ts: on-device (Android shim) never exposes a LanguageModel, even if a global one exists, so only_on_device cannot silently use it`
+Core tools (all read-only): `kalam_spec_schema`, `kalam_validate_spec`, `kalam_list_templates`, `kalam_build_from_template`, `kalam_classify_request`, `kalam_explain_spec`, `kalam_diff_specs`, `kalam_check_formula`, `kalam_explain_formula`, `kalam_compute_report` and `kalam_package_app`. It also serves the `kalam://schema` and `kalam://templates/{id}` resources and a `create_kalam_app` prompt.
 
-Classifier benchmark (`tests/fixtures/requests/classifier-cases.json`): **56 of 57** complexity levels correct (98.2%), 33 of 33 secondary labels. The single miss is `calc-with-history` (expected medium, got complex).
+Add it to Claude Code:
 
-Notes:
+```bash
+claude mcp add kalam -- node /absolute/path/to/kalam/mcp/dist/server.js --workspace /absolute/path/to/my-apps
+```
 
-- One test (`classifier ... is cheap: well under 2 ms per request`) is a timing assertion. It failed once in a full parallel run (about 2.5 ms under heavy load) and passes when run alone or on a quiet machine.
-- Unit tests use fake providers on purpose. Real-model behaviour is checked by the scripts above and by the demo, never by mocks.
-- Playwright uses its bundled Chromium (no Gemini Nano), so `npm run e2e` covers the deterministic and offline paths only. The specs (`tests/e2e`) are newly added; their pass/fail status is not recorded in this README.
-- No ESLint configuration is committed yet.
+Add it to Claude Desktop in `claude_desktop_config.json`, then restart Claude Desktop:
+
+```json
+{ "mcpServers": { "kalam": { "command": "node", "args": ["/absolute/path/to/kalam/mcp/dist/server.js", "--workspace", "/absolute/path/to/my-apps"] } } }
+```
+
+The package tool writes the same importable file as "Export design" in Kalam. Open it with Settings, Storage, Import.
+
+### 4.12 Check the hybrid path by hand
+
+Use the production build in desktop Chrome with Gemini Nano available and an App Check debug token registered.
+
+1. Open **Settings, AI and privacy** to see the mode, on-device status, Firebase AI Logic configuration and App Check state.
+2. Create an app from *"A counter to count how many glasses of water I drink"*. It gets a Deterministic badge and makes no cloud call.
+3. Create an app from a complex request, such as *"A tailor order book with customer name, chest, waist, delivery date and advance paid, and a way to classify notes as urgent or normal"*. It gets a Cloud badge and a plain-language summary.
+4. In the app's editor, open AI blocks and run **Verify on this device**. Cloud writes sample cases and Gemini Nano runs them locally.
+5. Go offline. Saved apps still open. An AI action on a record shows On-device. Creating a complex app explains that building needs an online model and leaves saved apps untouched.
+6. Open **Activity** for counts by source, median latency, fallbacks and recent decisions. The log is local and clearable.
 
 ---
 
-## Three-minute hybrid demo
+## 5. Testing
 
-Goal: show deterministic, on-device and cloud paths, the offline guarantee, and honest source labels.
+```bash
+npm test                  # Vitest unit tests, fake providers
+npm run typecheck         # tsc --noEmit
+npm run lint              # ESLint (expo lint)
+npm run build:web && npm run e2e     # Playwright against the production build
+cd functions && npm test             # builds, then node --test
+cd mcp && npm test                   # MCP server tests
+npm run audit                        # npm audit for the app and the functions
+```
 
-**Before recording**
+The unit suite holds more than 7,000 tests across `src/core`, `src/infrastructure`, `src/features` and `src/runtime`. Unit tests use fake providers on purpose. Real-model behaviour is checked by the scripts below and by the walk-through in 4.12, never by mocks.
 
-- `.env.local` filled in, App Check debug token registered, Gemini Nano `available` (Settings shows "On-device AI ready").
-- Use the production build (`npm run build:web`, `node tests/e2e/serve.mjs`) in desktop Chrome so a reload also works offline.
-- Have a complex prompt ready, for example: *"A tailor order book with customer name, phone, chest, waist and length, delivery date and advance paid. Let me classify each note as urgent or normal."* (The cloud model decides the structure; check the saved app under Edit, AI blocks. If it did not add an AI block, ask for one with **Ask for a change** before recording.)
+The setup steps in 4.2 to 4.11 were re-run on 2026-11-26 from a clean copy of the repository (every file that Git would publish, in an empty folder, with no `node_modules` and no `.env.local`). `npm ci`, the Functions install and build, and `npm run build:web` passed. Two corrections came out of it and are written into 4.2 and 4.11.
 
-**Script**
-
-| Time | Step | What the viewer should see |
+| Command | What it does | Cost |
 |---|---|---|
-| 0:00 | Open **Settings**, AI and privacy | Hybrid mode, on-device AI ready, Firebase AI Logic configured, App Check state |
-| 0:20 | **Create**: type *"A counter to count how many glasses of water I drink"*, create | Progress, then review with a **Deterministic** / template badge. No cloud call. Save to Shelf, open it, tap the counter |
-| 0:50 | **Create**: paste the complex prompt | Progress through classify and cloud compile. Review shows a **Cloud** badge and a plain-language summary of screens and data. Save, open, add a record or two |
-| 1:35 | **Edit** the app, AI blocks, **Verify on this device** (online) | Cloud writes five sample cases, Gemini Nano runs them locally. At least four passing marks the block "Runs on this device" |
-| 2:00 | **Go offline** (airplane mode, or DevTools Network, Offline) | Shelf shows **Offline: apps still work**. Reload the page: the app still opens |
-| 2:10 | In the app, add a record, then trigger its AI action (classify / summarise) | Works with no network. The badge reads **On-device** |
-| 2:30 | Try **Create** with a complex request while offline | A plain-language message that building needs an online model; saved apps and data untouched |
-| 2:40 | Back online, open **Activity** | Counts by source (On-device, Cloud, Deterministic), median latency, fallbacks, escalations and recent decisions. Recorded locally |
+| `npm run eval` | Runs the golden set (`tests/evaluation/golden`) through the classifier, templates, validation and describe. Writes a dated report | none |
+| `npm run eval:check` | Same, and exits 1 when a quality floor is missed (used in CI) | none |
+| `node scripts/eval.mjs --live --budget 6` | Also compiles cloud-route cases with real Firebase AI Logic. The budget is a hard cap on requests | billed |
+| `npm run bench` | Timing and size benchmarks of the pure core | none |
+| `npm run check:bundle` | Web bundle budgets, after `build:web` | none |
+| `node scripts/verify-firebase-ai.mjs` | One real cloud request (`--on-device` for Chrome Gemini Nano) | one billed call |
+| `node scripts/verify-cloud-compile.mjs` | The real creation pipeline against the real cloud model, with a call cap | billed |
+
+**Recording evidence.** `scripts/record-evidence.mjs` runs the verify script, removes anything secret-shaped (API key, App Check token, UUIDs, long tokens) and writes a dated JSON file to `docs/evidence/`. The only prompt sent is the fixed sample "Buy milk tomorrow."
+
+```bash
+node scripts/record-evidence.mjs cloud        # one billed cloud call. Do not run it in a loop
+node scripts/record-evidence.mjs on-device    # Chrome must be running with --remote-debugging-port=9333
+```
+
+`all` runs both. Re-running on the same day overwrites that day's file.
+
+Continuous integration (`.github/workflows`) runs types, lint, unit and evaluation tests, the production web build with a bundle scan for provider secrets, Playwright, the Functions tests, Firestore rules tests and dependency and secret scans. It calls no real model and needs no secret.
 
 ---
 
-## Project structure
+## 6. Project layout
 
 ```text
 src/
-  app/                 Expo Router routes: shelf, onboarding, create (+ draw, review),
-                       app/[id] (run, edit), activity, settings
-  core/                Pure TypeScript, runs in Node under Vitest. No react / expo imports
-    spec/              KalamSpec v1 Zod schema, validation, migration, plain-language describe
-    contracts/         Every cross-module interface (frozen)
-    ai/                Orchestrator, routing policy, model config, Zod -> JSON Schema
-    classifier/        Deterministic complexity + template matching
-    templates/         11 templates: calculator, counter, checklist, notes, expense tracker, ...
-    compiler/          Cloud compiler: prompt, IR, conversion, one repair pass
-    pipeline/          createApplication: classify -> template or cloud -> validate
-    tasks/             AI-block, edit and voice services (Nano-first)
-    edit/              Patch operations on specs; versioning/ keeps every valid version
-    formula/           Restricted expression parser and evaluator
-  runtime/             KalamRuntime and engine: renders and runs a KalamSpec, in-memory or stored
+  app/                 Expo Router routes: shelf, onboarding, create (draw, review), app run and edit, activity, settings
+  core/                Pure TypeScript. Runs in Node under Vitest. No React, Expo or Firebase imports
+                       spec (KalamSpec schema, validation), ai (orchestrator, routing), classifier, templates,
+                       compiler, pipeline, tasks (AI blocks, edit, voice), edit, versioning, formula, backup, bazaar,
+                       queue, collab, account-sync, clone, import-link, reports
+  runtime/             KalamRuntime and engine: renders and runs a KalamSpec
   infrastructure/
-    firebase/          Firebase init, App Check, hybrid provider, on-device status
-    specialist/        Client for the kalamSpecialistReason callable
-    storage/           Dexie (web) / expo-sqlite (Android) behind one driver
-    platform/          Network, media, speech: .web / .native splits
-    pwa/               Service worker registration
-  features/            create, drawing (Studio), editing, activity, settings, shelf, landing, input
-  design/              Design tokens, theme and UI kit
-  components/, state/  Shell, shared UI helpers, Zustand stores
+    firebase/          Firebase init, App Check, hybrid provider, on-device adapters
+    specialist/        Client for the specialist callable
+    storage/           Dexie (web) and expo-sqlite (Android, iOS) behind one driver
+    platform/          Network, media, speech: .web and .native splits
+    bazaar/, pwa/      Bazaar client, service worker registration
+  features/            create, media, drawing (Studio), editing, visual-studio, history, shelf, templates, queue,
+                       collab, share, widgets, reports, reminders, assistant, document-intel, recovery, storage,
+                       account, auth, bazaar, bazaar-moderation, cloud-consent, settings, activity, landing
+  design/, components/ Design tokens, UI kit, shell
   services/index.ts    Composition root: the only place providers meet core
-functions/             Cloud Functions codebase "kalam": specialist adapters (Claude, Nebius)
-scripts/               build-pwa.mjs, verify-firebase-ai.mjs, record-evidence.mjs, verify-cloud-compile.mjs, eval.mjs
-tests/                 fixtures/ (specs, classifier cases, compiler IR) and e2e/ (Playwright)
-docs/                  Product, architecture and AI documents (00 to 17), verification report, evidence/
+functions/             Cloud Functions codebase "kalam": specialists (Claude, Nebius) and Bazaar callables
+modules/
+  kalam-nano/          Android native module (Kotlin): Gemini Nano, Play Integrity
+  kalam-apple/         iOS native module (Swift): Apple Foundation Models, App Attest
+  kalam-widget/        Android widget and iOS WidgetKit extension (written, never built or registered)
+mcp/                   MCP server (Node) reusing src/core
+scripts/               build-pwa, verify-firebase-ai, verify-cloud-compile, record-evidence, eval, bench, check-bundle-size
+tests/                 fixtures, e2e (Playwright), evaluation (golden set, perf budgets), rules (Firestore)
+docs/evidence/         Recorded real runs (JSON)
+DESIGN.md              The visual system of the Kalam shell, written from the built app
 ```
 
----
-
-## Security and privacy
-
-- **Secrets.** Only `EXPO_PUBLIC_*` identifiers reach the client. Claude and Nebius keys live only in Cloud Functions (Secret Manager when deployed, `functions/.secret.local` locally, gitignored). Never commit secrets.
-- **App Check.** Web uses reCAPTCHA Enterprise (v3 optional), with a debug token in development only. `kalamSpecialistReason` sets `enforceAppCheck: true`.
-- **Specialist function.** Strict request validation and size limits, a per-task allowlist (`plan_app`, `repair_spec`, `interpret_sketch`), timeouts, server-side output validation, a per-instance rate limit, and a usage log without user content.
-- **Consent.** Cloud AI can be switched off (**Offline only**); external specialists are off by default and need their own switch.
-- **KalamSpec is data.** No `eval`, no `new Function`, no executing model output. Every spec is validated (Zod plus semantic checks) before it renders; invalid output is rejected or repaired once; the previous valid version is preserved. Injection fixtures live in `tests/fixtures/specs/invalid`.
-- **Prompt injection.** User content and images are wrapped as untrusted data in prompts; model output is never trusted.
-- **What leaves the device.** Only for cloud-routed tasks: your text, chosen photos, video keyframes and a drawing summary. Raw audio and raw video are not sent. Apps and their records stay in IndexedDB or SQLite. The Activity log is local and clearable.
-- **Hosting headers** (`firebase.json`): `nosniff`, strict referrer policy, `X-Frame-Options: DENY`, camera and microphone limited to self.
-- A dedicated security review has **not** been completed yet.
+Stack: Expo SDK 58, React Native 0.88, React 19.3, Expo Router, TypeScript (strict), Zod 4, Zustand 5, Firebase JS SDK 13, Vitest 5, Playwright, Cloud Functions 2nd gen on Node 22. Platform splits use Metro extensions (`foo.web.ts`, `foo.native.ts`, `foo.ios.ts`) with a plain `foo.ts` shim so `tsc` resolves. Web animation uses GSAP and three.js. Android and iOS use Reanimated and Skia.
 
 ---
 
-## Known limitations
+## 7. Privacy and security
 
-- **Android on-device AI is not available.** Firebase's JS hybrid path drives Chrome's Prompt API only. Gemini Nano on Android needs a native bridge that does not exist yet, so on-device-only requests fail with a clear message instead of silently using the cloud.
-- **Android App Check is not implemented.** The JS SDK offers only reCAPTCHA providers (browser DOM). Play Integrity needs a native bridge. With App Check enforced, Android cloud calls, and the specialist function, would be rejected.
-- **Android build, end-to-end and security review are unverified** at the time of writing.
-- **A complex app compiled by the real cloud model through the app UI is not yet verified end to end.** One tiny structured request through the SDK is recorded in `docs/evidence/`, and the compile path is covered by unit tests with fake providers. The six-scenario browser check (Nano available, not capable, not ready, fallback, App Check, offline) has not been run yet.
-- **Specialists are not deployed**, are off by default, and no benchmark yet shows a measurable benefit over Firebase-only generation (a docs/07 CP8/CP9 acceptance criterion).
-- **AI-block verification** and the on-device AI actions are implemented and unit tested, but not yet run end to end against real models in the app.
-- **Capture on real devices** (camera, microphone, video, speech recognition) is built but not verified on hardware. Speech recognition may be performed by a platform cloud service; Kalam labels where it ran.
-- **On-device scope.** Prompt API sessions are configured for English text, and on-device image input accepts JPEG or PNG only. Gemini Nano needs capable desktop hardware and a multi-gigabyte download.
-- **Complex apps are bounded** by the KalamSpec limits (for example 8 screens and 10 collections). Features Kalam cannot do (logins, payments, servers) are mapped to the closest offline equivalent.
-- **iOS is code and configuration only.** It shares the codebase, but no iOS build has been made and no iOS test has run. The `ios` block in `app.json` and `eas.json` are still to be added. On-device AI on iOS needs a Swift native module that does not exist, and App Attest for App Check needs native code too. Verifying iOS needs a Mac or EAS Build, and a real device for on-device AI and App Attest (ADR-039 in `docs/16`).
-- **Not verified:** accounts and the Bazaar marketplace are in progress and have not been verified end to end (see `docs/12_KALAM_BAZAAR.md`). Paid listings exist behind the `kalamBazaarPurchase` function and stay hidden unless `EXPO_PUBLIC_BAZAAR_PAYMENTS=on`, which is off by default.
-- **Playwright e2e** specs are new and their results are not recorded here. One timing-based unit test can flake under load (see [Running tests](#running-tests)).
-
----
-
-## Documentation map
-
-| Document | Topic |
-|---|---|
-| `docs/07_HYBRID_AI.md` | **AI architecture authority**, implementation checkpoints CP0 to CP12 with status |
-| `docs/17_FIREBASE_HYBRID_AI_REQUIREMENTS_TRACEABILITY.md` | Hackathon requirements and compliance matrix |
-| `docs/FIREBASE_HYBRID_AI_VERIFICATION.md` | Real recorded runs, versions, scenario matrix, limits (raw runs in `docs/evidence/`) |
-| `docs/16_ARCHITECTURE_DECISIONS_AND_RISKS.md` | Decisions (ADR-001 to ADR-039), the register of conflicts between documents, risks |
-| `docs/05_KALAMSPEC.md` | The KalamSpec format |
-| `docs/18` | The MCP server: tools, limits and status |
-| `docs/04_TECHNICAL_ARCHITECTURE.md` | Stack and system architecture |
-| `docs/09_RUNTIME_AND_OFFLINE.md` | Runtime and offline behaviour |
-| `docs/11_DATA_AND_SECURITY.md` | Data and security |
-| `docs/02_DESIGN_SYSTEM.md`, `docs/03_UX_AND_INTERACTION.md` | Design system and UX |
-| `docs/06_MULTIMODAL_ENGINE.md`, `docs/08_DRAWING_STUDIO.md` | Multimodal input and the Drawing Studio |
-| `docs/00_PROJECT_BIBLE.md`, `docs/01_PRODUCT_REQUIREMENTS.md`, `docs/15_PRODUCT_ROADMAP.md` | Vision, requirements, roadmap |
+- **Data stays on the device.** Apps and their records are stored in IndexedDB (web) or SQLite (Android, iOS). Cloud Firestore holds Bazaar and collaboration data, and account sync data if you turn it on. The Activity log is local and clearable.
+- **Sign-in.** Signing in is required. Firebase Authentication keeps the session on the device, so after you sign in, saved apps open and run with no network. Account sync is off until you choose it, and records sync only if you also set a passphrase, which encrypts them on the device first.
+- **What is sent to the cloud, and when.** Only for cloud-routed tasks, and only if cloud AI is allowed: your request text, photos you chose, video keyframes and a summary of a drawing. Raw audio and raw video are not sent to any AI provider. Video is reduced to keyframes and speech to a transcript first. Speech recognition itself may run on a platform service, and Kalam labels where it ran. Recordings are deleted right after transcription unless you turn on "Keep recordings".
+- **You control it.** **Offline only** mode blocks every cloud call. "Use cloud AI when needed" and "Allow specialist models" are separate switches. Specialist models are off by default.
+- **Encrypted backups.** Backups use AES-256-GCM with a key derived by PBKDF2-HMAC-SHA256 (310,000 iterations minimum) from your passphrase. The passphrase and key are never stored.
+- **No keys in the client.** Only `EXPO_PUBLIC_*` identifiers reach the bundle. Claude and Nebius keys exist only in Cloud Functions (Secret Manager, or `functions/.secret.local` locally). CI scans the production bundle for provider secrets.
+- **App Check.** Web uses reCAPTCHA Enterprise, with a debug token in development only. Native builds use Play Integrity and App Attest. The Cloud Functions enforce it, and the specialist function accepts each token once.
+- **Specialist function.** Strict request validation and size limits, a per-task allowlist (`plan_app`, `repair_spec`, `interpret_sketch`), timeouts, server-side output validation, a rate limit, and a usage log that holds task, provider, model, latency and token counts but no user content.
+- **KalamSpec is data.** No `eval`, no `new Function`, no executing model output. Every spec is validated before it renders. Invalid output is rejected or repaired once. The previous valid version is preserved. Injection fixtures live in `tests/fixtures/specs/invalid`.
+- **Prompt injection.** User text and images are wrapped as untrusted data in prompts. Model output is never trusted.
+- **Hosting headers** (`firebase.json`): a Content Security Policy, `nosniff`, `X-Frame-Options: DENY`, a strict referrer policy and camera and microphone limited to the page itself.
+- **Firestore rules** are covered by emulator tests in `tests/rules`.
 
 ---
 
-## License
+## 8. Existing work and tooling
+
+### Existing-work disclosure
+
+On 2026-11-17 this repository held only product planning documents and an instruction file for the coding agent. It had no source code, no configuration and no build. Those planning documents are kept locally and are not published here.
+
+All of the code in this repository was written during the hackathon period with AI assistance from Claude Code (Anthropic). That covers the app, the runtime, the AI pipeline, the Cloud Functions, the native modules, the MCP server, the tests, the scripts and the build setup. The planning documents were revised while building so that they match the decisions made along the way.
+
+### Tooling and Firebase Agent Skills record
+
+- **Coding agent:** Claude Code (Anthropic).
+- **Firebase Agent Skills:** none confirmed. No official Firebase Agent Skill was confirmed as installed or used. The Firebase AI Logic integration followed the Firebase documentation and the installed SDK's own type definitions (`@firebase/ai` 3.1.0). If a Firebase skill is used later, it will be listed here.
+- **Other skills assigned to the build agents:** `frontend-design`, `emil-design-eng`, `gsap-react`, `gsap-performance`, `threejs-fundamentals`, `claude-api`, `security-review`, `impeccable`, `readme`, and `avoid-ai-writing` or `unslop` for plain-English copy. This list records which skills the agents were told to use. It is not a log of every call.
+- **Other tools:** Vitest, Playwright, the Firebase emulators, `tsc`, ESLint, and the scripts in `scripts/`.
+
+---
+
+## 9. Licence
 
 Kalam is released under the [MIT License](LICENSE). Copyright (c) 2026 Vishav Mehra.
-
----
-
-## Existing work and how Kalam was built
-
-### Existing-work disclosure (`docs/17` section 3.9)
-
-On 2026-11-17 this repository contained only the product documents (`docs/00` to `docs/17`) and `CLAUDE.md`. It had no source code, no configuration and no build.
-
-All of the code in this repository was written during the hackathon period with AI assistance from Claude Code: the app, the runtime, the AI pipeline, the Cloud Functions, the tests, the scripts and the build setup. The product documents were revised while building so that they match the decisions recorded in `docs/16`.
-
-### Tooling and Firebase Agent Skills record (`docs/17` section 4.2)
-
-- **Coding agent:** Claude Code (Anthropic), following `CLAUDE.md`.
-- **Firebase Agent Skills:** none confirmed. No official Firebase Agent Skill was confirmed as installed or used. The Firebase AI Logic integration followed the Firebase documentation and the installed SDK's own type definitions (`@firebase/ai` 3.1.0). If a Firebase skill is used later, it will be listed here.
-- **Other skills assigned to the build agents:** `frontend-design`, `emil-design-eng`, `gsap-react`, `gsap-performance`, `threejs-fundamentals`, `claude-api`, `security-review`, `impeccable`, `readme`, and `avoid-ai-writing` or `unslop` for plain-English copy. Each one is marked "assigned to build agents": this list records which skills the agents were told to use, not a log of every call.
-- **Other tools:** Vitest, Playwright, the Firebase Functions emulator, `tsc`, and the scripts in `scripts/`.

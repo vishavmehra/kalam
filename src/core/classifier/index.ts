@@ -6,7 +6,7 @@
  * ponytail: lexicon heuristics, benchmarked in tests/fixtures/requests/classifier-cases.json.
  * Escalate genuinely ambiguous cases to Nano/cloud classification if the benchmark drops < 90%.
  */
-import type { ComplexityLevel, NormalizedInput, TaskClassification, TemplateId } from '../contracts';
+import type { ComplexityLevel, DrawingSummary, NormalizedInput, TaskClassification, TemplateId } from '../contracts';
 import type { KalamSpec } from '../spec/schema';
 import { getTemplate, matchTemplates } from '../templates';
 
@@ -33,7 +33,7 @@ const ENTITIES: ReadonlyArray<{ name: string; re: RegExp; tx?: boolean }> = [
   { name: 'deliveries', re: /\b(?:deliveries|shipments?|dispatches)\b/, tx: true },
   { name: 'salaries', re: /\b(?:salar(?:y|ies)|payroll|wages)\b/, tx: true },
   { name: 'leads', re: /\b(?:leads?|deals?|prospects?)\b/ },
-  { name: 'fees', re: /\b(?:fees?|tuition)\b/, tx: true },
+  { name: 'fees', re: /\b(?:fees?|tuition(?! (?:class|classes|centre|center)))\b/, tx: true },
 ];
 
 const SIGNALS = {
@@ -72,7 +72,43 @@ function countsOf(spec: KalamSpec): { screens: number; collections: number; acti
   return { screens: spec.screens.length, collections: Object.keys(spec.collections).length, actions: Object.keys(spec.actions).length };
 }
 
-const levelFor = (points: number): ComplexityLevel => (points <= 1 ? 'simple' : points <= 4 ? 'medium' : 'complex');
+const RANK: Record<ComplexityLevel, number> = { simple: 0, medium: 1, complex: 2 };
+const higher = (a: ComplexityLevel, b: ComplexityLevel): ComplexityLevel => (RANK[b] > RANK[a] ? b : a);
+
+/**
+ * Points say how much is asked for; `hard` says whether any of it is a genuinely heavy kind (roles, workflows,
+ * a whole business system, extensive dashboards, many screens, four or more record kinds, a very long brief).
+ * Links between records plus ordinary reports are a medium app (docs/07 §3.1): they reach "complex" only with a hard
+ * signal or a very high score.
+ */
+const levelFor = (a: Pick<TextAnalysis, 'points' | 'hard'>): ComplexityLevel =>
+  a.points <= 1 ? 'simple' : a.points >= 8 || (a.points >= 5 && a.hard) ? 'complex' : 'medium';
+
+/**
+ * The one other level a close call could be, or undefined when the score is clear (docs/07 §3.4). Only the
+ * small-model tie-break uses it, and only upward: one point short of medium, or the medium/complex edge. A complex
+ * request always has a heavy signal, so it is never second-guessed downward.
+ */
+function alternativeFor(a: Pick<TextAnalysis, 'points'>, level: ComplexityLevel): ComplexityLevel | undefined {
+  if (level === 'simple') return a.points === 1 ? 'medium' : undefined;
+  return level === 'medium' && a.points >= 4 ? 'complex' : undefined;
+}
+
+/**
+ * Size of a Drawing Studio sketch from its structure alone (docs/07 §3.2: screens, actions, size). The words on
+ * a sketch are labels, not requirements, so they never raise the level.
+ * ponytail: thresholds fitted to tests/evaluation/golden/sketches.json, so its 25/25 is a fitted score, not
+ * evidence. On sketches-heldout.json (written afterwards, never used to tune) it gets 7/12: 7/8 clear cases, 0/4
+ * ambiguous, every miss one level too high (a contact book's list and form buttons read as two actions). Two pages
+ * with one button (a form and its list) stay simple; a second button is a second action. Replace with an estimate
+ * from the compiled app, and add a fresh held-out set, before quoting sketch accuracy as a product claim.
+ */
+function drawingLevel(d: DrawingSummary): ComplexityLevel {
+  if (d.pageCount >= 5 || d.elements.length > 60) return 'complex';
+  if (d.pageCount >= 3) return 'medium';
+  if (d.pageCount === 2) return d.elements.filter((e) => e.kind === 'stamp:bigButton').length >= 2 ? 'medium' : 'simple';
+  return d.elements.length > 14 ? 'medium' : 'simple';
+}
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const list = (xs: readonly string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
 
@@ -83,6 +119,8 @@ interface TextAnalysis {
   reports: boolean;
   roles: boolean;
   workflow: boolean;
+  /** At least one heavy signal, see levelFor. */
+  hard: boolean;
   explicitScreens?: number;
 }
 
@@ -133,7 +171,9 @@ function analyzeText(raw: string): TextAnalysis {
   if (words > 120) { points += 2; reasons.push(`Long, detailed request (${words} words).`); }
   else if (words > 60) { points += 1; reasons.push(`Detailed request (${words} words).`); }
 
-  return { points, reasons, entities, reports, roles, workflow, explicitScreens };
+  const hard = workflow || roles || SIGNALS.bigSystem.test(t) || (reports && SIGNALS.heavyReports.test(t))
+    || SIGNALS.multiScreen.test(t) || (explicitScreens ?? 0) >= 4 || found.length >= 4 || words > 120;
+  return { points, reasons, entities, reports, roles, workflow, hard, explicitScreens };
 }
 
 function estimate(a: TextAnalysis): { screens: number; collections: number; actions: number } {
@@ -148,7 +188,7 @@ function classifyEdit(text: string, spec: KalamSpec): TaskClassification {
   const a = analyzeText(text);
   const base = countsOf(spec);
   const structural = STRUCTURAL_EDIT.test(t) || a.points >= 2;
-  const complexity: ComplexityLevel = a.points >= 5 ? 'complex' : structural ? 'medium' : 'simple';
+  const complexity: ComplexityLevel = levelFor(a) === 'complex' ? 'complex' : structural ? 'medium' : 'simple';
   const reasons = [`Changes the existing app "${spec.name}".`];
   if (complexity === 'simple') {
     reasons.push(COSMETIC_EDIT.test(t)
@@ -182,11 +222,12 @@ export function classifyRequest(input: NormalizedInput): TaskClassification {
 
   if (input.existingSpec) return classifyEdit(text, input.existingSpec);
 
-  const images = input.images.length + (input.video?.frames.length ?? 0) + (input.drawing?.images.length ?? 0);
-  const hasSketch = input.images.some((i) => i.source !== 'video_frame') || !!input.drawing;
+  // Frames are samples of one clip and a drawing's page images repeat its pages: neither is a separate image.
+  const photos = input.images.filter((i) => i.source !== 'video_frame').length;
+  const hasSketch = photos > 0 || !!input.drawing;
   const hasVideo = !!input.video || input.modalities.includes('video');
   const untranscribedAudio = input.modalities.includes('audio') && !input.audioTranscript;
-  const multimodal = images > 0 || hasSketch || hasVideo || untranscribedAudio;
+  const multimodal = hasSketch || hasVideo || untranscribedAudio || input.images.length > 0;
 
   const a = analyzeText(text);
   const reasons: string[] = [];
@@ -194,10 +235,18 @@ export function classifyRequest(input: NormalizedInput): TaskClassification {
 
   if (multimodal) {
     const pages = input.drawing?.pageCount ?? 0;
-    const elements = input.drawing?.elements.length ?? 0;
-    const big = pages >= 4 || elements > 60 || images > 4 || a.points >= 5;
     const est = estimate(a);
-    const screens = Math.min(8, Math.max(est.screens, pages, input.images.length, 1));
+    const screens = Math.min(8, Math.max(est.screens, pages, photos, 1));
+    // The level comes from what is asked for, not from the input type: needing vision does not make an app harder.
+    // A Studio drawing has a known structure, so a small sketch stays simple. A photo, clip or recording hides its
+    // structure until the cloud model reads it, so those start at medium. The drawing's own labels never count.
+    const said = [input.text, input.audioTranscript, input.video?.summary].filter((s): s is string => !!s?.trim()).join('\n');
+    const spoken = analyzeText(said);
+    const unseen = photos > 0 || hasVideo || untranscribedAudio || input.images.length > 0;
+    let level: ComplexityLevel = input.drawing ? drawingLevel(input.drawing) : 'simple';
+    if (unseen) level = higher(level, 'medium');
+    if (photos > 4) level = 'complex';
+    if (said) level = higher(level, input.drawing ? higher('medium', levelFor(spoken)) : levelFor(spoken));
     reasons.push(
       hasSketch
         ? 'Includes a sketch or photo of an app; reading its layout needs cloud vision.'
@@ -205,11 +254,16 @@ export function classifyRequest(input: NormalizedInput): TaskClassification {
           ? 'Includes a video; understanding it needs cloud multimodal reasoning.'
           : 'Includes audio that has not been transcribed; it needs cloud multimodal reasoning.',
     );
-    if (big) reasons.push('The visual reference is large (many pages, elements or images).');
-    reasons.push(...a.reasons);
+    if (input.drawing && !unseen) {
+      reasons.push(level === 'simple'
+        ? `The sketch is small (${pages} page${pages === 1 ? '' : 's'}), so the app should be simple.`
+        : 'The sketch is large or comes with extra instructions, so the app is more than simple.');
+    }
+    // A sketch's own labels are not requirements, so they are not offered as reasons for its level.
+    if (said || !input.drawing) reasons.push(...a.reasons);
     return {
       taskType: hasSketch ? 'interpret_sketch' : 'create_app',
-      complexity: big ? 'complex' : 'medium',
+      complexity: level,
       estimatedScreens: screens,
       estimatedCollections: est.collections,
       estimatedActions: Math.max(est.actions, screens * 2),
@@ -238,7 +292,7 @@ export function classifyRequest(input: NormalizedInput): TaskClassification {
     };
   }
 
-  const complexity = levelFor(a.points);
+  const complexity = levelFor(a);
   if (strong) {
     const title = getTemplate(strong.templateId)?.title ?? strong.templateId;
     reasons.push(`Matches the ${title} template (${list(strong.matchedKeywords.slice(0, 3).map((k) => `"${k}"`))}).`);
@@ -269,6 +323,7 @@ export function classifyRequest(input: NormalizedInput): TaskClassification {
     estimatedActions: est.actions,
     requiresMultimodalReasoning: false,
     requiresCloudReasoning: true,
+    ...(alternativeFor(a, complexity) ? { alternative: alternativeFor(a, complexity) } : {}),
     confidence: complexity === 'simple' ? 0.55 : complexity === 'medium' ? 0.7 : round2(Math.min(0.92, 0.7 + 0.03 * a.points)),
     method: 'deterministic',
     reasons,

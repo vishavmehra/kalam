@@ -5,13 +5,16 @@ import {
 import { palette } from '@/design/tokens';
 import { images } from './image-cache.native';
 import type { Primitive } from './model';
+import { drawShapedText } from './skia-text';
 
 const fonts = new Map<string, SkFont>();
-function font(size: number, bold?: boolean): SkFont {
-  const key = `${size}:${bold ? 1 : 0}`;
+/** System families for the typefaces a person can pick for text. */
+const FAMILY = { sans: 'sans-serif', serif: 'serif', mono: 'monospace' } as const;
+function font(size: number, bold?: boolean, face: keyof typeof FAMILY = 'sans'): SkFont {
+  const key = `${size}:${bold ? 1 : 0}:${face}`;
   let f = fonts.get(key);
   if (!f) {
-    f = matchFont({ fontFamily: 'sans-serif', fontSize: size, fontWeight: bold ? 'bold' : 'normal' });
+    f = matchFont({ fontFamily: FAMILY[face], fontSize: size, fontWeight: bold ? 'bold' : 'normal' });
     fonts.set(key, f);
   }
   return f;
@@ -67,7 +70,9 @@ export function drawPrimitivesSkia(canvas: SkCanvas, prims: readonly Primitive[]
         canvas.drawLine(p.x1, p.y1, p.x2, p.y2, paint(p.stroke, 'stroke', p.width, 1, p.dash));
         break;
       case 'text': {
-        const f = font(p.size, p.bold);
+        // Indic scripts need a shaper; the paragraph path draws them once their fonts are registered.
+        if (drawShapedText(canvas, p)) break;
+        const f = font(p.size, p.bold, p.font);
         const w = p.align === 'center' ? f.measureText(p.text).width : 0;
         // Display-list text y is the top of the line; Skia draws from the baseline.
         canvas.drawText(p.text, p.x - w / 2, p.y + p.size * 0.82, paint(p.color, 'fill'), f);

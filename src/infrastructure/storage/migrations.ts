@@ -9,7 +9,7 @@
 import type { StorageTables, TableName } from './driver';
 
 /** Bump when a table, an index or the meaning of stored data changes. */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /** Tables of the first released layout (wave 1). Later versions add tables; none were removed. */
 export const V1_TABLES: readonly TableName[] = ['apps', 'versions', 'records', 'state', 'events', 'settings', 'drawings'];
@@ -22,6 +22,12 @@ export const V2_TABLES: readonly TableName[] = [...V1_TABLES, 'translations', 'b
  * no data migration for it: web adds the store, Android creates the missing table in `migrateSqlite`.
  */
 export const V3_TABLES: readonly TableName[] = ['shareLinks'];
+
+/**
+ * Version 4 adds only the `pendingOps` table (queued-until-online operations, docs/09 §18). Nothing
+ * existing changes and there is no data migration. Web adds the store; Android creates the missing table.
+ */
+export const V4_TABLES: readonly TableName[] = ['pendingOps'];
 
 export interface DataMigration {
   /** Schema version this migration upgrades TO. Runs only on databases older than this. */

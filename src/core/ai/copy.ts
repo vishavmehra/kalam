@@ -11,12 +11,27 @@ export const AI_COPY = {
   cloudOff: 'Cloud AI is turned off in Settings.',
   firebaseMissing: 'Firebase AI Logic is not configured for this build.',
   taskNeedsCloud: 'This task cannot run on-device.',
+  localFailedGate: 'On-device AI did not pass its checks for this task on this device, so it is not used.',
+  iconBuiltIn: 'Using the built-in icons.',
+  noImageModel: 'Kalam has not checked an AI image model for this build yet, so it cannot draw pictures with AI.',
   deviceNotReady: (availability: string) => `On-device AI is not ready on this device (${availability}).`,
   deviceLacks: (capability: Capability) => `On-device AI on this device cannot handle ${CAPABILITY_LABELS[capability]}.`,
   rateLimited: 'Kalam has asked for a lot of AI help in a short time. Wait a minute and try again.',
   cancelled: 'The request was cancelled.',
   inputTooLarge: 'This is too much for the AI to read at once. Try a shorter description or fewer photos.',
+  needsCloudOk: 'Kalam needs your OK to use cloud help for this. Nothing was sent.',
 } as const;
+
+/** The result the orchestrator returns when the one-time cloud notice was not accepted (docs/11 §8.3). */
+export function needsCloudOk(r: { errorCode?: AIErrorCode; errorMessage?: string } | undefined): boolean {
+  return r?.errorCode === 'consent_denied' && r.errorMessage === AI_COPY.needsCloudOk;
+}
+
+/** The note the orchestrator writes into the event of that result, so a stored event can say the same (Activity). */
+export const CLOUD_NOTICE_NOTE = 'cloud notice not accepted';
+export function noticeDeclined(e: { errorCode?: AIErrorCode; escalationReason?: string }): boolean {
+  return e.errorCode === 'consent_denied' && !!e.escalationReason?.includes(CLOUD_NOTICE_NOTE);
+}
 
 export const CAPABILITY_LABELS: Readonly<Record<Capability, string>> = {
   text: 'text',

@@ -5,7 +5,7 @@ test.describe('g. Drawing Studio', () => {
     await completeOnboarding(page);
     await openCreate(page);
 
-    await page.getByRole('radio', { name: /^Draw/ }).first().click();
+    await page.getByRole('tab', { name: /^Draw/ }).click();
     await page.getByRole('button', { name: 'Open Drawing Studio' }).click();
     await expect(page).toHaveURL(/\/create\/draw/);
 
@@ -47,12 +47,12 @@ test.describe('g. Drawing Studio', () => {
 
     // Back on Create with the drawing attached.
     await expect(page).toHaveURL(/\/create$/, { timeout: 20_000 });
-    await expect(page.getByRole('radio', { name: 'Draw, has input' })).toBeChecked();
-    await expect(page.getByText(/1 screen · 1 component$/)).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Draw, has input' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByText('Untitled sketch: 1 screen and 1 component').first()).toBeAttached() // read by screen readers;
     await expect(page.getByRole('button', { name: 'Detach drawing' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Continue drawing' })).toBeVisible();
     // A drawing alone is a valid input: Create is enabled.
-    await expect(page.getByRole('button', { name: 'Create app' })).toBeEnabled();
-    await expect(page.getByRole('button', { name: /1 screen sketch/ })).toBeVisible();
+    await expect(page.getByTestId('create-app').first()).toBeEnabled();
+    await expect(page.getByRole('button', { name: /^Drawing, 1 screen/ })).toBeVisible();
   });
 });

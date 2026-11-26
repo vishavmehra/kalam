@@ -3,6 +3,7 @@
  * UI code calls `syncReminders(appId)` after anything that can change what is due.
  */
 import { getNotificationAdapter } from '@/infrastructure/platform/notifications';
+import { withSpecReminders } from '@/runtime/engine/v11/reminder';
 import { getServices } from '@/services';
 
 import { loadReminderConfig } from './config';
@@ -15,7 +16,12 @@ function getRunner(): SyncRunner {
     adapter: getNotificationAdapter(),
     loadApp: (appId) => getServices().db.apps.get(appId),
     loadRecords: (appId) => getServices().db.records.listAll(appId),
-    loadConfig: (appId) => loadReminderConfig(getServices().db.state, appId),
+    // The app's own Reminder components (KalamSpec 1.1) join the person's rules, each on only when its switch is on.
+    loadConfig: async (appId) => {
+      const { db } = getServices();
+      const [config, app, state] = await Promise.all([loadReminderConfig(db.state, appId), db.apps.get(appId), db.state.all(appId)]);
+      return withSpecReminders(config, app?.spec, state);
+    },
     now: Date.now,
   });
   return runner;

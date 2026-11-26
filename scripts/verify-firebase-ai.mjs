@@ -5,6 +5,7 @@
  *
  *   node scripts/verify-firebase-ai.mjs [--model gemini-3.8-flash]
  *   node scripts/verify-firebase-ai.mjs --on-device [--cdp-port 9333]   (Gemini Nano in Chrome)
+ *   node scripts/verify-firebase-ai.mjs --web-matrix [--cdp-port 9333]  (the six Chrome scenarios of docs/17 section 12.1)
  *
  * Node has no Chrome Prompt API and no reCAPTCHA, so this verifies the cloud leg only. If
  * EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN is set (and registered in Firebase console → App Check → Manage
@@ -162,5 +163,135 @@ async function onDevice() {
   }
 }
 
+
+/**
+ * --web-matrix: the six Chrome scenarios of docs/17 section 12.1, run with Kalam's own orchestrator and Firebase provider
+ * (tests/evaluation/browser/web-matrix.entry.ts, bundled here with Vite) in real browsers:
+ *   A, C, D, E, F in the dedicated Kalam Chrome over CDP (Gemini Nano present), each in its own new tab;
+ *   B in Playwright's Chromium, a real browser with no Prompt API.
+ * Cloud steps are real and billed (about six small requests). The bundle holds the public Firebase config and the App Check
+ * debug token, so it is built into a temporary folder that is deleted afterwards. Closes only its own tabs.
+ */
+async function webMatrix() {
+  const { mkdtempSync, rmSync, readFileSync: read, writeFileSync } = await import('node:fs');
+  const { createServer } = await import('node:http');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const portArg = process.argv.indexOf('--cdp-port');
+  const cdp = `http://127.0.0.1:${portArg > 0 ? process.argv[portArg + 1] : 9333}`;
+  const outDir = mkdtempSync(join(tmpdir(), 'kalam-web-matrix-'));
+  let server;
+  const tabs = [];
+  try {
+    const define = { 'process.env': '{}', 'process.env.NODE_ENV': '"development"' };
+    for (const [k, v] of Object.entries(env)) if (k.startsWith('EXPO_PUBLIC_')) define[`process.env.${k}`] = JSON.stringify(v);
+    const { build } = await import('vite');
+    await build({
+      root, configFile: false, logLevel: 'error', define,
+      resolve: { alias: { '@': join(root, 'src') }, extensions: ['.web.ts', '.web.tsx', '.ts', '.tsx', '.mjs', '.js', '.json'] },
+      build: {
+        outDir, emptyOutDir: true, minify: false, target: 'es2022',
+        lib: { entry: join(root, 'tests', 'evaluation', 'browser', 'web-matrix.entry.ts'), formats: ['iife'], name: 'KalamMatrix', fileName: () => 'matrix.js' },
+      },
+    });
+    writeFileSync(join(outDir, 'index.html'), '<!doctype html><meta charset="utf-8"><title>Kalam web matrix</title><script src="matrix.js"></script>');
+    const bundle = read(join(outDir, 'matrix.js'));
+    server = createServer((req, res) => {
+      if (req.url?.startsWith('/matrix.js')) { res.writeHead(200, { 'content-type': 'text/javascript' }); res.end(bundle); return; }
+      res.writeHead(200, { 'content-type': 'text/html' });
+      res.end('<!doctype html><meta charset="utf-8"><title>Kalam web matrix</title><script src="matrix.js"></script>');
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    const pageUrl = `http://localhost:${server.address().port}/`;
+
+    /** One new tab in the Kalam Chrome. */
+    const openTab = async () => {
+      const tab = await (await fetch(`${cdp}/json/new?${encodeURIComponent(pageUrl)}`, { method: 'PUT' })).json();
+      const ws = new WebSocket(tab.webSocketDebuggerUrl);
+      await new Promise((r, j) => { ws.onopen = r; ws.onerror = () => j(new Error('CDP websocket failed')); });
+      let seq = 0;
+      const pending = new Map();
+      ws.onmessage = (m) => { const d = JSON.parse(m.data); pending.get(d.id)?.(d); pending.delete(d.id); };
+      const send = (method, params = {}) => new Promise((r) => { const id = ++seq; pending.set(id, r); ws.send(JSON.stringify({ id, method, params })); });
+      const evaluate = async (expression) => (await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })).result?.result?.value;
+      for (let i = 0; i < 100 && !(await evaluate('Boolean(window.__matrix && window.__matrix.ready)')); i++) await new Promise((r) => setTimeout(r, 100));
+      const handle = { send, evaluate, run: (id) => evaluate(`window.__matrix.run(${JSON.stringify(id)})`), close: async () => { ws.close(); await fetch(`${cdp}/json/close/${tab.id}`).catch(() => {}); } };
+      tabs.push(handle);
+      return handle;
+    };
+
+    const version = await (await fetch(`${cdp}/json/version`)).json();
+    const results = [];
+    // `--only A,F,G` runs part of the matrix while it is being debugged.
+    const onlyArg = process.argv.indexOf('--only');
+    const want = (id) => onlyArg < 0 || process.argv[onlyArg + 1].split(',').includes(id);
+    // A and F share a tab: the first Nano session of a page takes about 40 s, later ones about 0.1 s.
+    // F takes the tab offline and G puts it back, so the reconnect is part of the same recorded run.
+    if (want('A') || want('F') || want('G')) {
+      const tabA = await openTab();
+      if (want('A')) results.push(await tabA.run('A'));
+      if (want('F') || want('G')) {
+        await tabA.send('Network.enable');
+        if (want('F')) {
+          await tabA.send('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+          results.push(await tabA.run('F'));
+          await tabA.send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+          await new Promise((r) => setTimeout(r, 1500)); // let the page see the network return
+        }
+        if (want('G')) results.push(await tabA.run('G'));
+      }
+      await tabA.close();
+    }
+    for (const id of ['C', 'D', 'E', 'H']) {
+      if (!want(id)) continue;
+      const tab = await openTab();
+      results.push(await tab.run(id));
+      await tab.close();
+    }
+    // B and C2 run in Playwright's Chromium, which is a real browser: B with the Prompt API switched off (no local model at all),
+    // C2 as it ships (Prompt API exposed, Gemini Nano not installed: availability "downloadable").
+    let chromiumVersion = 'unavailable';
+    if (want('B') || want('C2')) {
+      let playwright;
+      try { playwright = await import('playwright'); } catch (e) { playwright = undefined; chromiumVersion = `not available: ${redact(e?.message ?? e)}`; }
+      const variants = [
+        ['B', ['--disable-features=PromptAPIForGeminiNano,AIPromptAPI,AIPromptAPIMultimodalInput,OptimizationGuideOnDeviceModel']],
+        ['C2', []],
+      ];
+      for (const [id, args] of variants) {
+        if (!want(id)) continue;
+        try {
+          if (!playwright) throw new Error(chromiumVersion);
+          const browser = await playwright.chromium.launch({ args });
+          chromiumVersion = `Chromium ${browser.version()} (Playwright)`;
+          const page = await browser.newPage();
+          await page.goto(pageUrl);
+          await page.waitForFunction(() => window.__matrix?.ready === true);
+          results.push(await page.evaluate((scenario) => window.__matrix.run(scenario), id));
+          await browser.close();
+        } catch (e) {
+          results.push({ id, title: id === 'B' ? 'Chrome without a local model' : 'Local model not ready (real)', how: 'Playwright Chromium', pass: false, observed: {}, events: [], failures: [`could not run: ${redact(e?.message ?? e)}`] });
+        }
+      }
+    }
+    results.sort((a, b) => a.id.localeCompare(b.id));
+    const out = {
+      ok: results.length === (onlyArg < 0 ? 9 : process.argv[onlyArg + 1].split(',').length) && results.every((r) => r.pass),
+      kalamChrome: version.Browser,
+      withoutLocalModel: chromiumVersion,
+      scenarios: results,
+    };
+    console.log(JSON.stringify(out, null, 2));
+    return out.ok ? 0 : 1;
+  } finally {
+    for (const t of tabs) await t.close().catch(() => {});
+    server?.closeAllConnections();
+    server?.close();
+    rmSync(outDir, { recursive: true, force: true });
+  }
+}
+
 // exitCode (not process.exit) avoids a libuv handle-closing assertion on Windows with pending fetch handles.
-(process.argv.includes('--on-device') ? onDevice() : main()).then((code) => { process.exitCode = code; }, (e) => { console.error(redact(e?.message ?? e)); process.exitCode = 2; });
+(process.argv.includes('--web-matrix') ? webMatrix() : process.argv.includes('--on-device') ? onDevice() : main()).then((code) => { process.exitCode = code; }, (e) => { console.error(redact(e?.message ?? e)); process.exitCode = 2; });

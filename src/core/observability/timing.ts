@@ -6,9 +6,18 @@
  * or a file name, and the functions copy only those fields from what they are given. Events live in a
  * bounded in-memory ring, are never written to disk and are never sent anywhere. A diagnostics view
  * reads them with `events()` or `summarize()`.
+ *
+ * The ring keeps up to `capacity` events for each name, so a burst of one kind (a backup import
+ * validates every app) cannot push every other kind out of the medians.
  */
+import { notifyAll } from './notify';
 
-export const TIMING_NAMES = ['app_open', 'spec_validate', 'record_write'] as const;
+export const TIMING_NAMES = [
+  'app_open', 'spec_validate', 'record_write',
+  // Local media steps (docs/06 §17.3). Model time is not here: it is the latency on each inference event.
+  'attachment_intake', 'media_validate', 'media_preprocess', 'thumbnail', 'audio_transcribe', 'video_frames', 'drawing_export',
+  'context_assemble', 'request_prepare',
+] as const;
 export type TimingName = (typeof TIMING_NAMES)[number];
 
 export interface TimingEvent {
@@ -45,9 +54,12 @@ export interface RunningTiming {
 export interface TimingLog {
   record(name: TimingName, ms: number, options?: TimingOptions): TimingEvent | undefined;
   start(name: TimingName): RunningTiming;
-  /** Times `fn`. A promise is awaited; a throw or rejection is recorded as failed and rethrown. */
-  time<T>(name: TimingName, fn: () => Promise<T>): Promise<T>;
-  time<T>(name: TimingName, fn: () => T): T;
+  /**
+   * Times `fn`. A promise is awaited; a throw or rejection is recorded as failed and rethrown.
+   * `worked` marks a returned value as a failure, for steps that report failure as a value (a transcript result).
+   */
+  time<T>(name: TimingName, fn: () => Promise<T>, worked?: (value: T) => boolean): Promise<T>;
+  time<T>(name: TimingName, fn: () => T, worked?: (value: T) => boolean): T;
   /** Oldest first. */
   events(): readonly TimingEvent[];
   /** One row per name that has at least one event, in the order of `TIMING_NAMES`. */
@@ -58,7 +70,8 @@ export interface TimingLog {
   version(): number;
 }
 
-export const TIMING_RING_SIZE = 200;
+/** Events kept per name. */
+export const TIMING_RING_SIZE = 50;
 const MAX_MS = 60 * 60 * 1000;
 const MAX_COUNT = 1_000_000_000;
 const NAMES: ReadonlySet<string> = new Set(TIMING_NAMES);
@@ -73,6 +86,7 @@ const isPromiseLike = (v: unknown): v is PromiseLike<unknown> =>
   typeof v === 'object' && v !== null && typeof (v as { then?: unknown }).then === 'function';
 
 export interface TimingLogOptions {
+  /** Events kept per name. At least 1. */
   capacity?: number;
   /** Monotonic milliseconds, for durations. */
   clock?: () => number;
@@ -80,13 +94,14 @@ export interface TimingLogOptions {
   wall?: () => number;
 }
 
-export function createTimingLog({ capacity = TIMING_RING_SIZE, clock = defaultClock, wall = Date.now }: TimingLogOptions = {}): TimingLog {
+export function createTimingLog({ capacity: wanted = TIMING_RING_SIZE, clock = defaultClock, wall = Date.now }: TimingLogOptions = {}): TimingLog {
+  const capacity = Number.isFinite(wanted) ? Math.max(1, Math.floor(wanted)) : TIMING_RING_SIZE;
   let ring: TimingEvent[] = [];
   let version = 0;
   const listeners = new Set<() => void>();
   const changed = () => {
     version += 1;
-    for (const l of [...listeners]) l();
+    notifyAll(listeners);
   };
 
   function record(name: TimingName, ms: number, options?: TimingOptions): TimingEvent | undefined {
@@ -99,7 +114,9 @@ export function createTimingLog({ capacity = TIMING_RING_SIZE, clock = defaultCl
       ok: options?.ok !== false,
       ...(typeof count === 'number' && Number.isInteger(count) && count >= 0 && count <= MAX_COUNT ? { count } : {}),
     };
-    ring = [...ring, event].slice(-capacity);
+    ring = [...ring, event];
+    const mine = ring.filter((e) => e.name === name);
+    if (mine.length > capacity) ring = ring.filter((e) => e !== mine[0]);
     changed();
     return event;
   }
@@ -116,7 +133,7 @@ export function createTimingLog({ capacity = TIMING_RING_SIZE, clock = defaultCl
     };
   }
 
-  function time<T>(name: TimingName, fn: () => T | Promise<T>): T | Promise<T> {
+  function time<T>(name: TimingName, fn: () => T | Promise<T>, worked?: (value: T) => boolean): T | Promise<T> {
     const running = start(name);
     let result: T | Promise<T>;
     try {
@@ -128,7 +145,7 @@ export function createTimingLog({ capacity = TIMING_RING_SIZE, clock = defaultCl
     if (isPromiseLike(result)) {
       return Promise.resolve(result).then(
         (value) => {
-          running.stop();
+          running.stop(worked && !worked(value) ? { ok: false } : undefined);
           return value;
         },
         (error: unknown) => {
@@ -137,7 +154,7 @@ export function createTimingLog({ capacity = TIMING_RING_SIZE, clock = defaultCl
         },
       );
     }
-    running.stop();
+    running.stop(worked && !worked(result) ? { ok: false } : undefined);
     return result;
   }
 

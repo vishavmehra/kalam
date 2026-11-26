@@ -51,3 +51,13 @@ export function backupFileName(now = Date.now()): string {
   const d = new Date(now);
   return `kalam-backup-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.kalambackup`;
 }
+
+export interface ArchivedRow { id: string; name: string; changedAt: number }
+
+/** Apps the person archived (hidden from the shelf, nothing deleted), most recently changed first. */
+export function archivedApps(apps: ReadonlyArray<{ id: string; archived?: boolean; updatedAt: number; spec: { name: string } }>): ArchivedRow[] {
+  return apps
+    .filter((a) => a.archived === true)
+    .map((a) => ({ id: a.id, name: a.spec.name, changedAt: a.updatedAt }))
+    .sort((a, b) => b.changedAt - a.changedAt || a.name.localeCompare(b.name));
+}

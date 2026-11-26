@@ -1,7 +1,7 @@
 /**
  * Optional file access (--workspace <dir>). Only `*.kalam.json` files directly inside that one folder:
  * no subfolders, no `..`, no absolute paths, no symbolic links, size caps on read. Files are the
- * importable app format, so Kalam can open them with Settings, Storage, Import.
+ * app file format (a one-app kalam-backup, as kalam_package_app makes).
  */
 import { lstat, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -9,12 +9,11 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { validateSpec } from '@/core/spec/validate';
-import { appFile, fail, isResult, needValid, ok, specInput, withHints } from './tools';
+import { appFile, fail, FILE_NAME_RE, isResult, needValid, ok, specInput, withHints } from './tools';
 
 export const SUFFIX = '.kalam.json';
 export const MAX_FILE_BYTES = 1_000_000;
 const MAX_LISTED = 500;
-const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,79}$/;
 // Windows device names stay devices even with an extension (CON.kalam.json).
 const DEVICE_RE = /^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i;
 
@@ -29,7 +28,7 @@ export async function openWorkspace(dir: string): Promise<Workspace> {
 /** A direct child of the workspace named `<name>.kalam.json`, or undefined for anything else. */
 export function resolveInWorkspace(ws: Workspace, name: string): string | undefined {
   const base = name.endsWith(SUFFIX) ? name : name + SUFFIX;
-  if (!NAME_RE.test(base) || base.includes('..') || DEVICE_RE.test(base) || base.length > 96) return undefined;
+  if (!FILE_NAME_RE.test(base) || base.includes('..') || DEVICE_RE.test(base)) return undefined;
   const full = path.resolve(ws.root, base);
   return path.dirname(full) === ws.root && path.basename(full) === base ? full : undefined;
 }
@@ -87,7 +86,8 @@ export async function writeAppFile(ws: Workspace, name: string, spec: unknown, o
 }
 
 const nameInput = z.string().min(1).max(96).describe('A file name in the workspace, such as "expenses" or "expenses.kalam.json".');
-const RW = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
+// destructive: with overwrite: true a write replaces a file's contents.
+const RW = { readOnlyHint: false, destructiveHint: true, openWorldHint: false } as const;
 
 export function registerWorkspaceTools(server: McpServer, ws: Workspace): void {
   server.registerTool('kalam_workspace_list', {
@@ -102,7 +102,7 @@ export function registerWorkspaceTools(server: McpServer, ws: Workspace): void {
   }, ({ name }) => readAppFile(ws, name));
   server.registerTool('kalam_workspace_write', {
     title: 'Save an app file',
-    description: 'Validates a spec and saves it as an importable *.kalam.json file in the workspace. Never replaces a file unless overwrite is true.',
+    description: 'Validates a spec and saves it as a *.kalam.json app file in the workspace. Never replaces a file unless overwrite is true.',
     inputSchema: { name: nameInput, spec: specInput, overwrite: z.boolean().default(false) }, annotations: RW,
   }, ({ name, spec, overwrite }) => writeAppFile(ws, name, spec, overwrite));
 }

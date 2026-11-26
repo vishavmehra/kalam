@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SPEECH } from '@/core/contracts';
-import { findSpeechLanguage, formatRate, SPEECH_LANGUAGES, stepRate } from './languages';
+import { findSpeechLanguage, formatRate, SPEECH_LANGUAGES, speechServiceName, stepRate } from './languages';
 
 describe('speech settings helpers', () => {
   it('steps the speaking rate in quarters and stays between 0.5 and 2', () => {
@@ -37,5 +37,11 @@ describe('speech settings helpers', () => {
 
   it('recordings are not kept by default', () => {
     expect(DEFAULT_SPEECH.keepRecordings).toBe(false);
+  });
+
+  it('names the online speech service of each platform', () => {
+    expect(speechServiceName('web')).toBe("your browser's speech service");
+    expect(speechServiceName('ios')).toBe("Apple's speech service");
+    expect(speechServiceName('android')).toBe("Android's speech service");
   });
 });

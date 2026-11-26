@@ -8,6 +8,7 @@ import { encodeEnvelope, headerAad, type Envelope } from './envelope';
 import { BackupConflictError, BackupError } from './errors';
 import { collectionToCsv, exportAppJson, exportFileName, exportRecordsJson } from './exports';
 import { unpackPayload } from './payload';
+import { drawingSchema, versionRowShape } from './schemas';
 import { createBackupService } from './service';
 import { fixtureApp, fixtureSpec, PNG_BASE64 } from './test-fixtures';
 
@@ -289,5 +290,51 @@ describe('portable exports', () => {
     expect(recordsOnly.collections.expenses.fields.amount).toEqual({ label: 'Amount', type: 'number' });
     expect(recordsOnly.collections.expenses.records.map((r) => r.values.title)).toEqual(['Tea']);
     expect(JSON.stringify(recordsOnly)).not.toContain('screens');
+  });
+});
+
+describe('fields added after the first format', () => {
+  it('keeps the drawing object properties through validation', () => {
+    const parsed = drawingSchema.safeParse({
+      id: 'drw_props', title: 'Props', createdAt: 1, updatedAt: 2, schemaVersion: 2,
+      pages: [{
+        id: 'pg_1', title: 'Home', width: 360, height: 640,
+        elements: [
+          { id: 'el_rect', kind: 'rect', x: 0, y: 0, w: 40, h: 20, color: '#000000', size: 2, fill: '#ffcc00', radius: 14 },
+          { id: 'el_arrow', kind: 'arrow', x: 0, y: 0, w: 40, h: 20, color: '#000000', size: 2, headSize: 32 },
+          { id: 'el_text', kind: 'text', x: 0, y: 0, text: 'Hi', color: '#000000', fontSize: 16, font: 'serif', bold: true },
+        ],
+      }],
+    });
+    expect(parsed.success).toBe(true);
+    const els = parsed.success ? parsed.data.pages[0]!.elements : [];
+    expect(els[0]).toMatchObject({ fill: '#ffcc00', radius: 14 });
+    expect(els[1]).toMatchObject({ headSize: 32 });
+    expect(els[2]).toMatchObject({ font: 'serif', bold: true });
+  });
+
+  it('keeps the archived mark of an app through a restore', async () => {
+    const source = freshDb();
+    const app = await source.apps.save({ ...fixtureApp(fixtureSpec()), archived: true }, create);
+    const { bytes } = await createBackupService({ db: source, ...FAST }).exportEncrypted(PASS);
+    const target = freshDb();
+    await createBackupService({ db: target, ...FAST }).importEncrypted(bytes, PASS);
+    expect((await target.apps.get(app.id))?.archived).toBe(true);
+  });
+
+  it('keeps who made a version, and drops an origin it does not know', () => {
+    const row = { appId: 'app_x', version: 2, createdAt: 5, kind: 'patch', patch: [], summary: 'Edit', source: 'edit' };
+    expect(versionRowShape.parse({ ...row, origin: 'ai' }).origin).toBe('ai');
+    expect(versionRowShape.parse({ ...row, origin: 'robot' }).origin).toBeUndefined();
+    expect(versionRowShape.parse(row).origin).toBeUndefined();
+  });
+
+  it('stores the origin the caller names on the new version', async () => {
+    const db = freshDb();
+    const app = await db.apps.save(fixtureApp(fixtureSpec()), create);
+    await db.apps.save({ ...app, spec: { ...app.spec, name: 'Shop expenses' } }, { summary: 'Renamed', source: 'edit', origin: 'ai' });
+    const versions = await db.versions.list(app.id);
+    expect(versions[0]!.origin).toBe('ai');
+    expect(versions[1]!.origin).toBeUndefined();
   });
 });

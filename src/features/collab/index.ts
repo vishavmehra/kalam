@@ -1,0 +1,10 @@
+export { ShareWithPeopleSheet, type ShareWithPeopleSheetProps } from './ShareWithPeopleSheet';
+export { MembersList, type MembersListProps } from './MembersList';
+export { TeamSheet, type TeamSheetProps } from './TeamSheet';
+export { SyncStatusBadge, describeStatus, type SyncStatusBadgeProps } from './SyncStatusBadge';
+export { JoinSheet, type JoinOutcome, type JoinSheetProps } from './JoinSheet';
+export { EndedNotices } from './EndedNotices';
+export { InvitePanel, inviteLink } from './InvitePanel';
+export { useCollabSync, useSpace, useSyncStatus, useTeams } from './use-collab';
+export { collabGuardedRecords, getCollabService } from '@/infrastructure/collab/service';
+export { useStructureGate } from './use-structure-gate';

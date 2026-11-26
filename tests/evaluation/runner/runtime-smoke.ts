@@ -23,6 +23,8 @@ function sampleValue(f: KalamField): RecordValue {
       return false;
     case 'enum':
       return f.options[0] ?? '';
+    case 'image':
+      return null;
   }
 }
 

@@ -4,7 +4,8 @@
  *
  *   node scripts/record-evidence.mjs cloud        one real, billed Firebase AI Logic cloud call
  *   node scripts/record-evidence.mjs on-device    Gemini Nano in the Kalam Chrome over CDP (default port 9333)
- *   node scripts/record-evidence.mjs all          both
+ *   node scripts/record-evidence.mjs web-matrix   the six Chrome scenarios of docs/17 section 12.1 (about six billed requests)
+ *   node scripts/record-evidence.mjs all          cloud and on-device (the matrix is run on its own)
  *
  * It runs scripts/verify-firebase-ai.mjs as a child process, scrubs anything secret-shaped from the
  * output (API key, App Check debug token, UUIDs, long tokens), and writes docs/evidence/<kind>-<date>.json.
@@ -48,7 +49,7 @@ async function chromeVersion() {
 }
 
 async function record(kind, args) {
-  const run = spawnSync(process.execPath, [join(root, 'scripts', 'verify-firebase-ai.mjs'), ...args], { encoding: 'utf8', timeout: 180_000 });
+  const run = spawnSync(process.execPath, [join(root, 'scripts', 'verify-firebase-ai.mjs'), ...args], { encoding: 'utf8', timeout: kind === 'web-matrix' ? 900_000 : 180_000, maxBuffer: 16 * 1024 * 1024 });
   const stdout = redact(run.stdout ?? '').trim();
   const stderr = redact(run.stderr ?? '').trim();
   let result = null;
@@ -67,7 +68,7 @@ async function record(kind, args) {
       node: process.version,
       os: `${process.platform} ${process.arch}`,
       sdk: { firebase: versionOf('firebase'), '@firebase/ai': versionOf('@firebase/ai') },
-      ...(kind === 'on-device-inference' ? { chrome: await chromeVersion(), cdpPort } : {}),
+      ...(kind === 'on-device-inference' || kind === 'web-matrix' ? { chrome: await chromeVersion(), cdpPort } : {}),
     },
     result,
     ...(result ? {} : { rawStdout: stdout.slice(0, 2000), rawStderr: stderr.slice(0, 2000) }),
@@ -80,11 +81,12 @@ async function record(kind, args) {
 }
 
 const which = process.argv[2];
-if (!['cloud', 'on-device', 'all'].includes(which)) {
-  console.error('usage: node scripts/record-evidence.mjs cloud|on-device|all [--cdp-port 9333]');
+if (!['cloud', 'on-device', 'web-matrix', 'all'].includes(which)) {
+  console.error('usage: node scripts/record-evidence.mjs cloud|on-device|web-matrix|all [--cdp-port 9333]');
   process.exit(2);
 }
 const codes = [];
-if (which !== 'on-device') codes.push(await record('cloud-inference', []));
-if (which !== 'cloud') codes.push(await record('on-device-inference', ['--on-device', '--cdp-port', cdpPort]));
+if (which === 'cloud' || which === 'all') codes.push(await record('cloud-inference', []));
+if (which === 'on-device' || which === 'all') codes.push(await record('on-device-inference', ['--on-device', '--cdp-port', cdpPort]));
+if (which === 'web-matrix') codes.push(await record('web-matrix', ['--web-matrix', '--cdp-port', cdpPort]));
 process.exitCode = codes.some(Boolean) ? 1 : 0;

@@ -1,25 +1,26 @@
 import { router } from 'expo-router';
-import { CloudOff, Heart, LogOut, ShieldCheck, Store, UserRound } from 'lucide-react-native';
+import { CloudOff, LogOut, ShieldCheck, Store, UserRound } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 import { AppShell } from '@/components/shell/AppShell';
 import { routes } from '@/components/shell/routes';
-import { bazaarRoutes } from '@/features/bazaar/routes';
 import { useOnline } from '@/components/status/useHybridStatus';
 import type { KalamUser } from '@/core/contracts';
-import { Button, Chip, EmptyState, Screen, Surface, Text, TextField, useKalamTheme, useToast } from '@/design';
+import { Button, ConfirmSheet, EmptyState, LedgerRule, Screen, Stamp, Surface, Text, TextField, useKalamTheme, useToast } from '@/design';
+import { bazaarRoutes } from '@/features/bazaar/routes';
+import { useT } from '@/i18n/react';
 import { getServices } from '@/services';
 
+import { noteSignedOut } from './gate-notice';
 import { SignInPanel } from './SignInPanel';
 import { publicName, useAuthUser } from './use-auth';
 
-const PROVIDER_LABELS: Record<string, string> = { password: 'email', 'google.com': 'Google' };
-
-/** /account: optional account for Kalam Bazaar. Apps never need it (docs/04 §15.4, docs/11 §9). */
+/** /account: who is signed in, the name shown on shared apps, and sign-out (docs/04 §15.4, docs/11 §9). */
 export function AccountScreen() {
   const theme = useKalamTheme();
+  const t = useT(theme.uiLanguage);
   const { user, restoring, configured } = useAuthUser();
   const online = useOnline();
 
@@ -27,37 +28,27 @@ export function AccountScreen() {
     <AppShell active="account">
       <Screen maxWidth={760}>
         <View style={{ gap: 6, marginBottom: 28 }}>
-          <Text variant="h1">Account</Text>
-          <Text tone="secondary">
-            You do not need an account to make or use apps. An account lets you share apps in Kalam Bazaar and like other people's apps.
-          </Text>
+          <Text variant="h1">{t('account.title')}</Text>
+          <LedgerRule />
+          <Text tone="secondary" style={{ marginTop: 10, maxWidth: 620 }}>{t('account.lede')}</Text>
         </View>
 
         <View style={{ gap: 32 }}>
           {!configured ? (
-            <EmptyState
-              title="Accounts are not set up in this build"
-              description="Your apps work the same without one. Kalam Bazaar needs Firebase to be configured."
-            />
+            <EmptyState title={t('account.notConfiguredTitle')} description={t('account.notConfiguredBody')} />
           ) : restoring ? (
             <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 24 }}>
               <ActivityIndicator color={theme.colors.primary} />
-              <Text tone="secondary">Checking your account</Text>
+              <Text tone="secondary">{t('account.checking')}</Text>
             </View>
           ) : user && !user.isAnonymous ? (
             <Profile user={user} />
           ) : (
             <View style={{ gap: 16 }}>
-              {!online ? (
-                <Notice icon={<CloudOff size={18} color={theme.colors.warning} />} text="You are offline. You can sign in when you are back online. Your apps still work." />
-              ) : null}
-              {user?.isAnonymous ? <GuestCard /> : null}
+              {!online ? <Notice icon={<CloudOff size={18} color={theme.colors.graphite} />} text={t('auth.gate.offline')} /> : null}
               <Surface padded={24} style={{ gap: 16 }}>
-                <Text variant="h3">{user?.isAnonymous ? 'Add your email' : 'Sign in or create an account'}</Text>
-                {user?.isAnonymous ? (
-                  <Text tone="secondary">Keep your likes and start sharing apps. Your guest likes move to the new account.</Text>
-                ) : null}
-                <SignInPanel initialMode={user?.isAnonymous ? 'signup' : 'signin'} allowGuest={!user} />
+                <Text variant="h3" level={2}>{t('auth.sheet.title')}</Text>
+                <SignInPanel initialMode={user?.isAnonymous ? 'signup' : 'signin'} />
               </Surface>
             </View>
           )}
@@ -71,10 +62,12 @@ export function AccountScreen() {
 
 function Profile({ user }: { user: KalamUser }) {
   const theme = useKalamTheme();
+  const t = useT(theme.uiLanguage);
   const toast = useToast();
   const [name, setName] = useState(publicName(user));
   const [saving, setSaving] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [confirmOut, setConfirmOut] = useState(false);
   useEffect(() => setName(publicName(user)), [user]);
   const initial = (user.displayName || user.email || '?').trim().charAt(0).toUpperCase();
   const changed = name.trim() !== publicName(user);
@@ -84,7 +77,7 @@ function Profile({ user }: { user: KalamUser }) {
     setSaving(true);
     const r = await getServices().auth.setDisplayName(name);
     setSaving(false);
-    toast.show(r.ok ? { message: 'Name saved.', tone: 'success' } : { message: r.message ?? 'Could not save your name.', tone: 'danger' });
+    toast.show(r.ok ? { message: t('account.nameSaved'), tone: 'success' } : { message: t('account.nameFailed'), tone: 'danger' });
   };
 
   return (
@@ -94,22 +87,24 @@ function Profile({ user }: { user: KalamUser }) {
           <View
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
-            style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: theme.colors.primarySoft, alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: theme.colors.primarySoft, borderWidth: 1.5, borderColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' }}
           >
-            <Text variant="h3" tone="primary">{initial}</Text>
+            <Text variant="h3" level={0} tone="primary">{initial}</Text>
           </View>
           <View style={{ flex: 1, gap: 2 }}>
-            <Text variant="h4" numberOfLines={1}>{user.displayName || 'No name yet'}</Text>
+            <Text variant="h4" level={2} numberOfLines={1}>{user.displayName || t('account.noName')}</Text>
             {user.email ? <Text tone="secondary" numberOfLines={1}>{user.email}</Text> : null}
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-              {user.providers.map((p) => <Chip key={p} label={`Signed in with ${PROVIDER_LABELS[p] ?? p}`} tone="neutral" />)}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+              {user.providers.map((p) => (
+                <Stamp key={p} kind="plain" size="sm" icon={null} label={p === 'google.com' ? t('account.viaGoogle') : p === 'password' ? t('account.viaEmail') : p} />
+              ))}
             </View>
           </View>
         </View>
         <View style={{ gap: 12 }}>
           <TextField
-            label="Name shown on apps you share"
-            helper="People see this name in Kalam Bazaar. Your email stays private."
+            label={t('account.nameLabel')}
+            helper={t('account.nameHelp')}
             icon={UserRound}
             value={name}
             onChangeText={setName}
@@ -117,74 +112,57 @@ function Profile({ user }: { user: KalamUser }) {
           />
           {changed ? (
             <View style={{ alignSelf: 'flex-start' }}>
-              <Button label="Save name" onPress={save} loading={saving} disabled={!name.trim()} />
+              <Button label={t('account.saveName')} onPress={save} loading={saving} disabled={!name.trim()} />
             </View>
           ) : null}
         </View>
       </Surface>
 
       <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
-        <Button label="Creator Studio" icon={Store} variant="outline" onPress={() => router.push(bazaarRoutes.mine)} />
-        <Button label="My library" variant="ghost" onPress={() => router.push(bazaarRoutes.library)} />
-        <Button label="Go to Kalam Bazaar" variant="ghost" onPress={() => router.push(routes.bazaar)} />
+        <Button label={t('account.studio')} icon={Store} variant="outline" onPress={() => router.push(bazaarRoutes.mine)} />
+        <Button label={t('account.library')} variant="ghost" onPress={() => router.push(bazaarRoutes.library)} />
+        <Button label={t('account.bazaar')} variant="ghost" onPress={() => router.push(routes.bazaar)} />
         <Button
-          label="Sign out"
+          label={t('account.signOut')}
           icon={LogOut}
           variant="ghost"
           loading={signingOut}
-          accessibilityHint="Your apps stay on this device."
-          onPress={async () => {
-            setSigningOut(true);
-            await getServices().auth.signOut().catch(() => {});
-            setSigningOut(false);
-            toast.show({ message: 'Signed out. Your apps are still on this device.', tone: 'info' });
-          }}
+          accessibilityHint={t('account.signOutHint')}
+          onPress={() => setConfirmOut(true)}
         />
       </View>
+      <ConfirmSheet
+        visible={confirmOut}
+        title={t('account.signOutConfirm.title')}
+        message={t('account.signOutConfirm.message')}
+        confirmLabel={t('account.signOut')}
+        onCancel={() => setConfirmOut(false)}
+        onConfirm={async () => {
+          setSigningOut(true);
+          await getServices().auth.signOut().catch(() => {});
+          setSigningOut(false);
+          setConfirmOut(false);
+          noteSignedOut(); // the sign-in screen says it, so nothing sits on top of its logo
+        }}
+      />
     </View>
-  );
-}
-
-function GuestCard() {
-  const theme = useKalamTheme();
-  const toast = useToast();
-  return (
-    <Surface tone="alt" padded={20} style={{ gap: 10 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Heart size={18} color={theme.colors.accent} />
-        <Text variant="h4">You are using Kalam Bazaar as a guest</Text>
-      </View>
-      <Text tone="secondary">
-        Guests can like and report apps. To share your own apps, add an email or sign in with Google. If you sign out as a guest, your likes cannot be recovered.
-      </Text>
-      <View style={{ alignSelf: 'flex-start' }}>
-        <Button
-          label="Sign out of guest account"
-          variant="ghost"
-          size="sm"
-          onPress={async () => {
-            await getServices().auth.signOut().catch(() => {});
-            toast.show({ message: 'Signed out.', tone: 'info' });
-          }}
-        />
-      </View>
-    </Surface>
   );
 }
 
 function PrivacyNote() {
   const theme = useKalamTheme();
+  const t = useT(theme.uiLanguage);
   return (
     <View style={{ gap: 12 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <ShieldCheck size={20} color={theme.colors.primary} />
-        <Text variant="h3">What an account stores</Text>
+        <Text variant="h3" level={2}>{t('account.storesTitle')}</Text>
       </View>
       <View style={{ gap: 8 }}>
-        <Bullet>Your email and the name you choose. Firebase Authentication uses them to sign you in.</Bullet>
-        <Bullet>Your apps and everything you type into them stay on this device. Signing in does not upload them.</Bullet>
-        <Bullet>Apps you share in Kalam Bazaar are public. Only the app design is shared, never your records.</Bullet>
-        <Bullet>Signing out keeps all your apps on this device.</Bullet>
+        <Bullet>{t('account.stores1')}</Bullet>
+        <Bullet>{t('account.stores2')}</Bullet>
+        <Bullet>{t('account.stores3')}</Bullet>
+        <Bullet>{t('account.stores4')}</Bullet>
       </View>
     </View>
   );
@@ -194,7 +172,7 @@ function Bullet({ children }: { children: ReactNode }) {
   const theme = useKalamTheme();
   return (
     <View style={{ flexDirection: 'row', gap: 10 }}>
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.textMuted, marginTop: 8 }} />
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.mark, marginTop: 9 }} />
       <Text tone="secondary" style={{ flex: 1 }}>{children}</Text>
     </View>
   );

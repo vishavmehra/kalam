@@ -95,7 +95,7 @@ describe('counting after opt-in', () => {
     await t.count('app_opened', undefined);
     await t.count('error', 'Could not save the order for Asha Verma');
     await t.count('error', new Error('prompt: build a clinic app'));
-    expect(t.snapshot().counts).toEqual({ apps_created: {}, ai_source: {}, app_opened: {}, error: { other: 2 }, feature_used: {}, bazaar: {} });
+    expect(t.snapshot().counts).toEqual({ apps_created: {}, ai_source: {}, app_opened: {}, error: { other: 2 }, feature_used: {}, feature_failed: {}, flow: {}, bazaar: {} });
   });
 
   it('turning it off stops counting and keeps what was counted; reset clears it', async () => {
@@ -127,7 +127,7 @@ describe('counting after opt-in', () => {
 
   it('keeps counting in memory when storage fails, and never rejects', async () => {
     const t = createTelemetry({ read: async () => { throw new Error('no storage'); }, write: async () => { throw new Error('full'); } });
-    await expect(t.setEnabled(true)).resolves.toBeUndefined();
+    await expect(t.setEnabled(true)).resolves.toBe(false);
     await expect(t.count('app_opened', 'online')).resolves.toBeUndefined();
     expect(t.snapshot().counts.app_opened).toEqual({ online: 1 });
   });
@@ -179,7 +179,7 @@ describe('export', () => {
       exportedAt: '2026-11-18T10:00:00.000Z',
       enabled: true,
       since: '2026-11-18T10:00:00.000Z',
-      counts: { apps_created: { audio: 1 }, ai_source: {}, app_opened: {}, error: {}, feature_used: {}, bazaar: {} },
+      counts: { apps_created: { audio: 1 }, ai_source: {}, app_opened: {}, error: {}, feature_used: {}, feature_failed: {}, flow: {}, bazaar: {} },
     });
   });
 
@@ -231,12 +231,13 @@ describe('saved data is untrusted', () => {
       since: 1_700_000_000_000,
       counts: {
         'apps_created:text': 3,
-        'apps_created:Asha': 9,
-        'secret:text': 4,
+        'apps_created:Asha Verma': 9,
+        'Secret:text': 4,
         'ai_source:cloud': -2,
         'ai_source:on_device': 1.5,
         'app_opened:online': 5_000_000_000,
         'error:timeout': 'lots',
+        '__proto__:x': 5,
       },
     });
     const state = parseState(raw);
@@ -248,6 +249,168 @@ describe('saved data is untrusted', () => {
     for (const raw of [null, '', 'not json', '[]', '42', '{"enabled":"yes","counts":7}']) {
       expect(parseState(raw)).toEqual({ enabled: false, since: null, counts: {} });
     }
+  });
+
+  it('ignores a start time that no date can hold, so reading it never throws', async () => {
+    for (const since of [1e20, -1e20, Number.MAX_SAFE_INTEGER * 1e3]) {
+      expect(parseState(JSON.stringify({ enabled: true, since, counts: {} })).since).toBeNull();
+    }
+    const t = createTelemetry(memoryStore(JSON.stringify({ enabled: true, since: 1e20, counts: { 'app_opened:online': 2 } })).store);
+    await t.ready;
+    expect(t.snapshot().since).toBeNull();
+    expect(JSON.parse(t.exportJson()).since).toBeNull();
+    expect(t.snapshot().counts.app_opened).toEqual({ online: 2 });
+    // A bad clock cannot make the export throw either.
+    const odd = createTelemetry(memoryStore().store, () => Number.NaN);
+    await odd.setEnabled(true);
+    expect(() => odd.exportJson()).not.toThrow();
+  });
+});
+
+describe('saved shape', () => {
+  it('writes a version number', async () => {
+    const mem = memoryStore();
+    const t = createTelemetry(mem.store);
+    await t.setEnabled(true);
+    expect(JSON.parse(mem.saved ?? '{}').version).toBe(1);
+  });
+
+  it('keeps well-shaped keys this build does not know through a save, and never shows or exports them', async () => {
+    const mem = memoryStore(JSON.stringify({
+      version: 2, enabled: true, since: 1_700_000_000_000,
+      counts: { 'gesture_used:pinch': 4, 'apps_created:text': 1, 'Not A Key': 3, 'x:': 1 },
+    }));
+    const t = createTelemetry(mem.store);
+    await t.ready;
+    await t.count('apps_created', 'text');
+    const saved = JSON.parse(mem.saved ?? '{}');
+    expect(saved.counts).toEqual({ 'gesture_used:pinch': 4, 'apps_created:text': 2 });
+    expect(t.snapshot().total).toBe(2);
+    expect(t.exportJson()).not.toContain('gesture_used');
+    await t.reset();
+    expect(JSON.parse(mem.saved ?? '{}').counts).toEqual({});
+  });
+
+  it('keeps at most 100 foreign keys', () => {
+    const counts = Object.fromEntries(Array.from({ length: 150 }, (_, i) => [`future_event:v${i}`, 1]));
+    expect(Object.keys(parseState(JSON.stringify({ counts })).counts)).toHaveLength(100);
+  });
+});
+
+describe('two copies of the app (browser tabs)', () => {
+  /** One saved value shared by several store views. A write wakes the other views, as a `storage` event does. */
+  function sharedStorage() {
+    let saved: string | null = null;
+    const views: Array<{ wake: () => void }> = [];
+    return {
+      view(): TelemetryStore {
+        const mine: { wake: () => void } = { wake: () => undefined };
+        views.push(mine);
+        return {
+          read: async () => saved,
+          write: async (json) => {
+            saved = json;
+            for (const v of views) if (v !== mine) v.wake();
+          },
+          subscribe(listener) {
+            mine.wake = listener;
+            return () => { mine.wake = () => undefined; };
+          },
+        };
+      },
+    };
+  }
+
+  it('does not turn counting back on in a tab that was open before the person turned it off', async () => {
+    const shared = sharedStorage();
+    const a = createTelemetry(shared.view());
+    const b = createTelemetry(shared.view());
+    await Promise.all([a.ready, b.ready]);
+    await a.setEnabled(true);
+    await vi.waitFor(() => expect(b.isEnabled()).toBe(true));
+    await a.setEnabled(false);
+    await vi.waitFor(() => expect(b.isEnabled()).toBe(false));
+    await b.count('app_opened', 'online');
+    expect(b.snapshot().total).toBe(0);
+    const c = createTelemetry(shared.view());
+    await c.ready;
+    expect(c.isEnabled()).toBe(false);
+    expect(c.snapshot().total).toBe(0);
+  });
+
+  it('keeps the counts both tabs made, one after the other', async () => {
+    const shared = sharedStorage();
+    const a = createTelemetry(shared.view());
+    const b = createTelemetry(shared.view());
+    await Promise.all([a.ready, b.ready]);
+    await a.setEnabled(true);
+    await vi.waitFor(() => expect(b.isEnabled()).toBe(true));
+    await a.count('app_opened', 'online');
+    await vi.waitFor(() => expect(b.snapshot().counts.app_opened).toEqual({ online: 1 }));
+    await b.count('app_opened', 'online');
+    await vi.waitFor(() => expect(a.snapshot().counts.app_opened).toEqual({ online: 2 }));
+    expect(b.snapshot().counts.app_opened).toEqual({ online: 2 });
+  });
+});
+
+describe('what can be counted', () => {
+  it('counts a feature attempt and a failed attempt separately, so a success rate can be worked out', async () => {
+    const t = createTelemetry(memoryStore().store);
+    await t.setEnabled(true);
+    for (const f of ['time_machine', 'backup', 'access_mode', 'template'] as const) await t.count('feature_used', f);
+    await t.count('feature_used', 'backup');
+    await t.count('feature_failed', 'backup');
+    await t.count('feature_failed', 'diary');
+    const { counts } = t.snapshot();
+    expect(counts.feature_used).toEqual({ time_machine: 1, backup: 2, access_mode: 1, template: 1 });
+    expect(counts.feature_failed).toEqual({ backup: 1 });
+  });
+
+  it('counts the flow steps from docs/01 and nothing else', async () => {
+    const t = createTelemetry(memoryStore().store);
+    await t.setEnabled(true);
+    for (const step of ['onboarding_completed', 'creation_started', 'compilation_failed', 'record_created', 'offline_operation_completed']) {
+      await t.count('flow', step);
+    }
+    await t.count('flow', 'preview_opened');
+    expect(t.snapshot().total).toBe(5);
+  });
+});
+
+describe('a subscriber that throws', () => {
+  it('does not break counting, saving or the failure report', async () => {
+    const t = createTelemetry(memoryStore().store);
+    t.subscribe(() => { throw new Error('bad subscriber'); });
+    await expect(t.setEnabled(true)).resolves.toBe(true);
+    await expect(t.count('app_opened', 'online')).resolves.toBeUndefined();
+    expect(t.snapshot().total).toBe(1);
+    installTelemetry(t);
+    expect(() => reportError('timeout')).not.toThrow();
+  });
+});
+
+describe('reportError', () => {
+  it('keeps the code for a typed error that has no code of its own, by class name only', () => {
+    class InvalidSpecError extends Error {
+      constructor() {
+        super('App design failed validation: screens[0] Asha Verma');
+        this.name = 'InvalidSpecError';
+      }
+    }
+    expect(reportError(new InvalidSpecError())).toBe('invalid_spec');
+    expect(errorLog.recent()[0].code).toBe('invalid_spec');
+    expect(JSON.stringify(errorLog.recent())).not.toContain('Asha');
+  });
+
+  it('does not list or count the persons own choices as errors', async () => {
+    const t = createTelemetry(memoryStore().store);
+    installTelemetry(t);
+    await t.setEnabled(true);
+    expect(reportError('cancelled')).toBe('cancelled');
+    expect(reportError({ code: 'consent_denied' })).toBe('consent_denied');
+    expect(reportError('timeout')).toBe('timeout');
+    await vi.waitFor(() => expect(t.snapshot().counts.error).toEqual({ timeout: 1 }));
+    expect(errorLog.recent().map((e) => e.code)).toEqual(['timeout']);
   });
 });
 

@@ -6,12 +6,16 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
+import { speechServiceName } from '@/features/settings/speech/languages';
 import { getSpeechCapability, startDictation, type DictationSession } from '@/infrastructure/platform/speech';
 import { blockedMessage, chooseSpeechPath } from '@/infrastructure/platform/speech-policy';
+import { t as gt } from '@/i18n/active';
 import { useSettingsStore } from '@/state/settings-store';
 
-const SERVICE = Platform.OS === 'web' ? "Your browser's speech service" : "Android's speech service";
+const name = speechServiceName(Platform.OS);
+const SERVICE = name.charAt(0).toUpperCase() + name.slice(1);
 
+/** `lang` is the listening language (settings.speech.sttLanguage), never the app's own language. */
 export function useDictation(lang: string, onText: (text: string) => void) {
   const aiMode = useSettingsStore((s) => s.settings.aiMode);
   const allowCloud = useSettingsStore((s) => s.settings.allowCloud);
@@ -40,7 +44,7 @@ export function useDictation(lang: string, onText: (text: string) => void) {
     if (path.kind === 'needs_consent') {
       const ok = await new Promise<boolean>((resolve) => {
         setAsk({
-          message: `${SERVICE} will hear you to turn your words into text. Kalam does not keep the recording.`,
+          message: gt('edit.draw.speech.askMessage', { service: SERVICE }),
           answer: (yes) => { setAsk(null); resolve(yes); },
         });
       });
@@ -69,7 +73,7 @@ export function useDictation(lang: string, onText: (text: string) => void) {
       });
       setListening(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Listening could not start. You can type instead.');
+      setError(e instanceof Error ? e.message : gt('edit.draw.speech.couldNotStart'));
     }
   }, [lang, aiMode, allowCloud]);
 

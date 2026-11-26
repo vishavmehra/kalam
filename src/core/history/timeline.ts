@@ -16,15 +16,28 @@ const EVENT_OF: Record<AppVersion['source'], VersionEvent> = {
 };
 
 /**
- * Who made the change, when the app records it. The stored version has no such field today, so this is read
- * defensively: a stored `origin` is shown, nothing is guessed. (Contract request in the R2 report.)
+ * Who made the change (docs/14 §11.3). A stored `origin` is shown as it is. Versions saved before the field
+ * existed have none, so the one fact they do carry is used: an import is known to be an import. Nothing else
+ * is guessed.
  */
 export type VersionOrigin = 'user' | 'ai' | 'import' | 'marketplace';
 const ORIGINS: readonly string[] = ['user', 'ai', 'import', 'marketplace'];
 export function originOf(v: AppVersion): VersionOrigin | undefined {
-  const o = (v as AppVersion & { origin?: unknown }).origin;
-  return typeof o === 'string' && ORIGINS.includes(o) ? (o as VersionOrigin) : undefined;
+  const o: unknown = v.origin;
+  if (typeof o === 'string' && ORIGINS.includes(o)) return o as VersionOrigin;
+  return v.source === 'import' ? 'import' : undefined;
 }
+
+/**
+ * A copy of the stored versions that is safe to replay. materialize() applies each stored patch with
+ * fast-json-patch, which puts an added value into the document by reference. A later patch that edits that value
+ * then rewrites the earlier patch (and every spec built from it). Replaying copies keeps the stored history intact.
+ */
+function replayable(versions: readonly AppVersion[]): AppVersion[] {
+  return versions.map((v) => (v.patch ? { ...v, patch: JSON.parse(JSON.stringify(v.patch)) as AppVersion['patch'] } : v));
+}
+/** Rebuilds one version without touching `versions`. */
+const rebuild = (versions: readonly AppVersion[], target: number): KalamSpec | undefined => materialize(replayable(versions), target);
 
 /**
  * Categories of one version, in display order.
@@ -86,7 +99,7 @@ export function buildTimeline(versions: readonly AppVersion[], options: Timeline
   let previous: { version: number; spec: KalamSpec } | undefined;
 
   for (const v of sorted) {
-    const spec = materialize(sorted, v.version);
+    const spec = rebuild(sorted, v.version);
     const before = previous && previous.version === v.version - 1 ? previous.spec : undefined;
     const changes = before && spec ? describeSpecChanges(before, spec) : undefined;
     const known = changes ?? (v.kind === 'patch' && v.patch ? describePatch(v.patch) : undefined);
@@ -128,7 +141,7 @@ export function filterTimeline(days: readonly TimelineDay[], categories: readonl
  * Undefined when either version can no longer be rebuilt from the stored history.
  */
 export function diffVersions(versions: readonly AppVersion[], from: number, to: number): ChangeEntry[] | undefined {
-  const a = materialize(versions, from);
-  const b = materialize(versions, to);
+  const a = rebuild(versions, from);
+  const b = rebuild(versions, to);
   return a && b ? describeSpecChanges(a, b) : undefined;
 }

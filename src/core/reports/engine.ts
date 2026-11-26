@@ -36,7 +36,8 @@ export interface ReportPoint {
   values: Array<number | null>;
   entries: number;
 }
-export type ReportStatus = 'empty' | 'none_in_range' | 'not_enough' | 'ok';
+/** `filtered_out`: the list has entries but the report's filters match none of them. */
+export type ReportStatus = 'empty' | 'filtered_out' | 'none_in_range' | 'not_enough' | 'ok';
 export interface ReportComparison {
   /** The earlier stretch, written out. */
   range: string;
@@ -62,9 +63,16 @@ export interface ReportResult {
   entries: number;
   /** Entries left out because the report needs a date and they have none. */
   skipped: number;
-  /** Always explicit (docs/14 §7.7). */
+  /** Entries left out because their date is after today. */
+  future: number;
+  /** Always explicit (docs/14 §7.7). Always ends today. */
   range: { from?: string; to: string; label: string };
+  /** What the dates mean, when the report uses dates: a date field (its label) or when each entry was added. */
+  dates?: { field: string } | 'added';
+  /** More than MAX_BUCKETS periods: the oldest are left out and `range.from` moves up to match. */
+  trimmed: boolean;
   comparison?: ReportComparison;
+  /** Over finished periods only: the one still running is left out. */
   trend?: 'up' | 'down' | 'flat';
   status: ReportStatus;
   view: ReportView;
@@ -75,8 +83,16 @@ export interface ReportResult {
 }
 export type ReportOutcome = { ok: true; result: ReportResult } | { ok: false; errors: string[] };
 
-/** More time buckets than this and the oldest ones are left out (the range label says so). */
+/** More time buckets than this and the oldest ones are left out (the range starts later and a note says so). */
 export const MAX_BUCKETS = 60;
+
+const UNIT_RANK: Record<TimeUnit, number> = { day: 0, week: 1, month: 2 };
+/**
+ * A time split fits a period when it is no longer than the period's own unit: "last 6 months" by
+ * week is fine, "last 7 days" by month would draw a whole month for 7 days of entries.
+ */
+export const timeSplitFits = (range: ReportDefinition['range'], unit: TimeUnit): boolean =>
+  range === 'all' || UNIT_RANK[unit] <= UNIT_RANK[range.unit];
 /** More categories than this and the smallest fold into "Other". */
 export const MAX_GROUPS = 12;
 
@@ -113,10 +129,18 @@ export function validateReport(spec: KalamSpec, def: ReportDefinition): string[]
   if (def.groupBy?.kind === 'field') need(def.groupBy.field, (f) => f.type === 'enum' || f.type === 'boolean', C.needsGroupable(def.groupBy.field));
   for (const f of def.filters ?? []) need(f.field, (d) => filterFits(d, f), C.badFilter(f.field));
   if (def.compare && def.range === 'all') errors.push(C.compareNeedsRange);
+  if (def.range !== 'all' && def.groupBy?.kind === 'time' && !timeSplitFits(def.range, def.groupBy.unit)) {
+    errors.push(C.splitTooBig(def.groupBy.unit, def.range.unit));
+  }
   if (def.view === 'line' && def.groupBy?.kind !== 'time') errors.push(C.lineNeedsTime);
   if (def.view === 'donut' && def.groupBy?.kind !== 'field') errors.push(C.donutNeedsField);
   if (def.view === 'bar' && !def.groupBy) errors.push(C.viewNeedsGroup('bar'));
   return errors;
+}
+
+/** Schema problems as plain sentences: our own rule messages are kept, Zod's wording is not shown. */
+export function schemaErrors(issues: ReadonlyArray<{ code: string; message: string }>): string[] {
+  return [...new Set(issues.map((i) => (i.code === 'custom' ? i.message : REPORT_COPY.invalid)))];
 }
 
 // ─── Filters ─────────────────────────────────────────────────────────────────
@@ -190,7 +214,7 @@ interface Dated { row: ReportRow; date: string }
 
 export function runReport(spec: KalamSpec, input: ReportDefinition, rows: readonly ReportRow[], opts: ReportOptions): ReportOutcome {
   const parsed = reportDefinitionSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, errors: parsed.error.issues.map((i) => i.message) };
+  if (!parsed.success) return { ok: false, errors: schemaErrors(parsed.error.issues) };
   const def = parsed.data;
   const errors = validateReport(spec, def);
   if (errors.length) return { ok: false, errors };
@@ -212,29 +236,30 @@ export function runReport(spec: KalamSpec, input: ReportDefinition, rows: readon
   const dateOf = (r: ReportRow): string | undefined =>
     def.dateField ? parseCivil(r.values[def.dateField])
       : r.createdAt !== undefined && Number.isFinite(r.createdAt) ? civilDate(r.createdAt, opts.timeZone) : undefined;
+  // Entries dated after today (planned spending, due dates, a mistyped year) are left out and counted.
   let skipped = 0;
+  let future = 0;
   const dated: Dated[] = [];
   for (const row of filtered) {
     const date = needsDate ? dateOf(row) : today;
-    if (date) dated.push({ row, date });
-    else skipped += 1;
+    if (!date) skipped += 1;
+    else if (date > today) future += 1;
+    else dated.push({ row, date });
   }
 
-  // 3. Explicit range. "last N" ends today; "all" runs from the first entry to the last one or today.
+  // 3. Explicit range, always ending today. "last N" starts N periods back; "all" at the first entry.
   let from = last ? startOf(shift(today, last.unit, -(last.last - 1)), last.unit) : undefined;
-  let to = today;
-  if (!last && needsDate && dated.length) {
-    const sorted = dated.map((d) => d.date).sort();
-    from = sorted[0];
-    if (sorted[sorted.length - 1]! > to) to = sorted[sorted.length - 1]!;
-  }
+  const to = today;
+  if (!last && needsDate && dated.length) from = dated.reduce((min, d) => (d.date < min ? d.date : min), dated[0]!.date);
   let buckets: string[] = [];
+  let trimmed = false;
   if (unit && from) {
-    buckets = bucketsBetween(from, to, unit);
-    if (buckets.length > MAX_BUCKETS) buckets = buckets.slice(-MAX_BUCKETS);
-    if (!last) from = buckets[0];
+    buckets = bucketsBetween(from, to, unit, MAX_BUCKETS);
+    trimmed = buckets[0]! > startOf(from, unit);
+    // Totals, entries and the range label cover exactly the buckets drawn.
+    if (trimmed || !last) from = buckets[0];
   }
-  const inRange = dated.filter((d) => !needsDate || ((!from || d.date >= from) && d.date <= to));
+  const inRange = dated.filter((d) => !needsDate || !from || d.date >= from);
   const rangeLabel = needsDate && from ? C.range(formatDay(from, lang), formatDay(to, lang)) : C.allTime;
 
   // 4. Groups.
@@ -268,9 +293,13 @@ export function runReport(spec: KalamSpec, input: ReportDefinition, rows: readon
 
   const busyBuckets = points.filter((p) => p.entries > 0).length;
   const status: ReportStatus = rows.length === 0 ? 'empty'
-    : inRange.length === 0 ? 'none_in_range'
-      : unit && busyBuckets < 2 ? 'not_enough' : 'ok';
-  const trend = unit && status === 'ok' ? trendOf(points.map((p) => p.values[0] ?? null)) : undefined;
+    : filtered.length === 0 ? 'filtered_out'
+      : inRange.length === 0 ? 'none_in_range'
+        : unit && busyBuckets < 2 ? 'not_enough' : 'ok';
+  // Whole periods only. The last bucket holds today, so it is still running; a first bucket that
+  // starts before the range (last 6 months by week) is cut short. Either would bend the line.
+  const whole = unit ? points.filter((p) => (!from || p.key >= from) && shift(p.key, unit, 1) <= today) : [];
+  const trend = unit && status === 'ok' ? trendOf(whole.map((p) => p.values[0] ?? null)) : undefined;
 
   let view: ReportView = 'number';
   if (status === 'ok' && def.groupBy) view = def.view ?? (unit ? 'line' : groupField?.type === 'boolean' ? 'donut' : 'bar');
@@ -289,7 +318,10 @@ export function runReport(spec: KalamSpec, input: ReportDefinition, rows: readon
     totals: agg.values(total),
     entries: inRange.length,
     skipped,
+    future,
     range: { from: needsDate ? from : undefined, to, label: rangeLabel },
+    dates: !needsDate ? undefined : def.dateField ? { field: col.fields[def.dateField]!.label } : 'added',
+    trimmed,
     comparison,
     trend,
     status,

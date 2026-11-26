@@ -3,14 +3,17 @@
  * drawings and temporary data; browser quota and persistence on the web, free space on Android; safe
  * clean-up actions. Records are never removed here without a named, confirmed action.
  */
-import { ChevronRight, Eraser, ShieldCheck, Trash2 } from 'lucide-react-native';
+import { ArchiveRestore, ChevronRight, Eraser, ShieldCheck, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { relativeTime } from '@/components/format';
 import { Button, ConfirmSheet, IconButton, Surface, Text, useKalamTheme, useToast } from '@/design';
 import { getDatabase, type StorageUsage } from '@/infrastructure/storage/database';
+import { SectionHeading } from '@/features/settings/Section';
+import { useArchiveApp } from '@/features/templates';
+import { useT } from '@/i18n/react';
 import { AppStorageSheet } from './AppStorageSheet';
-import { formatBytes } from './helpers';
+import { type ArchivedRow, archivedApps, formatBytes } from './helpers';
 import { cleanupTemporaryExports, deviceStorage, requestPersistence, type DeviceStorage } from './platform';
 
 type AppUsage = StorageUsage['apps'][number];
@@ -45,7 +48,11 @@ function Row({ label, detail, action }: { label: string; detail?: string; action
 
 export function StorageManagerPanel() {
   const toast = useToast();
-  const { space, colors } = useKalamTheme();
+  const theme = useKalamTheme();
+  const { space, colors } = theme;
+  const t = useT(theme.uiLanguage);
+  const archive = useArchiveApp();
+  const [archived, setArchived] = useState<ArchivedRow[]>([]);
   const [usage, setUsage] = useState<StorageUsage>();
   const [device, setDevice] = useState<DeviceStorage>();
   const [drawings, setDrawings] = useState<DrawingRow[]>([]);
@@ -57,8 +64,9 @@ export function StorageManagerPanel() {
   const refresh = useCallback(async () => {
     try {
       const db = getDatabase();
-      const [u, d, list] = await Promise.all([db.usage(), deviceStorage(), db.drawings.list()]);
+      const [u, d, list, apps] = await Promise.all([db.usage(), deviceStorage(), db.drawings.list(), db.apps.list()]);
       setUsage(u);
+      setArchived(archivedApps(apps));
       setDevice(d);
       setDrawings(list.map(({ id, title, updatedAt }) => ({ id, title, updatedAt })));
       setFailed(false);
@@ -121,10 +129,10 @@ export function StorageManagerPanel() {
 
   return (
     <View style={{ gap: space[3] }}>
-      <View style={{ gap: space[1] }}>
-        <Text variant="h3" accessibilityRole="header">Storage on this device</Text>
-        <Text tone="secondary">See what uses space and clear what you do not need. Records are only deleted when you choose to.</Text>
-      </View>
+      <SectionHeading
+        title="Storage on this device"
+        description="See what uses space and clear what you do not need. Records are only deleted when you choose to."
+      />
 
       {failed ? (
         <Surface padded={20} style={{ gap: space[2] }}>
@@ -170,6 +178,26 @@ export function StorageManagerPanel() {
                   action={<ChevronRight size={20} color={colors.textSecondary} />}
                 />
               </Pressable>
+            ))}
+          </Group>
+
+          {/* The archive list (docs/11 §6.5): hidden from the shelf, nothing deleted, one press brings an app back. */}
+          <Group title={t('storage.archive.title', { count: archived.length })}>
+            {archived.length === 0 ? <Text tone="secondary">{t('storage.archive.empty')}</Text> : null}
+            {archived.map((a) => (
+              <Row
+                key={a.id}
+                label={a.name}
+                detail={t('storage.archive.changed', { when: relativeTime(a.changedAt) })}
+                action={(
+                  <IconButton
+                    icon={ArchiveRestore}
+                    label={t('storage.archive.restoreLabel', { name: a.name })}
+                    onPress={() => { void archive({ id: a.id }, false).then((ok) => { if (ok) void refresh(); }); }}
+                    testID={`storage-unarchive-${a.id}`}
+                  />
+                )}
+              />
             ))}
           </Group>
 

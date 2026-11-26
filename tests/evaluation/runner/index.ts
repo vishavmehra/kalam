@@ -8,3 +8,6 @@ export * from './evaluate';
 export * from './metrics';
 export * from './cli';
 export * from './perf';
+export * from './review';
+export * from './scores';
+export * from './photo';

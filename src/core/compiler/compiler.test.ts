@@ -127,6 +127,21 @@ describe('wrapUntrusted (SECURITY_REVIEW R-05)', () => {
   it('keeps ordinary angle brackets and text', () => {
     expect(wrapUntrusted('t', 'price < 100 and > 50')).toContain('price < 100 and > 50');
   });
+
+  it('cuts at a whole character, never inside a Hindi syllable or an emoji (D10-041)', () => {
+    const inner = (s: string) => s.slice('<untrusted_t>\n'.length, -'\n</untrusted_t>'.length);
+    // "कि" is two code units: an old slice(0, 5) would keep "कि" + "कि" + half of the third.
+    expect(inner(wrapUntrusted('t', 'कि'.repeat(10), 5))).toBe('कि'.repeat(5));
+    // A family emoji is one character made of several code points; it is kept whole or dropped, never halved.
+    const family = '👨‍👩‍👧';
+    expect(inner(wrapUntrusted('t', `ab${family}${family}`, 3))).toBe(`ab${family}`);
+    expect(inner(wrapUntrusted('t', 'short', 100))).toBe('short');
+  });
+
+  it('keeps a long run with no break cheap and bounded', () => {
+    const out = wrapUntrusted('t', 'á'.repeat(200_000), 4000);
+    expect(out.length).toBeLessThan(40_000);
+  });
 });
 
 describe('compileWithCloud', () => {

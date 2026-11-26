@@ -9,24 +9,40 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   ActivityIndicator, Animated, BackHandler, Platform, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent,
 } from 'react-native';
-import type { AccessModes, AIImage, KalamRecord, RecordValue, RuntimeServices } from '@/core/contracts';
-import type { ComponentOf, KalamComponent, KalamSpec } from '@/core/spec/schema';
-import {
-  acceptProposal, clamp, collectionValues, createRuntimeState, currentScreen, deleteListRecord, dispatchAction, getForm,
-  goBack, lenientForm, openRecord, parseNumber, readAloudText, resolveAppTheme, runAIBlockFlow, runtimeAnnouncesTitle,
-  screenFieldDefs, setFieldValue, speaksResults, stepCounter, toggleRecordField, visibleChildren,
-  type ActionResult, type AIProposal, type DataSnapshot, type EngineEnv, type RuntimeEffect, type RuntimeState,
-} from './engine';
-import { BigButton, Counter, Heading, Stat, TextBlock } from './ui/blocks';
-import { ChoiceField, DateField, NumberField, TextField, ToggleField } from './ui/inputs';
-import { EASE_OUT, font, NATIVE_DRIVER, Pressy, useReducedMotion, type AppTheme } from './ui/kit';
-import { ListView } from './ui/ListView';
-import { AIReviewSheet, ConfirmSheet, type ConfirmRequest, Toast, type ToastMessage } from './ui/overlays';
-import { PhotoBlock, type AIRunStatus } from './ui/PhotoBlock';
-import { RuntimeErrorBoundary } from './ui/RuntimeErrorBoundary';
-import { stopSpeakingAloud, VoiceControl } from './voice';
+import type { AccessModes, AIImage, RecordValue, RuntimeServices } from '@/core/contracts';
+import type { ComponentOf, KalamComponent, KalamSpec, SuggestedMode } from '@/core/spec/schema';
+import { Stamp } from '@/design';
 import { useKalamTheme } from '@/design/theme';
+import { lifecycle } from '@/infrastructure/platform/lifecycle';
+import { getNotificationAdapter } from '@/infrastructure/platform/notifications';
 import { useRuntimeFont } from '@/i18n/use-script-fonts';
+import { QueueAiOffer } from '@/features/queue/QueueAiOffer';
+import { getOperationQueue } from '@/features/queue/queue-service';
+import { readAiStepResult } from '@/features/queue/snapshot';
+import { useQueuedAiResults } from '@/features/queue/use-queue';
+import { syncReminders } from '@/features/reminders/runtime';
+import { applyStartScreen } from '@/features/widgets/start-screen';
+import { useSettingsStore } from '@/state/settings-store';
+import {
+  acceptProposal, collectionValues, createDraftKeeper, createRuntimeContext, createRuntimeState, currentScreen,
+  deleteListRecord, dispatchAction, foldedCount, getForm, goBack, lenientForm, openRecord, proposalFromQueued, readAloudText,
+  resolveAppTheme, runAIBlockFlow, runtimeAnnouncesTitle, screenFieldDefs, selectedId, setFieldValue, speaksResults,
+  stepCounter, toggleRecordField, visibleChildren,
+  type ActionResult, type AIProposal, type DataSnapshot, type EngineEnv, type RuntimeContextValue, type RuntimeEffect, type RuntimeState,
+} from './engine';
+import {
+  arrangeScreen, offeredAccessModes, setReminderEnabled, SUGGESTED_MODES_KEY, type ReminderDevice, type ReminderStatus,
+} from './engine/v11';
+import { type RenderEnv, renderComponent } from './registry';
+import { RuntimeContextProvider } from './RuntimeContext';
+import { EASE_OUT, font, NATIVE_DRIVER, Pressy, useReducedMotion, type AppTheme } from './ui/kit';
+import { AIReviewSheet, ConfirmSheet, type ConfirmRequest, Toast, type ToastMessage } from './ui/overlays';
+import type { AIRunStatus } from './ui/PhotoBlock';
+import { RuntimeErrorBoundary } from './ui/RuntimeErrorBoundary';
+import { ShowMoreToggle } from './ui/ShowMore';
+import { LayoutView, SuggestedModesNotice } from './ui/v11';
+import { AppLanguageProvider, useAppT } from './use-app-t';
+import { stopSpeakingAloud, VoiceControl } from './voice';
 
 export interface KalamRuntimeProps {
   spec: KalamSpec;
@@ -37,6 +53,15 @@ export interface KalamRuntimeProps {
   accessModes: AccessModes;
   /** Called when the person goes back from the first screen. */
   onExit?: () => void;
+  /**
+   * A screen a widget or a link asked for (kalam://app/<id>?screen=<screen>). Applied at start and again whenever it
+   * changes while the app is open; an unknown screen leaves the app where it is.
+   */
+  startScreen?: string;
+  /** Called once the start screen has been applied, so the route can clear it. */
+  onStartScreenUsed?: () => void;
+  /** Where saved confirmations go. Absent: a toast inside the app. Present: the caller shows them (the run bar) and the app stays quiet. */
+  onToast?: (message: string, tone: ToastMessage['tone']) => void;
 }
 
 type Op = (env: EngineEnv, st: RuntimeState) => Promise<ActionResult> | ActionResult;
@@ -54,23 +79,40 @@ export function KalamRuntime(props: KalamRuntimeProps) {
   );
 }
 
-function RuntimeApp({ spec, appId, services, mode = 'live', accessModes, onExit }: KalamRuntimeProps) {
+function RuntimeApp({ spec, appId, services, mode = 'live', accessModes, onExit, startScreen, onStartScreenUsed, onToast }: KalamRuntimeProps) {
   // The app's font follows its own language (spec.lang), not Kalam's (docs/10 §12.1).
   const scriptFont = useRuntimeFont(spec.lang);
   const t = useMemo<AppTheme>(() => ({ ...resolveAppTheme(spec.theme, accessModes), scriptFont }), [spec.theme, accessModes, scriptFont]);
   const reduced = useReducedMotion();
   // The desk around a framed app belongs to Kalam (light or dark shell); the app keeps its own theme.
-  const desk = useKalamTheme().colors.background;
+  const kalam = useKalamTheme();
+  const desk = kalam.colors.background;
+  // The app's own words (runtime.* in the catalogues) in its own language, whatever language Kalam is shown in.
+  const tr = useAppT(spec.lang);
   const specRef = useRef(spec);
   specRef.current = spec;
+  const ctxRef = useRef<RuntimeContextValue | undefined>(undefined);
 
   // ── Runtime state (navigation, forms, selection) ──────────────────────────
-  const [rt, setRt] = useState<RuntimeState>(() => createRuntimeState(spec));
+  // A widget or link may ask for a screen: applied to the first state, and again if it changes while open.
+  const [rt, setRt] = useState<RuntimeState>(() => applyStartScreen(spec, createRuntimeState(spec), startScreen));
   const rtRef = useRef(rt);
   const commit = useCallback((next: RuntimeState) => {
     rtRef.current = next;
     setRt(next);
   }, []);
+  const appliedStart = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!startScreen) {
+      appliedStart.current = undefined;
+      return;
+    }
+    if (startScreen !== appliedStart.current) {
+      appliedStart.current = startScreen;
+      commit(applyStartScreen(specRef.current, rtRef.current, startScreen));
+    }
+    onStartScreenUsed?.();
+  }, [startScreen, commit, onStartScreenUsed]);
 
   // ── Local data (records + counters), kept fresh by repository subscriptions ─
   const [data, setData] = useState<DataSnapshot | null>(null);
@@ -81,6 +123,7 @@ function RuntimeApp({ spec, appId, services, mode = 'live', accessModes, onExit 
     const publish = (patch: Partial<DataSnapshot>) => {
       if (!alive) return;
       dataRef.current = { ...dataRef.current, ...patch };
+      ctxRef.current?.patchData(patch);
       setData(dataRef.current);
     };
     const loadRecords = async () => publish({ records: await services.records.listAll(appId) });
@@ -118,18 +161,31 @@ function RuntimeApp({ spec, appId, services, mode = 'live', accessModes, onExit 
   const stopSpeech = useCallback(() => stopSpeakingAloud(), []);
   const showToast = useCallback(
     (message: string, tone: ToastMessage['tone']) => {
+      announce(message);
+      // The caller shows saved confirmations itself (the run bar); the app then stays quiet but still speaks.
+      if (onToast) {
+        onToast(message, tone);
+        return;
+      }
       clearTimeout(toastTimer.current);
       setToast({ id: Date.now(), message, tone });
-      announce(message);
       toastTimer.current = setTimeout(() => setToast(null), tone === 'warning' || tone === 'error' ? 4200 : 2400);
     },
-    [announce],
+    [announce, onToast],
   );
 
   // ── AI state ───────────────────────────────────────────────────────────────
   const [proposal, setProposal] = useState<AIProposal | null>(null);
   const [aiStatus, setAiStatus] = useState<Record<string, AIRunStatus>>({});
   const [photos, setPhotos] = useState<Record<string, AIImage>>({});
+  /** An AI step that reported "offline": offer to queue it until the device is online (docs/09 §12.5). */
+  const [offlineStep, setOfflineStep] = useState<string | null>(null);
+  /** The queued operation whose finished result is on screen as a proposal. */
+  const [queuedOp, setQueuedOp] = useState<string | null>(null);
+  const [reminderStatus, setReminderStatus] = useState<Record<string, ReminderStatus>>({});
+  // Simple mode folds secondary components away; "Show more" opens them for one screen until Simple mode changes (docs/10 §4.3).
+  const [moreOn, setMoreOn] = useState<Record<string, boolean>>({});
+  useEffect(() => setMoreOn({}), [accessModes.simple]);
 
   const handleEffects = useCallback(
     (effects: RuntimeEffect[], opts: { fromPhoto?: boolean } = {}) => {
@@ -145,17 +201,19 @@ function RuntimeApp({ spec, appId, services, mode = 'live', accessModes, onExit 
           case 'aiProposal':
             setAiStatus((s) => ({ ...s, [e.proposal.blockId]: { phase: 'done', badge: e.proposal.source, latencyMs: e.proposal.latencyMs } }));
             setProposal(e.proposal);
-            announce('Check the suggested values before filling them in.');
+            setOfflineStep(null);
+            announce(tr('runtime.chrome.checkSuggested'));
             break;
           case 'aiUnavailable':
             setAiStatus((s) => ({ ...s, [e.blockId]: { phase: 'failed', badge: e.badge, message: e.message } }));
+            if (e.badge === 'offline') setOfflineStep(e.blockId);
             if (!opts.fromPhoto) showToast(e.message, 'warning');
             else announce(e.message);
             break;
         }
       }
     },
-    [announce, services, showToast],
+    [announce, services, showToast, tr],
   );
 
   // ── Confirmations in the app's own theme (never the browser's native dialog) ─
@@ -168,29 +226,53 @@ function RuntimeApp({ spec, appId, services, mode = 'live', accessModes, onExit 
   }), [services]);
 
   // ── Running engine operations ──────────────────────────────────────────────
-  const env = useCallback(
-    (overrides?: Partial<RuntimeServices>): EngineEnv => ({
-      spec: specRef.current,
-      appId,
-      services: overrides ? { ...svc, ...overrides } : svc,
-      data: dataRef.current,
-      now: new Date(),
-    }),
-    [appId, svc],
+  // One runtime context per running app (docs/09 §6): the spec, services, data snapshot, formula cache and the
+  // operations in flight. Every engine call goes through `ctx.run`, so a lifecycle flush can wait for them (`idle`).
+  const ctx = useMemo(
+    () => createRuntimeContext({ spec, appId, services: svc, accessibility: accessModes, data: dataRef.current }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a new spec is swapped in below, never by rebuilding the context
+    [appId, svc, accessModes],
   );
+  ctxRef.current = ctx;
+  if (ctx.spec() !== spec) ctx.setSpec(spec);
+
+  // Unsent typing survives a suspended app (docs/09 §15.5). Only the real app keeps a draft, never a preview.
+  const keeperRef = useRef<ReturnType<typeof createDraftKeeper> | undefined>(undefined);
+  useEffect(() => {
+    if (mode !== 'live') return undefined;
+    const keeper = createDraftKeeper(services.state, appId, () => specRef.current);
+    keeperRef.current = keeper;
+    let alive = true;
+    void keeper.load().then((d) => {
+      // Only into a fresh start: never over a screen the person already moved on.
+      if (alive && d && rtRef.current.stack.length === 1 && !Object.keys(rtRef.current.forms).length) commit({ ...rtRef.current, ...d });
+    });
+    const off = lifecycle.register(async () => {
+      await ctx.idle();
+      await keeper.save(rtRef.current);
+    });
+    return () => {
+      alive = false;
+      off();
+      keeperRef.current = undefined;
+    };
+  }, [mode, services, appId, ctx, commit]);
+
   const exec = useCallback(
     async (op: Op, overrides?: Partial<RuntimeServices>, fromPhoto?: boolean) => {
       const start = rtRef.current;
-      const res = await op(env(overrides), start);
+      const res = await ctx.run((e) => op(e, start), overrides);
       if (res.state !== start) commit(res.state);
       if (res.kvWrites) {
         dataRef.current = { ...dataRef.current, state: { ...dataRef.current.state, ...res.kvWrites } };
         setData(dataRef.current);
       }
+      // A saved entry must not come back as a draft after the app is closed.
+      if (res.ok) void keeperRef.current?.save(res.state);
       handleEffects(res.effects, { fromPhoto });
       return res;
     },
-    [commit, env, handleEffects],
+    [commit, ctx, handleEffects],
   );
   // Buttons: one action at a time — a double tap must not insert twice.
   const busyRef = useRef(false);
@@ -203,20 +285,20 @@ function RuntimeApp({ spec, appId, services, mode = 'live', accessModes, onExit 
       try {
         return await exec(op, overrides, fromPhoto);
       } catch {
-        showToast('Something went wrong. Nothing was changed.', 'error');
+        showToast(tr('runtime.chrome.wentWrong'), 'error');
         return undefined;
       } finally {
         busyRef.current = false;
         setBusy(false);
       }
     },
-    [exec, showToast],
+    [exec, showToast, tr],
   );
   // Counters: rapid taps are queued (never dropped) so each one counts.
   const chain = useRef<Promise<unknown>>(Promise.resolve());
   const enqueue = useCallback((op: Op) => {
-    chain.current = chain.current.then(() => exec(op)).catch(() => showToast("Couldn't save the count.", 'error'));
-  }, [exec, showToast]);
+    chain.current = chain.current.then(() => exec(op)).catch(() => showToast(tr('runtime.chrome.countFailed'), 'error'));
+  }, [exec, showToast, tr]);
 
   // ── Derived view state ─────────────────────────────────────────────────────
   const screen = currentScreen(spec, rt);
@@ -226,6 +308,53 @@ function RuntimeApp({ spec, appId, services, mode = 'live', accessModes, onExit 
   const records = data?.records;
   const collections = useMemo(() => collectionValues(spec, records ?? {}), [spec, records]);
   const kv = data?.state ?? {};
+  // The entry this screen is about: a customer's page lists and totals only that customer's entries.
+  const selected = selectedId(spec, rt);
+
+  // A queued AI step that finished while the app was closed or offline comes back as a proposal for the person to
+  // check, like a live one, on the screen that runs the step (docs/09 §12.5). Each result is shown once.
+  const queued = useQueuedAiResults(appId);
+  const shownOps = useRef(new Set<string>());
+  useEffect(() => {
+    if (mode !== 'live' || proposal || !data) return;
+    for (const op of queued) {
+      if (shownOps.current.has(op.id)) continue;
+      const result = readAiStepResult(op);
+      if (!result) continue;
+      const found = proposalFromQueued(ctx.env(), rtRef.current, result);
+      if (!found) continue;
+      shownOps.current.add(op.id);
+      setQueuedOp(op.id);
+      setProposal(found);
+      announce(tr('runtime.chrome.checkSuggested'));
+      return;
+    }
+  }, [mode, proposal, data, queued, screen.id, ctx, announce, tr]);
+  const settleQueued = useCallback(() => {
+    if (queuedOp) void getOperationQueue().dismiss(queuedOp).catch(() => undefined);
+    setQueuedOp(null);
+  }, [queuedOp]);
+
+  // Access Modes the app suggests are offered, never switched on by the app itself (docs/10).
+  const offered = useMemo(() => (mode === 'live' ? offeredAccessModes(spec, accessModes, kv) : []), [mode, spec, accessModes, kv]);
+  const acceptModes = useCallback((picked: readonly SuggestedMode[]) => {
+    const store = useSettingsStore.getState();
+    const next = { ...store.settings.accessModes, ...Object.fromEntries(picked.map((m) => [m, true])) };
+    void store.update({ accessModes: next }).catch(() => showToast(tr('runtime.chrome.wentWrong'), 'error'));
+  }, [showToast, tr]);
+  const dismissModes = useCallback(() => {
+    void services.state.set(appId, SUGGESTED_MODES_KEY, 'dismissed').catch(() => undefined);
+  }, [services, appId]);
+
+  // The reminder switch reaches the device only in the real app; a preview never schedules anything.
+  const reminderDevice = useMemo<ReminderDevice | undefined>(
+    () => (mode === 'live' ? { requestPermission: () => getNotificationAdapter().requestPermission(), sync: syncReminders } : undefined),
+    [mode],
+  );
+  const openNotificationSettings = useMemo(() => {
+    const adapter = mode === 'live' ? getNotificationAdapter() : undefined;
+    return adapter?.openSettings ? () => void adapter.openSettings?.().catch(() => undefined) : undefined;
+  }, [mode]);
 
   // Screen change: short fade-rise (fade only under reduced motion) + Read-aloud of the title.
   const enter = useRef(new Animated.Value(1)).current;
@@ -278,7 +407,7 @@ function RuntimeApp({ spec, appId, services, mode = 'live', accessModes, onExit 
         return img;
       };
       if (!c.aiBlock) {
-        await capture().catch(() => showToast("Couldn't open the photo picker.", 'error'));
+        await capture().catch(() => showToast(tr('runtime.chrome.pickerFailed'), 'error'));
         return;
       }
       const blockId = c.aiBlock;
@@ -286,112 +415,68 @@ function RuntimeApp({ spec, appId, services, mode = 'live', accessModes, onExit 
       // Cancelled pickers or thrown errors must not leave a spinner behind.
       setAiStatus((s) => (s[blockId]?.phase === 'running' ? { ...s, [blockId]: { phase: 'failed' } } : s));
     },
-    [announce, run, services, showToast],
+    [announce, run, services, showToast, tr],
   );
 
   if (loadFailed) {
     return (
       <Centered t={t}>
-        <Text style={[font(t, 17, '600'), { color: t.colors.text, textAlign: 'center' }]}>This app's data couldn't be opened.</Text>
-        <Text style={[font(t, 15), { color: t.colors.textMuted, textAlign: 'center' }]}>
-          Your records are still on this device. Close the app and open it again.
-        </Text>
+        <Text style={[font(t, 17, '600'), { color: t.colors.text, textAlign: 'center' }]}>{tr('runtime.chrome.dataFailedTitle')}</Text>
+        <Text style={[font(t, 15), { color: t.colors.textMuted, textAlign: 'center' }]}>{tr('runtime.chrome.dataFailedBody')}</Text>
       </Centered>
     );
   }
   if (!data) {
     return (
       <Centered t={t}>
-        <ActivityIndicator color={t.colors.primaryText} accessibilityLabel="Opening app" />
+        <ActivityIndicator color={t.colors.primaryText} accessibilityLabel={tr('runtime.chrome.opening')} />
       </Centered>
     );
   }
 
-  const render = (c: KalamComponent) => {
-    const focus = () => announce(readAloudText(c));
-    switch (c.type) {
-      case 'text': return <TextBlock key={c.id} c={c} t={t} />;
-      case 'heading': return <Heading key={c.id} c={c} t={t} />;
-      case 'number':
-        return <NumberField key={c.id} c={c} t={t} def={defs[c.field]} value={rawForm[c.field]} error={rt.errors[c.field]} onChange={(v) => setField(c.field, v)} onFocus={focus} />;
-      case 'textInput':
-        return <TextField key={c.id} c={c} t={t} def={defs[c.field]} value={rawForm[c.field]} error={rt.errors[c.field]} onChange={(v) => setField(c.field, v)} onFocus={focus} />;
-      case 'date':
-        return <DateField key={c.id} c={c} t={t} def={defs[c.field]} value={rawForm[c.field]} error={rt.errors[c.field]} onChange={(v) => setField(c.field, v)} onFocus={focus} />;
-      case 'choice':
-        return <ChoiceField key={c.id} c={c} t={t} def={defs[c.field]} value={rawForm[c.field]} error={rt.errors[c.field]} onChange={(v) => setField(c.field, v)} onFocus={focus} />;
-      case 'toggle':
-        return <ToggleField key={c.id} c={c} t={t} def={defs[c.field]} value={rawForm[c.field]} onChange={(v) => setField(c.field, v)} onFocus={focus} />;
-      case 'counter': {
-        const stored = c.field ? parseNumber(rawForm[c.field]) : kv[c.id];
-        const value = typeof stored === 'number' ? stored : clamp(0, c.min, c.max);
-        return (
-          <Counter
-            key={c.id} c={c} t={t} value={value}
-            onStep={(op) => {
-              announce(`${c.label} ${op === 'increment' ? 'up' : 'down'}`);
-              enqueue((e, st) => stepCounter(e, st, c.id, op));
-            }}
-          />
-        );
-      }
-      case 'bigButton':
-        return (
-          <BigButton
-            key={c.id} c={c} t={t} busy={busy}
-            onPress={() => {
-              focus();
-              void run((e, st) => dispatchAction(e, st, c.action));
-            }}
-          />
-        );
-      case 'list':
-        return (
-          <ListView
-            key={c.id} c={c} t={t} spec={spec} records={records?.[c.source] ?? EMPTY} collections={collections} form={form} state={kv}
-            onOpen={(r: KalamRecord) => {
-              announce(readAloudText(c));
-              const next = openRecord(specRef.current, rtRef.current, c, r, new Date());
-              if (next) commit(next);
-            }}
-            onToggle={(r) => c.toggleField && void run((e, st) => toggleRecordField(e, st, c.source, r.id, c.toggleField as string))}
-            onDelete={(r, title) => void run((e, st) => deleteListRecord(e, st, c.source, r.id, `Delete "${title}"? This can't be undone.`))}
-          />
-        );
-      case 'stat':
-        return <Stat key={c.id} c={c} t={t} lang={spec.lang} collections={collections} form={form} state={kv} />;
-      case 'photo':
-        return (
-          <PhotoBlock
-            key={c.id} c={c} t={t} image={photos[c.id]} status={c.aiBlock ? aiStatus[c.aiBlock] : undefined}
-            disabled={busy} onPick={() => void pickPhoto(c)}
-          />
-        );
-      default:
-        // Unknown component types never execute; the rest of the screen keeps working (docs/09 §5.3).
-        return (
-          <View key={(c as { id: string }).id} style={{ padding: t.space, borderRadius: t.radius, backgroundColor: t.colors.surfaceAlt }}>
-            <Text style={[font(t, 14), { color: t.colors.textMuted }]}>
-              {`This part (${String((c as { type?: unknown }).type ?? 'unknown').slice(0, 40)}) needs a newer version of Kalam. The rest of the screen works. Update Kalam to see it.`}
-            </Text>
-          </View>
-        );
-    }
+  // Every component type is drawn by the registry (./registry), which gets what it may read and the few things it may ask for.
+  const appTheme = t;
+  const renderEnv: RenderEnv = {
+    spec, appId, screen, defs, rawForm, form, errors: rt.errors, records, collections, kv, selected, busy, photos, aiStatus, reminderStatus, tr,
+    focus: (c) => announce(readAloudText(c)),
+    setField,
+    step: (c, op) => {
+      announce(tr(op === 'increment' ? 'runtime.chrome.countUp' : 'runtime.chrome.countDown', { label: c.label }));
+      enqueue((e, st) => stepCounter(e, st, c.id, op));
+    },
+    press: (actionId) => void run((e, st) => dispatchAction(e, st, actionId)),
+    openRecord: (list, r) => {
+      announce(readAloudText(list));
+      const next = openRecord(specRef.current, rtRef.current, list, r, new Date());
+      if (next) commit(next);
+    },
+    toggleRecord: (list, r) => {
+      if (list.toggleField) void run((e, st) => toggleRecordField(e, st, list.source, r.id, list.toggleField as string));
+    },
+    deleteRecord: (list, r, title) => void run((e, st) => deleteListRecord(e, st, list.source, r.id, tr('runtime.chrome.confirmDelete', { title }))),
+    switchReminder: (c, on) => void run(async (e, st) => {
+      const r = await setReminderEnabled(e, st, c.id, on, reminderDevice);
+      setReminderStatus((prev) => ({ ...prev, [c.id]: r.reminderStatus }));
+      return r;
+    }),
+    openNotificationSettings,
+    finishTimer: (message) => showToast(message, 'info'),
+    pickPhoto: (c) => void pickPhoto(c),
   };
+  const render = (c: KalamComponent): ReactNode => renderComponent(c, appTheme, renderEnv);
 
-  // Consecutive stats share a row so dashboards read as one group.
-  const groups: Array<KalamComponent | KalamComponent[]> = [];
-  for (const c of visibleChildren(screen, accessModes)) {
-    const last = groups[groups.length - 1];
-    if (c.type === 'stat' && Array.isArray(last)) last.push(c);
-    else groups.push(c.type === 'stat' ? [c] : c);
-  }
+  // The screen's layout groups (rows, grids, cards); with none, consecutive stats still share a row.
+  const showMore = moreOn[screen.id] === true;
+  const folded = foldedCount(screen, accessModes);
+  const items = arrangeScreen(screen, visibleChildren(screen, accessModes, { showMore }));
 
   const canGoBack = rt.stack.length > 1 || !!onExit;
   const prevTitle = rt.stack.length > 1 ? spec.screens.find((s) => s.id === rt.stack[rt.stack.length - 2])?.title : undefined;
   const translateY = reduced ? 0 : enter.interpolate({ inputRange: [0, 1], outputRange: [8, 0] });
 
   return (
+    <AppLanguageProvider value={spec.lang}>
+    <RuntimeContextProvider value={ctx}>
     <View
       onLayout={onLayout}
       // The app's own language tags its content, separate from Kalam's UI language (docs/10 §11).
@@ -402,19 +487,22 @@ function RuntimeApp({ spec, appId, services, mode = 'live', accessModes, onExit 
         style={[
           styles.app,
           { backgroundColor: t.colors.background },
-          framed && [styles.framed, { borderColor: t.colors.border, borderRadius: Math.min(t.radius + 12, 28) }],
+          framed && [styles.framed, kalam.elevation[2], { borderColor: kalam.colors.borderStrong, borderRadius: Math.min(t.radius + 12, 28) }],
         ]}
       >
+        {/* The preview note is Kalam's, not the app's: a stamp on a paper strip, in Kalam's own colours. */}
         {mode === 'preview' ? (
-          <View style={[styles.previewStrip, { backgroundColor: t.colors.primarySoft }]}>
-            <Text style={[font(t, 12, '500'), { color: t.colors.primaryText }]}>Preview. Records added here are not saved.</Text>
+          <View style={[styles.previewStrip, { backgroundColor: kalam.colors.surfaceAlt }]}>
+            <View style={{ alignSelf: 'center' }}>
+              <Stamp kind="plain" size="sm" label={tr('runtime.chrome.preview')} />
+            </View>
           </View>
         ) : null}
         <View style={[styles.header, { paddingHorizontal: t.space, paddingTop: t.space * 0.75, gap: 4 }]}>
           {canGoBack ? (
             <Pressy
               accessibilityRole="button"
-              accessibilityLabel={prevTitle ? `Back to ${prevTitle}` : 'Close app'}
+              accessibilityLabel={prevTitle ? tr('runtime.chrome.backTo', { name: prevTitle }) : tr('runtime.chrome.close')}
               onPress={back}
               style={[styles.back, { minHeight: t.target, minWidth: t.target, marginLeft: -t.space * 0.5 }]}
             >
@@ -424,10 +512,10 @@ function RuntimeApp({ spec, appId, services, mode = 'live', accessModes, onExit 
           ) : null}
           {accessModes.readAloud ? (
             <View style={{ flexDirection: 'row', marginLeft: 'auto', gap: 4 }}>
-              <Pressy accessibilityRole="button" accessibilityLabel="Read that again" onPress={repeatSpeech} style={[styles.back, { minHeight: t.target, minWidth: t.target, justifyContent: 'center' }]}>
+              <Pressy accessibilityRole="button" accessibilityLabel={tr('runtime.chrome.readAgain')} onPress={repeatSpeech} style={[styles.back, { minHeight: t.target, minWidth: t.target, justifyContent: 'center' }]}>
                 <Repeat size={20 * t.fontScale} color={t.colors.primaryText} />
               </Pressy>
-              <Pressy accessibilityRole="button" accessibilityLabel="Stop reading" onPress={stopSpeech} style={[styles.back, { minHeight: t.target, minWidth: t.target, justifyContent: 'center' }]}>
+              <Pressy accessibilityRole="button" accessibilityLabel={tr('runtime.chrome.stopReading')} onPress={stopSpeech} style={[styles.back, { minHeight: t.target, minWidth: t.target, justifyContent: 'center' }]}>
                 <Square size={18 * t.fontScale} color={t.colors.primaryText} />
               </Pressy>
             </View>
@@ -446,13 +534,21 @@ function RuntimeApp({ spec, appId, services, mode = 'live', accessModes, onExit 
               </Text>
               {screen.description ? <Text style={[font(t, 15), { color: t.colors.textMuted }]}>{screen.description}</Text> : null}
             </View>
-            {groups.map((g) =>
-              Array.isArray(g) ? (
-                <View key={g[0].id} style={[styles.statRow, { gap: t.space * 0.75 }]}>{g.map(render)}</View>
-              ) : (
-                render(g)
-              ),
-            )}
+            <SuggestedModesNotice t={t} lang={spec.lang} modes={offered} onAccept={acceptModes} onDismiss={dismissModes} />
+            <LayoutView items={items} t={t} render={render} />
+            {folded > 0 ? (
+              <ShowMoreToggle
+                t={t} open={showMore} label={showMore ? tr('runtime.chrome.showLess') : tr('runtime.chrome.showMore', { count: folded })}
+                onPress={() => setMoreOn((m) => ({ ...m, [screen.id]: !showMore }))}
+              />
+            ) : null}
+            {offlineStep && mode === 'live' && Object.prototype.hasOwnProperty.call(spec.aiBlocks, offlineStep) ? (
+              <QueueAiOffer
+                appId={appId} blockId={offlineStep} block={spec.aiBlocks[offlineStep]} form={form}
+                image={photos[visibleChildren(screen, accessModes).find((c) => c.type === 'photo' && c.aiBlock === offlineStep)?.id ?? '']}
+                pickImage={services.pickImage} onQueued={() => setOfflineStep(null)}
+              />
+            ) : null}
           </Animated.View>
         </ScrollView>
         <Toast toast={toast} t={t} reduced={reduced} />
@@ -461,7 +557,7 @@ function RuntimeApp({ spec, appId, services, mode = 'live', accessModes, onExit 
           run={run} getState={() => rtRef.current} onBack={back}
         />
       </View>
-      <ConfirmSheet request={confirmReq} t={t} wide={wide} />
+      <ConfirmSheet request={confirmReq} t={t} wide={wide} lang={spec.lang} />
       <AIReviewSheet
         proposal={proposal}
         spec={spec}
@@ -470,18 +566,20 @@ function RuntimeApp({ spec, appId, services, mode = 'live', accessModes, onExit 
         onAccept={() => {
           const p = proposal;
           setProposal(null);
+          settleQueued();
           if (p) void run((e, st) => acceptProposal(e, st, p));
         }}
         onDiscard={() => {
           setProposal(null);
-          showToast('Nothing was filled in.', 'info');
+          settleQueued();
+          showToast(tr('runtime.chrome.nothingFilled'), 'info');
         }}
       />
     </View>
+    </RuntimeContextProvider>
+    </AppLanguageProvider>
   );
 }
-
-const EMPTY: KalamRecord[] = [];
 
 function Centered({ t, children }: { t: ReturnType<typeof resolveAppTheme>; children: ReactNode }) {
   return (
@@ -493,12 +591,8 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   centered: { alignItems: 'center', justifyContent: 'center' },
   app: { flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center', overflow: 'hidden' },
-  framed: {
-    marginVertical: 24, borderWidth: 1,
-    shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 24, shadowOffset: { width: 0, height: 12 },
-  },
+  framed: { marginVertical: 24, borderWidth: 1 },
   previewStrip: { paddingVertical: 6, alignItems: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', minHeight: 8 },
   back: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingRight: 8 },
-  statRow: { flexDirection: 'row', flexWrap: 'wrap' },
 });

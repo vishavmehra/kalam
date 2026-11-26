@@ -1,0 +1,229 @@
+{
+  "kind": "benchmark-categories",
+  "createdAt": "2026-11-26T01:28:30.481Z",
+  "source": {
+    "liveReport": {
+      "promptVersion": "compiler-prompt@7a912e8dcd4c",
+      "datasetHash": "9efd98d0ab5a",
+      "createdAt": "2026-11-25T14:53:06.271Z"
+    },
+    "gates": "src/core/ai/local-ready.ts LOCAL_GATES"
+  },
+  "howToRead": "Each category is reported on its own. Rates are of the cases run. A category marked not run has no number here.",
+  "categories": [
+    {
+      "n": 1,
+      "title": "Simple application generation",
+      "providers": {
+        "Deterministic templates": "20 of 20 valid, no model",
+        "Firebase cloud Gemini (compile and one repair pass)": "not run",
+        "Gemini Nano": "not tried: the device model is not assumed able to build apps (docs/07 section 4.5)"
+      },
+      "note": "Text and voice requests the golden set labels simple. Templates build them with no model; two cases are too vague or need the cloud and were not built."
+    },
+    {
+      "n": 2,
+      "title": "Medium application generation",
+      "providers": {
+        "Deterministic templates": "not used for this category",
+        "Firebase cloud Gemini (compile and one repair pass)": {
+          "compiled": 8,
+          "validFirstPass": 5,
+          "validAfterRepair": 8,
+          "medianMs": 37760
+        },
+        "Gemini Nano": "not tried: the device model is not assumed able to build apps (docs/07 section 4.5)"
+      },
+      "note": "Text and voice requests labelled medium."
+    },
+    {
+      "n": 3,
+      "title": "Complex application generation",
+      "providers": {
+        "Deterministic templates": "not used for this category",
+        "Firebase cloud Gemini (compile and one repair pass)": {
+          "compiled": 3,
+          "validFirstPass": 2,
+          "validAfterRepair": 3,
+          "medianMs": 25286
+        },
+        "Gemini Nano": "not tried: the device model is not assumed able to build apps (docs/07 section 4.5)"
+      },
+      "note": "Text and voice requests labelled complex."
+    },
+    {
+      "n": 4,
+      "title": "Sketch understanding",
+      "providers": {
+        "Deterministic templates": "not used for this category",
+        "Firebase cloud Gemini (compile and one repair pass)": {
+          "compiled": 25,
+          "validFirstPass": 20,
+          "validAfterRepair": 23,
+          "medianMs": 11643
+        },
+        "Gemini Nano": "not tried: the device model is not assumed able to build apps (docs/07 section 4.5)"
+      },
+      "note": "Synthetic sketches (stamps and text). Hand-drawn photographs are not in the set."
+    },
+    {
+      "n": 5,
+      "title": "Image field extraction",
+      "providers": "not run",
+      "note": "Needs real photographs of slips and receipts. The set holds synthetic placeholders that are never sent to a model, and the device model is not assumed to read images (capabilities.ts)."
+    },
+    {
+      "n": 6,
+      "title": "Voice action interpretation",
+      "providers": {
+        "Gemini Nano (Chrome, offline)": {
+          "model": "gemini-nano, Chrome/158.0.0.0",
+          "cases": 23,
+          "schemaValid": 100,
+          "correct": 91.3,
+          "invented": 4.3,
+          "p95Ms": 3826,
+          "offline": true,
+          "gate": "ready",
+          "gateReasons": [],
+          "evidence": "docs/evidence/local-ready-voice_action-web-2026-11-26.json"
+        },
+        "Firebase cloud Gemini": {
+          "model": "gemini-3.5-flash-lite (Firebase AI Logic, cloud)",
+          "cases": 23,
+          "schemaValid": 100,
+          "correct": 95.7,
+          "invented": 0,
+          "p95Ms": 12471,
+          "offline": false,
+          "modelRequests": 23,
+          "evidence": "docs/evidence/provider-voice_action-cloud-2026-11-26.json"
+        }
+      },
+      "note": "Spoken commands the app's own phrases do not match; five more commands of the 28 never reach a model because the phrases answer them."
+    },
+    {
+      "n": 7,
+      "title": "Small edits",
+      "providers": "not run",
+      "note": "No case set yet. The deterministic edit parser answers most small edits with no model; the device path has tests but no benchmark."
+    },
+    {
+      "n": 8,
+      "title": "Structural edits",
+      "providers": "not run",
+      "note": "No case set yet. Structural edits always go to the cloud; they are covered by unit tests only."
+    },
+    {
+      "n": 9,
+      "title": "Classification",
+      "providers": {
+        "Gemini Nano (Chrome, offline)": {
+          "model": "gemini-nano, Chrome/158.0.0.0",
+          "cases": 84,
+          "schemaValid": 100,
+          "correct": 83.3,
+          "invented": 0,
+          "p95Ms": 1854,
+          "offline": true,
+          "gate": "failed",
+          "gateReasons": [
+            "correct 83.3%, needs 85%"
+          ],
+          "evidence": "docs/evidence/local-ready-classify-web-2026-11-26.json"
+        },
+        "Firebase cloud Gemini": {
+          "model": "gemini-3.5-flash-lite (Firebase AI Logic, cloud)",
+          "cases": 84,
+          "schemaValid": 100,
+          "correct": 91.7,
+          "invented": 0,
+          "p95Ms": 7718,
+          "offline": false,
+          "modelRequests": 84,
+          "evidence": "docs/evidence/provider-classify-cloud-2026-11-26.json"
+        }
+      },
+      "note": "The complexity tie-break between two levels, over the labelled request sets (84 cases). The same gate also covers AI steps that classify text."
+    },
+    {
+      "n": 10,
+      "title": "Summarisation",
+      "providers": {
+        "Gemini Nano (Chrome, offline)": {
+          "model": "gemini-nano, Chrome/158.0.0.0",
+          "cases": 20,
+          "schemaValid": 100,
+          "correct": 60,
+          "invented": 0,
+          "p95Ms": 5362,
+          "offline": true,
+          "gate": "failed",
+          "gateReasons": [
+            "correct 60%, needs 80%"
+          ],
+          "evidence": "docs/evidence/local-ready-summarize-web-2026-11-26.json"
+        },
+        "Firebase cloud Gemini": {
+          "model": "gemini-3.5-flash-lite (Firebase AI Logic, cloud)",
+          "cases": 20,
+          "schemaValid": 100,
+          "correct": 90,
+          "invented": 0,
+          "p95Ms": 12351,
+          "offline": false,
+          "modelRequests": 20,
+          "evidence": "docs/evidence/provider-summarize-cloud-2026-11-26.json"
+        }
+      },
+      "note": "Invented order-book notes of one or two sentences, summarised in 25 words or fewer."
+    },
+    {
+      "n": 11,
+      "title": "Translation",
+      "providers": {
+        "Gemini Nano (Chrome, offline)": {
+          "model": "gemini-nano, Chrome/158.0.0.0",
+          "cases": 20,
+          "schemaValid": 100,
+          "correct": 75,
+          "invented": 0,
+          "p95Ms": 2567,
+          "offline": true,
+          "gate": "failed",
+          "gateReasons": [
+            "correct 75%, needs 90%"
+          ],
+          "evidence": "docs/evidence/local-ready-translate-web-2026-11-26.json"
+        },
+        "Firebase cloud Gemini": {
+          "model": "gemini-3.5-flash-lite (Firebase AI Logic, cloud)",
+          "cases": 20,
+          "schemaValid": 100,
+          "correct": 100,
+          "invented": 0,
+          "p95Ms": 7995,
+          "offline": false,
+          "modelRequests": 20,
+          "evidence": "docs/evidence/provider-translate-cloud-2026-11-26.json"
+        }
+      },
+      "note": "English to Spanish and Japanese, the only languages besides English the Chrome Prompt API speaks. Hindi and the other app languages always go to the cloud."
+    },
+    {
+      "n": 12,
+      "title": "AI-block verification",
+      "providers": {
+        "Cloud writes the test cases, Gemini Nano runs the step (Chrome)": {
+          "pass": true,
+          "status": "onDevice",
+          "testCount": 5,
+          "passCount": 5,
+          "judgeUsed": false,
+          "evidence": "docs/evidence/web-matrix-2026-11-26.json, scenario H"
+        }
+      },
+      "note": "One classify step, model-written test inputs. Open-ended steps (summarise, translate) are graded by a cloud judge and are not in this run."
+    }
+  ]
+}

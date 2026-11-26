@@ -4,6 +4,7 @@
  * this file only answers "can Nano run here?", triggers the one-time download and keeps the model warm.
  */
 import type { LanguageModelCreateCoreOptions, LanguageModelDownloadMonitor } from 'firebase/ai';
+import { ON_DEVICE_MODEL } from '@/core/ai/model-config';
 import type { OnDeviceStatus } from '@/core/contracts';
 import { textIO } from './prompt-io';
 
@@ -18,6 +19,9 @@ export interface LanguageModelStatic {
  * availability answer, download and warm-up match what most requests ask for.
  */
 export const TEXT_IO: LanguageModelCreateCoreOptions = textIO();
+
+/** Model name firebase-provider puts on answers that came from Chrome's Prompt API. */
+export const ON_DEVICE_MODEL_NAME: string = ON_DEVICE_MODEL;
 
 const KNOWN = new Set<string>(['unavailable', 'downloadable', 'downloading', 'available']);
 let progress: number | undefined;

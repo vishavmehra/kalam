@@ -3,7 +3,9 @@
  * (docs/02 §12, docs/10 §4). The KalamSpec theme is never modified: modes are applied on top.
  */
 import type { AccessModes } from '@/core/contracts';
+import type { RuntimeFont } from '@/i18n/runtime-font';
 import type { KalamComponent, KalamScreen, KalamTheme } from '@/core/spec/schema';
+import { importanceOf } from '@/core/spec/v11';
 import { THEME_PRESET_TOKENS } from '@/core/templates/themes';
 
 // ─── Colour maths (WCAG 2.x relative luminance) ──────────────────────────────
@@ -83,6 +85,8 @@ export interface RuntimeTheme {
   /** Left-handed: primary controls move to the leading edge. Never mirrors text or data order. */
   mirror: boolean;
   highContrast: boolean;
+  /** Font for the app's own script (Devanagari, Tamil and so on). Absent or `latin` keeps the normal font. */
+  scriptFont?: RuntimeFont;
 }
 
 const SPACING = { compact: 12, comfortable: 16, spacious: 20 } as const;
@@ -164,11 +168,19 @@ export function resolveAppTheme(theme: KalamTheme, modes: AccessModes): RuntimeT
 
 // ─── Access overlay on components ────────────────────────────────────────────
 /**
- * Components rendered for this screen: hidden (`visible:false`) never; `secondary: true` hidden in
- * Simple Mode. Strict `=== true`: on lists `secondary` is the second-line *field id*, not this flag.
+ * Components rendered for this screen: hidden (`visible:false`) never. In Simple mode (docs/10 §4.3) only a
+ * secondary one is folded away (`importance: 'secondary'`, or the 1.0 flag `secondary: true`); essential and
+ * standard ones stay. `showMore` brings the folded ones back for this screen. Nothing is deleted either way.
  */
-export function visibleChildren(screen: KalamScreen, modes: AccessModes): KalamComponent[] {
-  return screen.children.filter((c) => c.visible !== false && !(modes.simple && c.secondary === true));
+export function visibleChildren(screen: KalamScreen, modes: AccessModes, opts: { showMore?: boolean } = {}): KalamComponent[] {
+  const fold = modes.simple && !opts.showMore;
+  return screen.children.filter((c) => c.visible !== false && !(fold && importanceOf(c) === 'secondary'));
+}
+
+/** How many components Simple mode folds away on this screen (the "Show more" button says so). 0 when it is off. */
+export function foldedCount(screen: KalamScreen, modes: AccessModes): number {
+  if (!modes.simple) return 0;
+  return screen.children.filter((c) => c.visible !== false && importanceOf(c) === 'secondary').length;
 }
 
 /** What Read-aloud Mode speaks when a component is focused or tapped. */

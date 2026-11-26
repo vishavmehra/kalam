@@ -71,3 +71,9 @@ export function speechErrorMessage(code: string): string {
       return 'Speech recognition stopped unexpectedly. Your transcript so far is kept.';
   }
 }
+
+/** The online speech service a platform falls back to, as said in consent text. Pass `Platform.OS`. */
+export function speechServiceName(os: string): string {
+  if (os === 'web') return "your browser's speech service";
+  return os === 'ios' ? "Apple's speech service" : "Android's speech service";
+}

@@ -1,9 +1,12 @@
 /**
- * Words the person sees in the Understanding Review (docs/03 §13). Kept in one place so the i18n
- * migration can move them. Plain English: no dashes as punctuation, no exclamation marks, no ids.
+ * The core's own sentences for the Understanding Review (docs/03 §13): why an edit was refused, and the
+ * text of an uncertain item. Plain English: no dashes as punctuation, no exclamation marks, no ids.
+ *
+ * Words the screen puts on its own controls are not here. The button names, field and component kinds,
+ * AI step policies and the screen reader label of an item button are translated, under `review.action`,
+ * `review.actionFor`, `review.fieldType`, `review.componentType`, `review.fallback` and `review.onError`
+ * in src/i18n/locales (all ten catalogues). The screen reads them with `useT()`.
  */
-import type { KalamFieldType } from '../spec/schema';
-import type { UncertainAction } from './uncertain';
 
 export const REVIEW_COPY = {
   unchanged: 'Kalam could not make that change. Your app is as it was.',
@@ -13,6 +16,7 @@ export const REVIEW_COPY = {
   fieldName: 'Give the field a name of up to 120 characters.',
   labelText: 'Use a label of up to 120 characters.',
   needOptions: 'Add at least one choice.',
+  photoField: 'A photo field is added by asking for a photo in the app, not here.',
   optionText: 'Use up to 50 choices of up to 60 characters each.',
   lastScreen: 'An app needs at least one screen.',
   tooManyScreens: 'An app can have up to 8 screens.',
@@ -48,10 +52,6 @@ export const REVIEW_COPY = {
     formMismatch: (label: string): string => `The button “${label}” saves to a different list than its screen fills in.`,
     untested: 'This AI step has not been tested on this device yet.',
   },
-  /** Buttons beside an uncertain item (docs/03 §13.4). */
-  actions: { accept: 'Keep it', change: 'Change it', remove: 'Remove it' } satisfies Record<UncertainAction, string>,
-  /** Field types in plain words for the field editor; never show 'enum' or 'boolean'. */
-  fieldTypes: { text: 'Text', number: 'Number', date: 'Date', enum: 'Choice', boolean: 'Yes or no' } satisfies Record<KalamFieldType, string>,
   /** Answers that need a rebuild become plain instructions for the compiler (docs/06 §11.5). */
   correction: {
     assumption: (assumed: string, answer: string): string => `Kalam assumed: ${assumed} Correction: ${answer}`,

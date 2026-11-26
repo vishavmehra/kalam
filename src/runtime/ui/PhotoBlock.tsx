@@ -7,6 +7,7 @@ import type { ComponentOf } from '@/core/spec/schema';
 import type { RuntimeTheme } from '../engine/theme';
 import type { ExecutionBadge } from '../engine/types';
 import { useComponentBounds } from '../layout';
+import { useAppT } from '../use-app-t';
 import { font, Pressy, SourceBadge } from './kit';
 
 export interface AIRunStatus {
@@ -20,13 +21,14 @@ export const PhotoBlock = memo(function PhotoBlock({ c, t, image, status, disabl
   c: ComponentOf<'photo'>; t: RuntimeTheme; image?: AIImage; status?: AIRunStatus; disabled: boolean; onPick(): void;
 }) {
   const bounds = useComponentBounds(c.id);
+  const tr = useAppT();
   const running = status?.phase === 'running';
   return (
     <View {...bounds} style={{ gap: 8 }}>
       <Pressy
         accessibilityRole="button"
         accessibilityLabel={c.a11yLabel ?? c.label}
-        accessibilityHint={c.aiBlock ? 'Choose a photo. The app will suggest values for you to check.' : 'Choose a photo'}
+        accessibilityHint={c.a11yDescription ?? tr(c.aiBlock ? 'runtime.photo.hintAi' : 'runtime.photo.hint')}
         accessibilityState={{ busy: running, disabled: disabled || running }}
         disabled={disabled || running}
         onPress={onPick}
@@ -44,6 +46,7 @@ export const PhotoBlock = memo(function PhotoBlock({ c, t, image, status, disabl
       >
         {image ? (
           <Image
+            alt=""
             source={{ uri: `data:${image.mimeType};base64,${image.base64}` }}
             accessibilityIgnoresInvertColors
             style={{ width: 56, height: 56, borderRadius: Math.min(t.radius, 12) }}
@@ -56,7 +59,7 @@ export const PhotoBlock = memo(function PhotoBlock({ c, t, image, status, disabl
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={[font(t, 16, '600'), { color: t.colors.text }]}>{c.label}</Text>
           <Text style={[font(t, 13), { color: t.colors.textMuted }]}>
-            {running ? 'Reading the photo…' : image ? 'Tap to choose another photo' : 'Tap to choose a photo'}
+            {running ? tr('runtime.photo.reading') : image ? tr('runtime.photo.another') : tr('runtime.photo.choose')}
           </Text>
         </View>
         {running ? <ActivityIndicator color={t.colors.primaryText} /> : null}

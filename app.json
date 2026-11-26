@@ -12,6 +12,11 @@
     "ios": {
       "bundleIdentifier": "com.kalam.app",
       "supportsTablet": true,
+      "icon": {
+        "light": "./assets/images/icon.png",
+        "dark": "./assets/images/icon-ios-dark.png",
+        "tinted": "./assets/images/icon-ios-tinted.png"
+      },
       "config": { "usesNonExemptEncryption": true },
       "entitlements": { "com.apple.developer.devicecheck.appattest-environment": "production" },
       "infoPlist": {
@@ -40,29 +45,31 @@
       "favicon": "./assets/images/favicon.png",
       "name": "Kalam",
       "shortName": "Kalam",
-      "themeColor": "#315C4C",
-      "backgroundColor": "#F8F7F2"
+      "themeColor": "#F4F5F0",
+      "backgroundColor": "#F4F5F0"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F7F7F4",
+          "backgroundColor": "#F4F5F0",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
-          "dark": { "image": "./assets/images/splash-icon-dark.png", "backgroundColor": "#121428" }
+          "dark": { "image": "./assets/images/splash-icon-dark.png", "backgroundColor": "#0B1238" }
         }
       ],
       "expo-sqlite",
-      ["expo-audio", { "microphonePermission": "Kalam uses the microphone so you can describe or control your apps by voice." }],
+      ["expo-audio", { "microphonePermission": "Kalam uses the microphone so you can describe or control your apps by voice.", "enableBackgroundPlayback": false }],
       "expo-video",
       "expo-localization",
       "expo-sharing",
       ["expo-image-picker", { "photosPermission": "Kalam reads photos you choose, such as sketches or bills.", "cameraPermission": "Kalam uses the camera to capture sketches and documents." }],
       ["expo-speech-recognition", { "microphonePermission": "Kalam uses the microphone for voice commands.", "speechRecognitionPermission": "Kalam converts your speech to text, on device where supported." }],
-      "expo-notifications",
-      "./modules/kalam-nano/app.plugin.js"
+      ["expo-notifications", { "enableRemoteNotifications": false }],
+      "./modules/kalam-nano/app.plugin.js",
+      "./modules/kalam-widget/app.plugin.js",
+      "./src/features/auth/google-signin.plugin.js"
     ],
     "experiments": {
       "typedRoutes": true,

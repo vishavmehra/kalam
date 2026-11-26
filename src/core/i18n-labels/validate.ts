@@ -52,7 +52,6 @@ const sameBag = (a: readonly string[], b: readonly string[]): boolean =>
 export function checkTranslation(source: string, candidate: unknown, target: string): TranslationCheck {
   if (typeof candidate !== 'string') return { ok: false, reason: 'not_text' };
   // Control characters never belong in a label; line breaks only where the source had one.
-  // eslint-disable-next-line no-control-regex
   const cleaned = candidate.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
   const text = (source.includes('\n') ? cleaned : cleaned.replace(/\s*[\r\n]+\s*/g, ' ')).trim();
   if (!text) return { ok: false, reason: 'empty' };

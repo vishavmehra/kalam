@@ -6,7 +6,8 @@ import { SHARE_LIMITS, type LinkView, type Sendable, type SendOutcome } from '@/
 import { Button, Chip, SwitchRow, Text, useKalamTheme, webData } from '@/design';
 import type { ShareController } from './controller';
 import { SHARE_UI } from './copy';
-import { chooseAllEntries, entriesToChange, toggleEntry } from './model';
+import { pressOnSpace } from './keys';
+import { chooseAllEntries, sendPlan, toggleEntry } from './model';
 import { InlineConfirm } from './InlineConfirm';
 
 export interface SendEntriesProps {
@@ -33,6 +34,7 @@ function Entry({ item, chosen, onPress }: { item: Sendable; chosen: boolean; onP
       accessibilityState={{ checked: chosen }}
       accessibilityLabel={item.alreadySent ? `${item.title}, ${SHARE_UI.send.sentBefore}` : item.title}
       onPress={onPress}
+      {...pressOnSpace(onPress)}
       {...webData({ kPress: '', kHover: 'surface' })}
       style={{
         minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center', gap: theme.space[3], paddingVertical: theme.space[2],
@@ -78,7 +80,8 @@ export function SendEntries({ view, controller, onBack, onSent }: SendEntriesPro
   }, [controller, linkId]);
 
   const items = loaded.phase === 'ready' ? loaded.items : [];
-  const changing = entriesToChange(items, chosen, update);
+  const plan = sendPlan(items, chosen, update);
+  const willSend = plan.create + plan.change;
   const anySentBefore = items.some((i) => i.alreadySent);
 
   const send = async () => {
@@ -105,10 +108,13 @@ export function SendEntries({ view, controller, onBack, onSent }: SendEntriesPro
             <Button label={SHARE_UI.send.selectAll} variant="outline" onPress={() => setChosen(chooseAllEntries(items.map((i) => i.id), limit))} />
             <Button label={SHARE_UI.send.clear} variant="ghost" onPress={() => setChosen(new Set())} disabled={!chosen.size} />
           </View>
-          <View accessibilityRole="list" style={{ gap: theme.space[2] }} accessibilityLiveRegion="polite">
+          <View role="group" aria-label={SHARE_UI.send.listLabel} accessibilityLabel={SHARE_UI.send.listLabel} style={{ gap: theme.space[2] }}>
             {items.map((item) => (
               <Entry key={item.id} item={item} chosen={chosen.has(item.id)} onPress={() => setChosen(toggleEntry(chosen, item.id, limit))} />
             ))}
+          </View>
+          <View accessibilityLiveRegion="polite">
+            <Text variant="bodySmall" tone="secondary">{SHARE_UI.send.chosen(chosen.size)}</Text>
           </View>
           {loaded.phase === 'ready' && loaded.total > items.length ? (
             <Text variant="bodySmall" tone="secondary">{SHARE_UI.send.more(items.length, loaded.total)}</Text>
@@ -123,15 +129,18 @@ export function SendEntries({ view, controller, onBack, onSent }: SendEntriesPro
       {reviewing ? (
         <InlineConfirm
           title={SHARE_UI.send.confirmTitle(view.destinationName)}
-          message={SHARE_UI.send.confirmMessage(chosen.size, view.fieldLabels, view.destinationName, changing)}
+          message={SHARE_UI.send.confirmMessage(plan, view.fieldLabels, view.destinationName)}
           confirmLabel={SHARE_UI.send.confirm}
           onConfirm={send}
           onCancel={() => setReviewing(false)}
         />
       ) : (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space[2] }}>
-          <Button label={SHARE_UI.send.action(chosen.size)} icon={Send} onPress={() => setReviewing(true)} disabled={!chosen.size} />
-          <Button label={SHARE_UI.send.back} icon={ArrowLeft} variant="outline" onPress={onBack} />
+        <View style={{ gap: theme.space[2] }}>
+          {chosen.size && !willSend ? <Text variant="bodySmall" tone="secondary">{SHARE_UI.send.nothingToDo}</Text> : null}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space[2] }}>
+            <Button label={SHARE_UI.send.action(willSend)} icon={Send} onPress={() => setReviewing(true)} disabled={!willSend} />
+            <Button label={SHARE_UI.send.back} icon={ArrowLeft} variant="outline" onPress={onBack} />
+          </View>
         </View>
       )}
     </View>

@@ -2,7 +2,7 @@
 import Dexie, { type IndexableType, type Table } from 'dexie';
 import { TABLES, TABLE_NAMES, type StorageTables, type StoreKey, type StoreTable, type TableName } from './driver';
 import { createKalamDatabase, type DatabaseOptions, type KalamLocalDatabase } from './kalam-database';
-import { runDataMigrations, V1_TABLES, V2_TABLES, V3_TABLES } from './migrations';
+import { runDataMigrations, V1_TABLES, V2_TABLES, V3_TABLES, V4_TABLES } from './migrations';
 
 function dexieTable<T>(table: Table<T, IndexableType>): StoreTable<T> {
   return {
@@ -48,8 +48,10 @@ export function createWebDatabase(name = 'kalam', options: DatabaseOptions = {})
     .version(3)
     .stores(storesFor(V3_TABLES))
     .upgrade(async (tx) => {
-      await runDataMigrations(bind(tx), 2, 3);
+      await runDataMigrations(bind(tx, [...V2_TABLES, ...V3_TABLES]), 2, 3);
     });
+  // Version 4 only adds the queued operations store. Existing rows are untouched.
+  dexie.version(4).stores(storesFor(V4_TABLES));
   return createKalamDatabase({
     tables: bind(dexie),
     // Tables are bound to the Transaction object itself: Dexie's implicit zone tracking is lost after

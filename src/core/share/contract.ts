@@ -15,7 +15,8 @@ export type LinkProblemCode =
   | 'source_collection_missing' | 'destination_collection_missing'
   | 'source_field_missing' | 'destination_field_missing'
   | 'source_type_changed' | 'destination_type_changed'
-  | 'destination_choices_missing';
+  | 'destination_choices_missing'
+  | 'destination_required_missing';
 
 export interface LinkProblem {
   code: LinkProblemCode;
@@ -38,10 +39,21 @@ export function typesCompatible(linkType: KalamFieldType, targetType: KalamField
   return linkType === targetType || (linkType === 'enum' && targetType === 'text');
 }
 
-/** Installed from the Bazaar: someone else made the design (docs/12). Detected from the design's own record of it. */
-export function isFromBazaar(spec: KalamSpec | undefined): boolean {
-  return !!spec && spec.meta.source === 'import' && !!listingIdFromBasedOn(spec.meta.basedOn);
+/**
+ * Made by someone else through the Bazaar (docs/12): installed, remixed or copied from it. The design's own
+ * record of where it came from says so, whatever its `source` is. A copy made on this device points at the
+ * app it was copied from, so `parentOf` (the apps on this device) lets the check follow that trail.
+ */
+export function isFromBazaar(spec: KalamSpec | undefined, parentOf?: (appId: string) => KalamSpec | undefined): boolean {
+  let meta = spec?.meta;
+  for (let hop = 0; meta && hop < BAZAAR_TRAIL_HOPS; hop++) {
+    if (listingIdFromBasedOn(meta.basedOn)) return true;
+    meta = meta.basedOn ? parentOf?.(meta.basedOn)?.meta : undefined;
+  }
+  return false;
 }
+/** Copies of copies followed back to a Bazaar original, at most this many steps. */
+export const BAZAAR_TRAIL_HOPS = 6;
 
 function problem(code: LinkProblemCode, ctx: NameContext, field?: string): LinkProblem {
   const make = SHARE_COPY.problem[code] as (c: NameContext) => string;
@@ -50,22 +62,32 @@ function problem(code: LinkProblemCode, ctx: NameContext, field?: string): LinkP
 
 /**
  * Is this link still safe to use? Every problem found is returned so the person sees them all at once.
- * `write` links also need the destination to accept the choices of a choice field.
+ * `write` links also need the destination to accept the choices of a choice field, and to need nothing
+ * that the link does not fill. `creating` words the problems for a link that is being made, not one that changed.
  */
-export function checkLink(link: ShareLink, source: KalamSpec | undefined, destination: KalamSpec | undefined): LinkHealth {
+export function checkLink(
+  link: ShareLink, source: KalamSpec | undefined, destination: KalamSpec | undefined, opts: { creating?: boolean } = {},
+): LinkHealth {
   const problems: LinkProblem[] = [];
   if (link.status === 'revoked') return { ok: false, problems: [problem('revoked', { source: '', destination: '' })] };
   if (!source) problems.push(problem('source_app_missing', { source: '', destination: '' }));
   if (!destination) problems.push(problem('destination_app_missing', { source: '', destination: '' }));
   if (!source || !destination) return { ok: false, problems };
 
-  const ctx: NameContext = { source: source.name, destination: destination.name };
+  const ctx: NameContext = { source: source.name, destination: destination.name, creating: opts.creating };
   const from = collectionOf(source, link.sourceCollection);
   const to = collectionOf(destination, link.destinationCollection);
   if (!from) problems.push(problem('source_collection_missing', { ...ctx, list: collectionLabel(source, link.sourceCollection) }));
   if (!to) problems.push(problem('destination_collection_missing', { ...ctx, list: collectionLabel(destination, link.destinationCollection) }));
   if (from && to) {
     for (const f of link.fields) problems.push(...checkField(link, f, from, to, ctx));
+    if (link.access === 'write') {
+      // An entry the destination would refuse for a missing required field can never be sent, so say so up front.
+      const filled = new Set(link.fields.map((f) => f.target));
+      for (const [id, field] of Object.entries(to.fields)) {
+        if (field.required && !filled.has(id)) problems.push(problem('destination_required_missing', { ...ctx, field: field.label }, id));
+      }
+    }
   }
   return problems.length ? { ok: false, problems } : { ok: true };
 }

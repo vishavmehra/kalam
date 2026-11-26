@@ -209,7 +209,7 @@ function dotsPath(w: number, h: number, step: number, r: number): string {
 
 /** Light paper gets the soft notebook rule; a dark custom colour gets a mid grey so the pattern still shows. */
 export function patternColor(paper: string): string {
-  return luminance(paper) < 0.35 ? palette.neutral[500] : palette.brand.rule;
+  return luminance(paper) < 0.35 ? palette.paper.graphite : palette.paper.rule;
 }
 
 const backdropCache = new Map<string, Primitive[]>();

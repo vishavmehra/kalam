@@ -12,6 +12,7 @@ import type {
 } from '@/core/contracts';
 import { base64ByteLength } from '@/core/backup/base64';
 import { blobSchema, timestamp } from '@/core/backup/schemas';
+import { limitsPolicy } from '@/core/limits/policy';
 import { THEME_PRESETS } from '@/core/spec/schema';
 import type { AICacheRow, StorageDriver, StorageTables } from './driver';
 import { BlobTooLargeError, MAX_AI_CACHE_ENTRY_BYTES, MAX_BLOB_BYTES, MAX_SESSIONS, SESSION_TTL_MS } from './storage-limits';
@@ -151,15 +152,26 @@ export function createAICacheRepository({ driver, now, aiCacheCap, aiCacheTtlMs 
         const time = now();
         const row: AICacheRow = {
           key, value: JSON.parse(json) as unknown, taskType: meta.taskType, source: meta.source, createdAt: time, lastUsedAt: time, bytes,
+          ...(meta.appId ? { appId: meta.appId } : {}),
         };
         await t.aiCache.put(row);
         const excess = (await t.aiCache.count()) - aiCacheCap;
         if (excess > 0) for (const old of await t.aiCache.oldestKeys('lastUsedAt', excess)) await t.aiCache.delete(old);
       });
     },
+    remove: (key) => tables.aiCache.delete(key),
+    removeForApp: (appId) => driver.transaction((t) => removeAiCacheOfApp(t, appId)),
     clear: () => tables.aiCache.clear(),
     size: () => tables.aiCache.count(),
   };
+}
+
+/**
+ * Drops the cached answers that belong to one app, inside an open transaction. ponytail: scans the
+ * table (capped at a few hundred rows) instead of keeping an appId index; add the index if the cap grows.
+ */
+export async function removeAiCacheOfApp(t: StorageTables, appId: string): Promise<void> {
+  for (const row of await t.aiCache.all()) if (row.appId === appId) await t.aiCache.delete(row.key);
 }
 
 // ─── Creation sessions ────────────────────────────────────────────────────────
@@ -180,13 +192,22 @@ const sessionSchema = z.object({
   /** Client details for restoring the workspace (image sizes, modality, drawing summary). Opaque, bounded. */
   draft: z.record(z.string(), z.unknown()).optional(),
 });
-const MAX_DRAFT_JSON = 1024 * 1024;
+const MAX_DRAFT_JSON = limitsPolicy.data.draftJsonBytes;
 
 export type StoredSession = CreationSession & { draft?: Record<string, unknown> };
 
 export interface SessionRepository extends CreationSessionRepository {
   list(): Promise<StoredSession[]>;
+  /**
+   * Writes only `draft.media` (the media session, docs/06 §3-4) of row `id`, creating a draft row when
+   * none exists. `null` removes it. A later `save` without `draft.media` keeps the stored one, so the
+   * creation draft and the media session can be written independently.
+   */
+  saveMedia(id: string, media: Record<string, unknown> | null, state?: CreationSession['state']): Promise<void>;
 }
+
+/** Key in `draft` that holds the media session. */
+export const MEDIA_DRAFT_KEY = 'media';
 
 export function createSessionRepository({ driver, now }: RepoContext): SessionRepository {
   const newestFirst = (a: CreationSession, b: CreationSession) => b.updatedAt - a.updatedAt;
@@ -201,14 +222,41 @@ export function createSessionRepository({ driver, now }: RepoContext): SessionRe
     }
     return keep;
   };
+  const checkSize = (row: StoredSession) => {
+    if (row.draft && utf8Length(JSON.stringify(row.draft)) > MAX_DRAFT_JSON) throw new Error('Creation session is too large to save');
+  };
   return {
     async save(session) {
       const parsed = sessionSchema.safeParse(session);
       if (!parsed.success) throw new Error('Creation session could not be saved: it is not in the expected shape');
-      if (parsed.data.draft && utf8Length(JSON.stringify(parsed.data.draft)) > MAX_DRAFT_JSON) {
-        throw new Error('Creation session is too large to save');
-      }
+      checkSize(parsed.data);
       await driver.transaction(async (t) => {
+        const row: StoredSession = parsed.data;
+        if (!row.draft || !(MEDIA_DRAFT_KEY in row.draft)) {
+          const media = ((await t.sessions.get(row.id)) as StoredSession | undefined)?.draft?.[MEDIA_DRAFT_KEY];
+          if (media !== undefined) {
+            row.draft = { ...(row.draft ?? {}), [MEDIA_DRAFT_KEY]: media };
+            checkSize(row);
+          }
+        }
+        await t.sessions.put(row);
+        await prune(t)();
+      });
+    },
+    async saveMedia(id, media, state = 'draft') {
+      if (media !== null && (typeof media !== 'object' || Array.isArray(media))) throw new Error('Media session must be an object');
+      await driver.transaction(async (t) => {
+        const prev = (await t.sessions.get(id)) as StoredSession | undefined;
+        const time = now();
+        const draft: Record<string, unknown> = { ...(prev?.draft ?? {}) };
+        if (media === null) delete draft[MEDIA_DRAFT_KEY];
+        else draft[MEDIA_DRAFT_KEY] = media;
+        const candidate = prev
+          ? { ...prev, updatedAt: time, draft }
+          : { id, state, createdAt: time, updatedAt: time, text: '', attachmentIds: [], draft };
+        const parsed = sessionSchema.safeParse(candidate);
+        if (!parsed.success) throw new Error('Creation session could not be saved: it is not in the expected shape');
+        checkSize(parsed.data);
         await t.sessions.put(parsed.data);
         await prune(t)();
       });

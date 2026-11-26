@@ -16,6 +16,8 @@ export const SHARE_LIMITS = {
   fieldsPerLink: LIMITS.fieldsPerCollection,
   /** Entries one send may carry. */
   sendBatch: 100,
+  /** Entries the send screen lists at once: the ones not sent yet first, then the ones sent before. */
+  sendWindow: 200,
   /** Source entry to destination entry pairs remembered, so a second send can update instead of duplicate. */
   sentLedger: 500,
   /** Events kept on one link. Older ones are dropped. */
@@ -61,7 +63,8 @@ export const shareAuditSchema = z
   })
   .strict();
 
-const recordId = z.string().min(1).max(64);
+/** Same limit as a record's own id (`recordShape` in the backup schemas), so any entry an app holds can be remembered. */
+const recordId = z.string().min(1).max(128);
 
 export const shareLinkSchema = z
   .object({

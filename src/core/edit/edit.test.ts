@@ -110,6 +110,43 @@ describe('applyPatchOps', () => {
   });
 });
 
+describe('applyPatchOps on KalamSpec 1.1 layout groups and permissions', () => {
+  const linked = validateSpec(loadFixture('valid', 'tailor-orders-linked', 'v11')).spec as KalamSpec;
+  const home = (s: KalamSpec | undefined) => s!.screens.find((x) => x.id === 'home')!;
+
+  it('removes a grouped component from its group, and drops a group left empty', () => {
+    const one = applyPatchOps(linked, [{ op: 'removeComponent', component: 'advance_total' }]);
+    expect(one.errors).toEqual([]);
+    expect(home(one.spec).layout?.[0]).toEqual({ type: 'row', children: ['open_orders'] });
+    const both = applyPatchOps(linked, [
+      { op: 'removeComponent', component: 'add_order' },
+      { op: 'removeComponent', component: 'add_customer' },
+    ]);
+    expect(both.errors).toEqual([]);
+    expect(home(both.spec).layout?.map((g) => g.type)).toEqual(['row', 'grid']); // the card held only those two
+  });
+
+  it('moves a grouped component inside its group, where the order on screen comes from', () => {
+    const r = applyPatchOps(linked, [{ op: 'moveComponent', component: 'advance_chart', direction: 'down' }]);
+    expect(r.errors).toEqual([]);
+    expect(home(r.spec).layout?.[1]).toMatchObject({ children: ['garment_chart', 'advance_chart'] });
+    expect(home(r.spec).children.map((c) => c.id)).toEqual(home(linked).children.map((c) => c.id));
+  });
+
+  it('keeps permissions derived from the components after an edit', () => {
+    const gone = applyPatchOps(linked, [{ op: 'removeComponent', component: 'delivery_reminder' }]);
+    expect(gone.errors).toEqual([]);
+    expect(gone.spec?.permissions).toBeUndefined();
+    expect(validateSpec(gone.spec).warnings.map((w) => w.code)).not.toContain('PERMISSION_UNUSED');
+    const photo = applyPatchOps(linked, [{ op: 'addComponent', screen: 'home', component: { id: 'snap', type: 'photo', label: 'Photo' } }]);
+    expect(photo.errors).toEqual([]);
+    expect(photo.spec?.permissions?.map((p) => p.kind)).toEqual(['camera', 'notifications']);
+    expect(photo.spec?.permissions?.[1].reason).toBe('To remind you a day before each delivery'); // the app's own reason stays
+    // A 1.0 app is not given the 1.1 section just because it has a photo.
+    expect(applyPatchOps(tailor, [{ op: 'setAppName', value: 'Tailor' }]).spec?.permissions).toBeUndefined();
+  });
+});
+
 describe('parseSmallEdit', () => {
   const ops = (text: string, s: KalamSpec = tailor) => parseSmallEdit(text, s).ops;
 

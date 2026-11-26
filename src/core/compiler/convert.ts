@@ -11,14 +11,16 @@
  *
  * The output is a CANDIDATE spec: callers must run `validateSpec` before using it.
  */
+import { PERMISSION_REASON } from '../spec/copy';
 import {
   ICON_GLYPHS, LIMITS, RESERVED_IDS, SCHEMA_VERSION, THEME_PRESETS,
   type IconGlyph, type KalamAction, type KalamAIBlock, type KalamCollection, type KalamComponent,
-  type KalamField, type KalamScreen, type KalamSpec, type ThemePreset,
+  type KalamField, type KalamLayoutNode, type KalamScreen, type KalamSpec, type ThemePreset,
 } from '../spec/schema';
+import { isMachineField, removeFromLayout, requiredPermissions } from '../spec/v11';
 import { themeFromPreset } from '../templates/themes';
 import type {
-  CompilerIR, IRAction, IRAIBlock, IRCollection, IRComponent, IRField, IRScreen,
+  CompilerIR, IRAction, IRAIBlock, IRCollection, IRComponent, IRField, IRGroup, IRScreen,
 } from './ir';
 
 // ─── Identifiers ──────────────────────────────────────────────────────────────
@@ -143,16 +145,16 @@ export function allocScreen(ctx: ConversionContext, s: IRScreen): string {
   return id;
 }
 
-function resolveField(ctx: ConversionContext, collection: string | undefined, raw: string | undefined) {
+function resolveField(ctx: ConversionContext | undefined, collection: string | undefined, raw: string | undefined) {
   if (raw === undefined || raw.trim() === '') return undefined;
-  const space = collection ? ctx.fields.get(collection) : undefined;
+  const space = collection ? ctx?.fields.get(collection) : undefined;
   return space ? space.resolve(raw) : resolveAnyField(ctx, raw);
 }
 
 /** A field referenced without a collection (transient forms, AI-block inputs). */
-function resolveAnyField(ctx: ConversionContext, raw: string | undefined) {
+function resolveAnyField(ctx: ConversionContext | undefined, raw: string | undefined) {
   if (raw === undefined || raw.trim() === '') return undefined;
-  for (const space of ctx.fields.values()) {
+  for (const space of ctx?.fields.values() ?? []) {
     const hit = space.lookup(raw);
     if (hit) return hit;
   }
@@ -215,13 +217,23 @@ export function pickGlyph(text: string): IconGlyph {
 }
 
 // ─── Entity converters (shared with structural edits) ─────────────────────────
-export function convertField(f: IRField): KalamField {
+/** `ctx` resolves a relation's collection and display field; without it they are slugified. */
+export function convertField(f: IRField, ctx?: ConversionContext): KalamField {
   const label = clip(f.label, LIMITS.labelLength) ?? humanize(f.id);
   const required = f.required || undefined;
   const dv = f.defaultValue?.trim();
   switch (f.type) {
-    case 'text':
-      return clean<KalamField>({ type: 'text', label, required, defaultValue: dv || undefined, multiline: f.multiline || undefined });
+    case 'text': {
+      // A relation stores a record id, so a default value or several lines make no sense there.
+      const target = f.refCollection ? (ctx ? ctx.collections.resolve(f.refCollection) : slugify(f.refCollection, 'data')) : undefined;
+      const ref = target
+        ? clean({ collection: target, display: resolveField(ctx, target, f.refDisplay), onDelete: f.onDelete })
+        : undefined;
+      return clean<KalamField>({
+        type: 'text', label, required, defaultValue: ref ? undefined : dv || undefined,
+        multiline: ref ? undefined : f.multiline || undefined, ref,
+      });
+    }
     case 'number': {
       const n = dv !== undefined && dv !== '' ? Number(dv) : undefined;
       return clean<KalamField>({
@@ -243,13 +255,15 @@ export function convertField(f: IRField): KalamField {
       const options = dedupe(f.options ?? []).map((o) => o.slice(0, 60)).slice(0, LIMITS.enumOptions);
       return clean<KalamField>({ type: 'enum', label, required, options, defaultValue: dv && options.includes(dv) ? dv : undefined });
     }
+    case 'image':
+      return clean<KalamField>({ type: 'image', label, required });
   }
 }
 
 export function convertCollection(c: IRCollection, ctx: ConversionContext, id: string): KalamCollection {
   const fs = ctx.fields.get(id);
   const fields: Record<string, KalamField> = {};
-  for (const f of c.fields) fields[fs?.resolve(f.id) ?? slugify(f.id, 'field')] = convertField(f);
+  for (const f of c.fields) fields[fs?.resolve(f.id) ?? slugify(f.id, 'field')] = convertField(f, ctx);
   return clean<KalamCollection>({ label: clip(c.label, LIMITS.labelLength), fields });
 }
 
@@ -319,20 +333,134 @@ export function convertComponent(c: IRComponent, ctx: ConversionContext, formCol
       break;
     }
     case 'photo':
-      out = { id, type: 'photo', label, aiBlock: ctx.aiBlocks.resolve(c.aiBlock) };
+      out = { id, type: 'photo', label, aiBlock: ctx.aiBlocks.resolve(c.aiBlock), field: field(c.field) };
+      break;
+    case 'chart': {
+      const source = ctx.collections.resolve(c.source);
+      const lf = (raw?: string) => resolveField(ctx, source, raw);
+      const metric = c.metric ?? 'count';
+      // Safe defaults keep the chart valid: count needs no field, and a chart is split by exactly one thing.
+      const groupBy = c.period ? undefined : lf(c.groupBy);
+      const period = c.period ?? (groupBy ? undefined : 'week');
+      // A line needs periods and a donut needs a field; a range is never shorter than one period.
+      const kind = period ? (c.chart === 'donut' ? 'line' : c.chart ?? 'line') : c.chart === 'line' ? 'bar' : c.chart ?? 'bar';
+      const rank = { day: 0, week: 1, month: 2 } as const;
+      const asked = c.rangeUnit ?? period ?? 'month';
+      const rangeUnit = period && rank[asked] < rank[period] ? period : asked;
+      out = {
+        id, type: 'chart', label, chart: kind, source, metric,
+        valueField: metric === 'count' ? undefined : lf(c.valueField), groupBy, period, dateField: lf(c.dateField),
+        range: c.rangeLast !== undefined ? { last: clamp(Math.round(c.rangeLast), 1, 60), unit: rangeUnit } : undefined,
+      };
+      break;
+    }
+    case 'timer': {
+      const mode = c.mode ?? (c.durationSec !== undefined ? 'countdown' : 'stopwatch');
+      out = {
+        id, type: 'timer', label, mode,
+        durationSec: mode === 'countdown' ? clamp(Math.round(c.durationSec ?? 60), 1, LIMITS.timerSeconds) : undefined,
+        field: field(c.field), unit: c.field ? c.unit : undefined,
+      };
+      break;
+    }
+    case 'reminder': {
+      const source = ctx.collections.resolve(c.source);
+      const lf = (raw?: string) => resolveField(ctx, source, raw);
+      const time = c.time?.trim();
+      out = {
+        id, type: 'reminder', label, source, dateField: lf(c.dateField),
+        leadDays: c.leadDays !== undefined ? clamp(Math.round(c.leadDays), 0, 30) : undefined,
+        time: time && /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : undefined,
+        doneField: lf(c.doneField), titleField: lf(c.titleField), message: clip(c.message, 120),
+      };
+      break;
+    }
+    case 'signature':
+      out = { id, type: 'signature', label, field: field(c.field), required: c.required || undefined };
       break;
   }
+  const style = clean({ size: c.size, emphasis: c.emphasis, tone: c.colorTone, align: c.align, fullWidth: c.fullWidth || undefined });
+  if (Object.keys(style).length) out.style = style;
   return clean(out) as KalamComponent;
+}
+
+/**
+ * Flat IR groups → nested layout. Deterministic repair: unknown ids, repeats, cycles and anything
+ * deeper than LIMITS.layoutDepth are dropped (layout is presentation; dropping it never loses data).
+ */
+export function convertLayout(groups: IRGroup[] | undefined, componentIds: ReadonlyMap<string, string>): KalamLayoutNode[] | undefined {
+  if (!groups?.length) return undefined;
+  const byId = new Map(groups.map((g) => [g.id, g] as const));
+  const nested = new Set(groups.flatMap((g) => g.items.filter((i) => byId.has(i) && i !== g.id)));
+  const placed = new Set<string>();
+  const used = new Set<string>();
+  let budget = LIMITS.layoutNodesPerScreen;
+  const build = (g: IRGroup, depth: number): KalamLayoutNode | undefined => {
+    if (used.has(g.id) || depth > LIMITS.layoutDepth || budget <= 0) return undefined;
+    used.add(g.id);
+    budget--;
+    const children: KalamLayoutNode['children'] = [];
+    for (const item of g.items.slice(0, LIMITS.layoutChildren)) {
+      const sub = byId.get(item);
+      if (sub) {
+        const node = build(sub, depth + 1);
+        if (node) children.push(node);
+        continue;
+      }
+      const id = componentIds.get(item) ?? componentIds.get(slugify(item));
+      if (id && !placed.has(id)) {
+        placed.add(id);
+        children.push(id);
+      }
+    }
+    if (!children.length) return undefined;
+    return clean({
+      type: g.type, children,
+      title: g.type === 'card' ? clip(g.title, LIMITS.labelLength) : undefined,
+      columns: g.type === 'grid' ? clamp(Math.round(g.columns ?? 2), 2, 4) : undefined,
+    }) as KalamLayoutNode;
+  };
+  const roots: KalamLayoutNode[] = [];
+  const add = (n: KalamLayoutNode | undefined) => n && roots.push(n);
+  for (const g of groups) if (!nested.has(g.id)) add(build(g, 1));
+  // Groups no surviving group reached (a cycle, or a level cut for depth) stand on their own.
+  for (const g of groups) if (!used.has(g.id)) add(build(g, 1));
+  return roots.length ? roots : undefined;
+}
+
+/**
+ * A 1.1 part whose required source or field did not resolve. It holds no data, so it is dropped
+ * rather than failing the whole app (the same repair convertLayout applies to groups).
+ */
+function unresolved(c: KalamComponent, ctx: ConversionContext, form: string | undefined): boolean {
+  const known = (col: string | undefined) => !!col && ctx.collections.ids().includes(col);
+  const knownField = (col: string | undefined, f: string | undefined) => !!f && known(col) && !!ctx.fields.get(col as string)?.ids().includes(f);
+  switch (c.type) {
+    case 'chart': return !known(c.source);
+    case 'reminder': return !knownField(c.source, c.dateField);
+    // On a screen without a form a signature fills a field of its own, so only a form's fields are checked.
+    case 'signature': return !c.field || (known(form) && !knownField(form, c.field));
+    default: return false;
+  }
 }
 
 export function convertScreen(s: IRScreen, ctx: ConversionContext): KalamScreen {
   const form = ctx.collections.resolve(s.form);
+  const converted = s.components.map((c) => [c, convertComponent(c, ctx, form)] as const).filter(([, out]) => !unresolved(out, ctx, form));
+  const children = converted.map(([, out]) => out);
+  // Raw IR id → final component id, for this screen only (dropped parts are not placed).
+  const componentIds = new Map<string, string>();
+  for (const [c, out] of converted) {
+    componentIds.set(c.id, out.id);
+    componentIds.set(slugify(c.id), out.id);
+  }
   return clean<KalamScreen>({
     id: ctx.allocated.get(s) ?? ctx.screens.resolve(s.id) ?? slugify(s.id, 'screen'),
     title: clip(s.title, LIMITS.nameLength) ?? humanize(s.id),
     description: clip(s.description, LIMITS.labelLength),
     form,
-    children: s.components.map((c) => convertComponent(c, ctx, form)),
+    children,
+    layout: convertLayout(s.groups, componentIds),
   });
 }
 
@@ -357,9 +485,16 @@ export function convertAction(a: IRAction, ctx: ConversionContext): KalamAction 
     case 'insert':
       out = { type: 'insert', collection, then: thenOpt };
       break;
-    case 'update':
-      out = { type: 'update', collection, record: 'selected', then: thenOpt };
+    case 'update': {
+      // Raw text values; completeSpec turns each into its field's type (it knows the fields).
+      const set: Record<string, string> = {};
+      for (const p of a.set ?? []) {
+        const f = resolveField(ctx, collection, p.field);
+        if (f) set[f] = p.value;
+      }
+      out = { type: 'update', collection, record: 'selected', set: Object.keys(set).length ? set : undefined, then: thenOpt };
       break;
+    }
     case 'delete':
       out = { type: 'delete', collection, record: 'selected', confirm: clip(a.confirm, 160) ?? 'Delete this record?', then: thenOpt };
       break;
@@ -436,6 +571,8 @@ export interface ConvertOptions {
   lang?: string;
   /** User preference wins over the model's preset choice. */
   themePreset?: ThemePreset;
+  /** The person's currency preference; used when the model gives none (v1.1 settings.currency). */
+  currency?: string;
   generator?: { route: 'deterministic' | 'on_device' | 'cloud'; provider?: string; model?: string };
 }
 
@@ -473,8 +610,18 @@ export function irToSpec(ir: CompilerIR, opts: ConvertOptions): KalamSpec {
   const lang = irLang && LANG_RE.test(irLang) ? irLang : opts.lang && LANG_RE.test(opts.lang) ? opts.lang : 'en';
   const glyph = ir.icon && ICON_GLYPHS.includes(ir.icon) ? ir.icon : pickGlyph(`${name} ${description ?? ''}`);
   const theme = themeFromPreset(preset);
+  const screens = ir.screens.map((s) => convertScreen(s, ctx));
+  // At most LIMITS.reminders reminders (the prompt says so); later ones are dropped, as above.
+  let reminders = 0;
+  for (const s of screens) {
+    for (const c of [...s.children]) {
+      if (c.type !== 'reminder' || ++reminders <= LIMITS.reminders) continue;
+      s.children.splice(s.children.indexOf(c), 1);
+      removeFromLayout(s, c.id);
+    }
+  }
 
-  return clean<KalamSpec>({
+  const spec = clean<KalamSpec>({
     id: opts.appId,
     schemaVersion: SCHEMA_VERSION,
     version: 1,
@@ -484,7 +631,7 @@ export function irToSpec(ir: CompilerIR, opts: ConvertOptions): KalamSpec {
     lang,
     theme,
     collections: specCollections,
-    screens: ir.screens.map((s) => convertScreen(s, ctx)),
+    screens,
     initialScreen,
     actions,
     aiBlocks,
@@ -497,5 +644,63 @@ export function irToSpec(ir: CompilerIR, opts: ConvertOptions): KalamSpec {
         ? clean({ route: opts.generator.route, provider: clip(opts.generator.provider, 40), model: clip(opts.generator.model, 80) })
         : undefined,
     }),
+    ...convertSections(ir, opts),
+  });
+  // Permissions come from the components, never from the model, with fixed plain reasons.
+  const permissions = requiredPermissions(spec).map((kind) => ({ kind, reason: PERMISSION_REASON[kind] }));
+  if (permissions.length) spec.permissions = permissions;
+  // The app's currency fills money stats that name none, so the runtime never falls back to a guess.
+  const currency = spec.settings?.currency;
+  if (currency) {
+    for (const s of spec.screens) for (const c of s.children) if (c.type === 'stat' && c.format === 'currency' && !c.currency) c.currency = currency;
+  }
+  // Links and signatures hold values only Kalam's own controls write: a reminder never names an
+  // entry by one (it would print a hidden code) and an AI step never fills one.
+  for (const s of spec.screens) {
+    for (const c of s.children) {
+      if (c.type !== 'reminder' || !c.titleField) continue;
+      const fields = Object.hasOwn(spec.collections, c.source) ? spec.collections[c.source].fields : {};
+      const f = Object.hasOwn(fields, c.titleField) ? fields[c.titleField] : undefined;
+      if (!f || (f.type !== 'text' && f.type !== 'enum') || isMachineField(spec, c.source, c.titleField)) delete c.titleField;
+    }
+  }
+  for (const b of Object.values(spec.aiBlocks)) {
+    if (b.kind !== 'extractFromPhoto' || !b.fields) continue;
+    const kept = b.fields.filter((f) => !isMachineField(spec, b.target, f));
+    if (kept.length) b.fields = kept; // all of them machine fields: left for the validator to report
+  }
+  return spec;
+}
+
+/** v1.1 sections with safe defaults. A section with nothing valid left is left out. */
+function convertSections(ir: CompilerIR, opts: ConvertOptions): Pick<KalamSpec, 'settings' | 'accessibility' | 'localization'> {
+  const currency = (ir.settings?.currency ?? opts.currency)?.trim().toUpperCase();
+  const settings = clean({
+    currency: currency && /^[A-Z]{3}$/.test(currency) ? currency : undefined,
+    timeFormat: ir.settings?.timeFormat,
+  });
+  const modes = dedupe(ir.accessibility?.suggestedModes ?? []) as NonNullable<KalamSpec['accessibility']>['suggestedModes'];
+  const accessibility = clean({ summary: clip(ir.accessibility?.summary, 300), suggestedModes: modes?.length ? modes : undefined });
+  const seen = new Set<string>();
+  const terminology: NonNullable<NonNullable<KalamSpec['localization']>['terminology']> = [];
+  for (const t of ir.terminology ?? []) {
+    const term = clip(t.term, 60);
+    if (!term || seen.has(term.toLocaleLowerCase()) || terminology.length >= LIMITS.terminology) continue;
+    const translations: Record<string, string> = {};
+    for (const tr of t.translations ?? []) {
+      const lang = tr.lang.trim();
+      const text = clip(tr.text, 60);
+      if (LANG_RE.test(lang) && text && Object.keys(translations).length < 12) translations[lang] = text;
+    }
+    const hasTr = Object.keys(translations).length > 0;
+    // `keep` wins when the model gave both; a term with no rule says nothing and is dropped.
+    if (!t.keep && !hasTr) continue;
+    seen.add(term.toLocaleLowerCase());
+    terminology.push(t.keep ? { term, keep: true } : { term, translations });
+  }
+  return clean({
+    settings: Object.keys(settings).length ? settings : undefined,
+    accessibility: Object.keys(accessibility).length ? accessibility : undefined,
+    localization: terminology.length ? { terminology } : undefined,
   });
 }

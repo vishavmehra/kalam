@@ -6,7 +6,7 @@
  * Everything read back from Firestore is untrusted and is parsed with these schemas first.
  */
 import { z } from 'zod';
-import { iconSchema, LIMITS } from '../spec/schema';
+import { iconSchema, LIMITS, PERMISSION_KINDS } from '../spec/schema';
 
 export const BAZAAR_CATEGORIES = [
   'business', 'education', 'finance', 'productivity', 'health', 'personal', 'field_work', 'utilities', 'creative',
@@ -134,6 +134,9 @@ export const safetySchema = z.object({
 });
 export type SafetyResult = z.infer<typeof safetySchema>;
 
+/** One line of the permissions disclosure, the permission and its reason. firestore.rules bounds the list (4 lines, 600 characters). */
+export const PERMISSION_LINE_LENGTH = 150;
+
 /** Derived from the validated spec, never from creator claims (docs/12 §7.2-7.4). */
 export const disclosureSchema = z.object({
   /** Collection labels: what records the app keeps on the installer's device. */
@@ -143,6 +146,11 @@ export const disclosureSchema = z.object({
   aiFeatures: z.array(z.string().max(BAZAAR_LIMITS.capabilityLength)).max(LIMITS.aiBlocks),
   /** True when some AI feature may need a connection (cloud) at least as a fallback. */
   cloudPossible: z.boolean(),
+  /**
+   * KalamSpec 1.1: what the app asks the phone for, each with its reason ("Camera: To take photos for
+   * this app"). Left out when the app asks for nothing, and on listings made before 1.1.
+   */
+  permissions: z.array(z.string().max(PERMISSION_LINE_LENGTH)).max(PERMISSION_KINDS.length).optional(),
 });
 export type ListingDisclosure = z.infer<typeof disclosureSchema>;
 

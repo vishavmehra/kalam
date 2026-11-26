@@ -4,17 +4,22 @@
  */
 import { zipSync } from 'fflate';
 import type { DrawingDocument, DrawingPage, NormalizedImage } from '@/core/contracts';
+import { timings } from '@/core/observability';
 import { fitWithin, stripDataUrl } from '@/features/input/media-math';
 import { images } from './image-cache.web';
-import { exportSize, pageHasVisibleContent, pageImageIds, pagePrimitives, type ExportFile, type SaveOutcome } from './model';
+import { contentCrop, exportSize, pageHasVisibleContent, pageImageIds, pagePrimitives, type Bounds, type ExportFile, type SaveOutcome } from './model';
 import { drawPrimitives } from './render-canvas';
+import { textFontsReady } from './text-fonts';
 
-function paintPage(page: DrawingPage, width: number, height: number): HTMLCanvasElement {
+function paintPage(page: DrawingPage, width: number, height: number, crop?: Bounds): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = width; canvas.height = height;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas is unavailable in this browser.');
-  ctx.scale(width / page.width, height / page.height);
+  if (crop) {
+    ctx.scale(width / crop.w, height / crop.h);
+    ctx.translate(-crop.x, -crop.y);
+  } else ctx.scale(width / page.width, height / page.height);
   drawPrimitives(ctx, pagePrimitives(page));
   return canvas;
 }
@@ -24,10 +29,14 @@ function release(canvas: HTMLCanvasElement) {
   canvas.width = 0; canvas.height = 0;
 }
 
-/** PNG of one page for cloud vision, at most 1280 px on the long side. */
+/**
+ * PNG of one page for cloud vision, at most 1280 px on the long side. It is cropped to what is drawn (docs/11 §7.5), so empty
+ * paper and anything beyond the drawing is not in the picture.
+ */
 export function exportPagePng(page: DrawingPage, index: number): NormalizedImage {
-  const size = fitWithin(page.width * 4, page.height * 4);
-  const canvas = paintPage(page, size.width, size.height);
+  const crop = contentCrop(page);
+  const size = fitWithin((crop?.w ?? page.width) * 4, (crop?.h ?? page.height) * 4);
+  const canvas = paintPage(page, size.width, size.height, crop ?? undefined);
   const base64 = stripDataUrl(canvas.toDataURL('image/png'));
   release(canvas);
   return {
@@ -37,23 +46,42 @@ export function exportPagePng(page: DrawingPage, index: number): NormalizedImage
     width: size.width,
     height: size.height,
     source: 'drawing',
-    label: `Screen ${index + 1}: ${page.title}`,
+    label: `Screen ${index + 1}: ${page.title}${crop ? ' (cropped to the drawing)' : ''}`,
   };
 }
 
 /** PNGs for every page with something visible, in page order. */
-export async function exportDrawingPages(doc: DrawingDocument): Promise<NormalizedImage[]> {
-  await images.ensure(doc.pages.flatMap(pageImageIds));
-  return doc.pages.flatMap((p, i) => (pageHasVisibleContent(p) ? [exportPagePng(p, i)] : []));
+export function exportDrawingPages(doc: DrawingDocument): Promise<NormalizedImage[]> {
+  return timings.time('drawing_export', async () => {
+    await images.ensure(doc.pages.flatMap(pageImageIds));
+    await textFontsReady(doc.pages);
+    return doc.pages.flatMap((p, i) => (pageHasVisibleContent(p) ? [exportPagePng(p, i)] : []));
+  });
 }
 
 /** PNG bytes for a person to keep. `scale` 1 = the page's own size; large scales are reduced to a safe size. */
 export async function renderPageBytes(page: DrawingPage, scale: number): Promise<{ bytes: Uint8Array; width: number; height: number }> {
   await images.ensure(pageImageIds(page));
+  await textFontsReady([page]);
   const { width, height } = exportSize(page, scale);
   const canvas = paintPage(page, width, height);
   try {
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('The image could not be created.');
+    return { bytes: new Uint8Array(await blob.arrayBuffer()), width, height };
+  } finally {
+    release(canvas);
+  }
+}
+
+/** JPEG bytes of a page, for the PDF. Pages have an opaque paper colour, so nothing turns black. */
+export async function renderPageJpeg(page: DrawingPage, scale: number): Promise<{ bytes: Uint8Array; width: number; height: number }> {
+  await images.ensure(pageImageIds(page));
+  await textFontsReady([page]);
+  const { width, height } = exportSize(page, scale);
+  const canvas = paintPage(page, width, height);
+  try {
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
     if (!blob) throw new Error('The image could not be created.');
     return { bytes: new Uint8Array(await blob.arrayBuffer()), width, height };
   } finally {
@@ -85,11 +113,11 @@ function download(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-/** One PNG downloads as is; several download as one zip so the browser does not block repeated downloads. */
+/** One file downloads as is; several download as one zip so the browser does not block repeated downloads. */
 export async function saveExportFiles(files: ExportFile[], archiveName: string): Promise<SaveOutcome> {
   if (files.length === 0) throw new Error('There is nothing to export.');
   if (files.length === 1) {
-    download(new Blob([files[0]!.bytes as BlobPart], { type: 'image/png' }), files[0]!.name);
+    download(new Blob([files[0]!.bytes as BlobPart], { type: files[0]!.mimeType ?? 'image/png' }), files[0]!.name);
   } else {
     const zip = zipSync(Object.fromEntries(files.map((f) => [f.name, f.bytes] as const)), { level: 0 });
     download(new Blob([zip as BlobPart], { type: 'application/zip' }), archiveName);

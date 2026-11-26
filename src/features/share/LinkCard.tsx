@@ -39,7 +39,11 @@ export function LinkCard({ view, onSend, onTurnOff, onRemove }: LinkCardProps) {
       <Text variant="h4">{SHARE_UI.card.to(view.sourceName, view.destinationName)}</Text>
 
       <View style={{ gap: theme.space[1] }}>
-        {view.lines.map((line) => <Text key={line} variant="bodySmall" tone="secondary">{line}</Text>)}
+        {status === 'off' ? (
+          <Text variant="bodySmall" tone="secondary">{SHARE_UI.card.turnedOffNote}</Text>
+        ) : (
+          view.lines.map((line) => <Text key={line} variant="bodySmall" tone="secondary">{line}</Text>)
+        )}
         <Text variant="bodySmall" weight="medium">{SHARE_UI.card.fields(view.fieldLabels)}</Text>
         {view.sourceFromBazaar ? <Text variant="bodySmall" tone="secondary">{SHARE_UI.card.bazaar(view.sourceName)}</Text> : null}
         {view.destinationFromBazaar ? <Text variant="bodySmall" tone="secondary">{SHARE_UI.card.bazaar(view.destinationName)}</Text> : null}
@@ -57,7 +61,7 @@ export function LinkCard({ view, onSend, onTurnOff, onRemove }: LinkCardProps) {
       ) : null}
 
       {showHistory ? (
-        <View style={{ gap: theme.space[1] }} accessibilityRole="list" accessibilityLabel={SHARE_UI.card.history}>
+        <View style={{ gap: theme.space[1] }} role="group" aria-label={SHARE_UI.card.history} accessibilityLabel={SHARE_UI.card.history}>
           {[...link.audit].reverse().map((e, i) => <Text key={`${e.at}-${i}`} variant="bodySmall" tone="secondary">{historyLine(e, formatWhen)}</Text>)}
         </View>
       ) : null}

@@ -275,6 +275,50 @@ describe('notification ids and text', () => {
     expect(plan({ config: cfg(rule({ titleField: 'status' })), records }).desired[0].body).toBe('Electricity is due tomorrow.');
   });
 
+  it("names an entry by a choice as its option and by a link as the linked entry's own name, never the stored id", () => {
+    const linked: SpecView = {
+      name: 'Dues',
+      collections: {
+        customers: { label: 'Customers', fields: { name: { type: 'text', label: 'Name', required: true }, village: { type: 'enum', label: 'Village', options: ['Rampur', 'Sonpur'] } } },
+        dues: {
+          label: 'Dues',
+          fields: {
+            customer: { type: 'text', label: 'Customer', required: true, ref: { collection: 'customers', onDelete: 'restrict' } },
+            village: { type: 'enum', label: 'Village', options: ['Rampur', 'Sonpur'] },
+            due: { type: 'date', label: 'Due date' },
+          },
+        },
+      },
+    };
+    const records = {
+      customers: [rec('c1', { name: '  Asha Rao ' })],
+      dues: [rec('d1', { customer: 'c1', village: 'Rampur', due: '2026-12-10' }), rec('d2', { customer: 'gone', village: 'Sonpur', due: '2026-12-11' })],
+    };
+    const ruleFor = (titleField?: string) => rule({ collection: 'dues', ...(titleField ? { titleField } : {}) });
+    const bodies = (titleField?: string) =>
+      computePlan({ appId: 'a', spec: linked, records, config: cfg(ruleFor(titleField)), now: NOW, zone: KOLKATA }).desired.map((n) => n.body);
+    // With no title field named, the link (the only text field) names the entry.
+    expect(bodies()).toEqual(['Asha Rao is due tomorrow.', 'Sonpur is due tomorrow.']);
+    // A link to a deleted entry falls back to the entry's choice instead of printing the id.
+    expect(bodies('customer')).toEqual(['Asha Rao is due tomorrow.', 'Sonpur is due tomorrow.']);
+    // A choice named as the title prints its option.
+    expect(bodies('village')).toEqual(['Rampur is due tomorrow.', 'Sonpur is due tomorrow.']);
+    // The Due list says the same.
+    const due = computeDue({ spec: linked, records, config: cfg(ruleFor()), now: Date.UTC(2026, 11, 10, 3), zone: KOLKATA });
+    expect(due.today.map((i) => i.title)).toEqual(['Asha Rao']);
+    expect(JSON.stringify(plan({ records: { bills: [] } }))).not.toContain('c1');
+  });
+
+  it('never prints a drawn signature as a name', () => {
+    const signed: SpecView = {
+      name: 'Orders',
+      collections: { orders: { label: 'Orders', fields: { sign: { type: 'text', label: 'Signature', required: true }, item: { type: 'text', label: 'Item' }, due: { type: 'date', label: 'Due' } } } },
+    };
+    const records = { orders: [rec('o1', { sign: 'sig1:00010002', item: 'Kurta', due: '2026-12-10' })] };
+    const out = computePlan({ appId: 'a', spec: signed, records, config: cfg(rule({ collection: 'orders' })), now: NOW, zone: KOLKATA });
+    expect(out.desired[0].body).toBe('Kurta is due tomorrow.');
+  });
+
   it('keeps long text within notification limits', () => {
     const long = 'x'.repeat(200);
     expect(reminderText(spec, rule(), long).body.length).toBeLessThanOrEqual(140);

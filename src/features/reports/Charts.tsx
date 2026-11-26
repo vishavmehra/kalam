@@ -15,8 +15,12 @@ import type { ChartStyle } from './chart-style';
 export interface ChartProps { result: ReportResult; style: ChartStyle; metric: number }
 
 const BAR_HEIGHT = 12;
-/** Slice fill strength in option order. Every slice is also named in the legend and the table. */
-const DONUT_OPACITY = [1, 0.72, 0.5, 0.32, 0.18] as const;
+/**
+ * Slice fill strength in option order. Every slice is also named in the legend and the table.
+ * Two only: fainter tints of one colour fall below 3:1 against the surface (WCAG 1.4.11), so a
+ * third part draws as bars instead. ponytail: add a checked categorical palette to allow more.
+ */
+const DONUT_OPACITY = [1, 0.72] as const;
 export const DONUT_MAX_SLICES = DONUT_OPACITY.length;
 
 function useWidth(initial = 300) {

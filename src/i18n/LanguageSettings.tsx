@@ -60,7 +60,24 @@ export function LanguageSettings() {
           </View>
         </View>
       ))}
-      {isDraft ? <Text variant="caption" tone="muted">{t('settings.language.draft')}</Text> : null}
+      {isDraft ? <DraftLanguageNote /> : null}
+    </View>
+  );
+}
+
+/**
+ * The note under a machine-translated language (MOUNTS "i18n review"): said in that language and in English,
+ * so a person who cannot read the draft still learns why it may read oddly. Nothing when the language is reviewed.
+ */
+export function DraftLanguageNote({ language }: { language?: string }) {
+  const own = useI18n(language);
+  const english = useI18n('en');
+  if (!own.isDraft) return null;
+  const same = own.language === english.language;
+  return (
+    <View role="note" style={{ gap: 2 }}>
+      <Text variant="bodySmall" tone="muted" {...({ lang: own.language } as object)}>{own.t('settings.language.draft')}</Text>
+      {same ? null : <Text variant="bodySmall" tone="muted" {...({ lang: 'en' } as object)}>{english.t('settings.language.draft')}</Text>}
     </View>
   );
 }

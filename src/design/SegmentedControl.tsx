@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 
+import { useRovingFocus } from './inputs/roving';
 import { Text } from './Text';
 import { useKalamTheme } from './theme';
 import { webData } from './web';
@@ -26,6 +27,11 @@ export interface SegmentedControlProps<T extends string> {
 export function SegmentedControl<T extends string>({ label, labelHidden, options, value, onChange, wrap }: SegmentedControlProps<T>) {
   const theme = useKalamTheme();
   const c = theme.colors;
+  const select = (i: number) => onChange(options[i].value);
+  // One tab stop on the chosen option; the arrow keys move and choose, Space chooses (web; phones need nothing).
+  const roving = useRovingFocus({
+    count: options.length, orientation: 'both', current: Math.max(0, options.findIndex((o) => o.value === value)), onMove: select, onActivate: select,
+  });
   return (
     <View style={{ gap: 8, alignSelf: 'stretch' }}>
       {labelHidden ? null : <Text variant="bodySmall" weight="medium" tone="secondary">{label}</Text>}
@@ -39,7 +45,7 @@ export function SegmentedControl<T extends string>({ label, labelHidden, options
           alignSelf: 'flex-start', maxWidth: '100%',
         }}
       >
-        {options.map((o) => {
+        {options.map((o, i) => {
           const selected = o.value === value;
           const Icon = o.icon;
           return (
@@ -49,6 +55,7 @@ export function SegmentedControl<T extends string>({ label, labelHidden, options
               aria-checked={selected}
               accessibilityState={{ checked: selected }}
               onPress={() => onChange(o.value)}
+              {...roving.itemProps(i)}
               {...webData({ kPress: '', kHover: selected ? 'none' : 'border' })}
               style={{
                 flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,

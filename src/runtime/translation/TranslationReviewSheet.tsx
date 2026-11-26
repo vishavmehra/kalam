@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 import { collectTranslatableLabels, languageLabel, type TranslatableLabel } from '@/core/i18n-labels';
 import { Button, Sheet, Text, useKalamTheme } from '@/design';
+import { useT } from '@/i18n/react';
 import type { AppTranslation } from './use-app-translation';
 
 export interface TranslationReviewSheetProps {
@@ -19,6 +20,7 @@ export interface TranslationReviewSheetProps {
 
 export function TranslationReviewSheet({ visible, translation: tr, onClose, onEdit }: TranslationReviewSheetProps) {
   const theme = useKalamTheme();
+  const t = useT();
   const labels = useMemo(() => (tr.original ? collectTranslatableLabels(tr.original) : []), [tr.original]);
   const name = languageLabel(tr.lang);
   const missing = useMemo(() => new Set(tr.missing), [tr.missing]);
@@ -27,10 +29,10 @@ export function TranslationReviewSheet({ visible, translation: tr, onClose, onEd
     <Sheet
       visible={visible}
       onClose={onClose}
-      title={`Review the ${name} labels`}
-      description="Tap a row to change its wording. Your changes are saved on this device."
+      title={t('runtime.translate.reviewTitle', { name })}
+      description={t('runtime.translate.reviewDescription')}
       maxWidth={560}
-      footer={<Button label="Done" onPress={onClose} />}
+      footer={<Button label={t('common.done')} onPress={onClose} />}
     >
       <View style={{ gap: 4, paddingBottom: 4 }}>
         {labels.map((label) => {
@@ -39,7 +41,7 @@ export function TranslationReviewSheet({ visible, translation: tr, onClose, onEd
             <Pressable
               key={label.key}
               role="button"
-              accessibilityLabel={`Change ${label.where.toLowerCase()}: ${label.text}`}
+              accessibilityLabel={t('runtime.translate.changeRow', { where: label.where.toLowerCase(), text: label.text })}
               onPress={() => onEdit(label)}
               style={({ pressed }) => ({
                 minHeight: theme.touchTarget,
@@ -59,7 +61,7 @@ export function TranslationReviewSheet({ visible, translation: tr, onClose, onEd
                 {shown ? (
                   <Text weight="medium">{shown}</Text>
                 ) : (
-                  <Text tone={missing.has(label.key) ? 'warning' : 'muted'}>Not translated. The original shows.</Text>
+                  <Text tone={missing.has(label.key) ? 'warning' : 'muted'}>{t('runtime.translate.notTranslated')}</Text>
                 )}
               </View>
               <Pencil size={16} color={theme.colors.textMuted} strokeWidth={2} />

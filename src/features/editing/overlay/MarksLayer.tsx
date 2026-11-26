@@ -1,6 +1,6 @@
 /**
  * What the overlay understood, drawn over the app: faint outlines on every part that can be
- * marked, a marigold highlight with a name tag on picked parts, and a highlighter wash on parts a
+ * marked, a sindoor outline with a name tag on picked parts, and a highlighter wash on parts a
  * proposed change touched. Never takes touches.
  */
 import { StyleSheet, View } from 'react-native';
@@ -34,7 +34,7 @@ export function MarksLayer({ parts, picked, changed, names, outlines, reduced }:
               key={`pick:${p.id}`}
               entering={reduced ? undefined : FadeIn.duration(160)}
               exiting={reduced ? undefined : FadeOut.duration(110)}
-              style={[styles.box, box, { borderRadius: radius.md, borderWidth: 2, borderColor: colors.accent, backgroundColor: withAlpha(colors.accent, 0.16) }]}
+              style={[styles.box, box, { borderRadius: radius.md, borderWidth: 2, borderColor: colors.mark, backgroundColor: withAlpha(colors.mark, 0.1) }]}
             >
               {tag ? (
                 <View style={[styles.tag, { backgroundColor: colors.primary, top: box.top >= TAG_HEIGHT + 2 ? -(TAG_HEIGHT + 4) : 4 }]}>

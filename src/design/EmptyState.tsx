@@ -23,7 +23,7 @@ export function EmptyState({ title, description, illustration, action, children,
     <View style={{ gap: 16, alignItems: items, paddingVertical: 24 }}>
       {illustration}
       <View style={{ gap: 6, maxWidth: 560, alignItems: items }}>
-        <Text variant="h3" align={align === 'center' ? 'center' : 'left'}>{title}</Text>
+        <Text variant="h3" level={2} align={align === 'center' ? 'center' : 'left'}>{title}</Text>
         <Text tone="secondary" align={align === 'center' ? 'center' : 'left'}>{description}</Text>
       </View>
       {action}

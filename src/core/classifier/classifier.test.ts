@@ -137,3 +137,80 @@ describe('classifyRequest behaviour', () => {
     expect(Math.min(...batches)).toBeLessThan(2);
   });
 });
+
+describe('what is asked for decides the level, not the input type (docs/07 §3.2)', () => {
+  const drawing = (pages: number, buttons: number, extra = 0): NormalizedInput => ({
+    text: '', modalities: ['drawing'], images: [],
+    drawing: {
+      drawingId: 'd', pageCount: pages, texts: ['Customers', 'Payments', 'Orders'], images: [],
+      elements: [
+        ...Array.from({ length: buttons }, () => ({ kind: 'stamp:bigButton', page: 0, bbox: [0, 0, 1, 1] as [number, number, number, number] })),
+        ...Array.from({ length: extra }, () => ({ kind: 'stamp:textInput', page: 0, bbox: [0, 0, 1, 1] as [number, number, number, number] })),
+      ],
+    },
+  });
+  const video = (frames: number, summary?: string, extra: Partial<NormalizedInput> = {}): NormalizedInput => ({
+    text: '', modalities: ['video'], images: [],
+    video: { frames: Array.from({ length: frames }, (_, i) => img(i, 'video_frame')), durationSec: 30, ...(summary ? { summary } : {}) },
+    ...extra,
+  });
+
+  it('a small Studio sketch is simple but still reads with cloud vision', () => {
+    const r = classifyRequest(drawing(1, 4, 3));
+    expect(r).toMatchObject({ complexity: 'simple', taskType: 'interpret_sketch', requiresCloudReasoning: true, requiresMultimodalReasoning: true });
+    expect(r.matchingTemplate).toBeUndefined();
+    expect(classifyRequest(drawing(2, 1, 4)).complexity).toBe('simple'); // a form and its list
+  });
+
+  it('sketch size comes from screens, actions and parts; its labels never raise it', () => {
+    expect(classifyRequest(drawing(2, 2)).complexity).toBe('medium');
+    expect(classifyRequest(drawing(3, 1)).complexity).toBe('medium');
+    expect(classifyRequest(drawing(1, 4, 12)).complexity).toBe('medium'); // many parts on one page
+    expect(classifyRequest(drawing(5, 3)).complexity).toBe('complex');
+    expect(classifyRequest(drawing(1, 1)).reasons.join(' ')).not.toMatch(/kinds of records/);
+  });
+
+  it('a sketch with a typed instruction is at least medium; heavy words make it complex', () => {
+    expect(classifyRequest({ ...drawing(1, 2), text: 'use rupees', modalities: ['drawing', 'text'] }).complexity).toBe('medium');
+    const crm = 'A CRM for my sales team with leads, deals, follow-up workflow and dashboards';
+    expect(classifyRequest({ ...drawing(1, 2), text: crm, modalities: ['drawing', 'text'] }).complexity).toBe('complex');
+  });
+
+  it('a photo hides its structure, so it starts at medium; more than four photos is complex', () => {
+    const photos = (n: number): NormalizedInput => ({ text: '', modalities: ['image'], images: Array.from({ length: n }, (_, i) => img(i, 'photo')) });
+    expect(classifyRequest(photos(1)).complexity).toBe('medium');
+    expect(classifyRequest(photos(5)).complexity).toBe('complex');
+  });
+
+  it('video frames are samples of one clip, not images', () => {
+    expect(classifyRequest(video(12)).complexity).toBe('medium');
+    expect(classifyRequest(video(8, 'A walkthrough of a shop stock app: item list, add item form and a low stock list.')).complexity).toBe('medium');
+    expect(classifyRequest(video(3, 'A tour of a clinic system with patients, doctors, appointments, billing and reports for admin and doctor logins.')).complexity).toBe('complex');
+    // The same frames sent as images beside the clip are still the clip.
+    expect(classifyRequest(video(6, undefined, { images: Array.from({ length: 6 }, (_, i) => img(i, 'video_frame')) })).complexity).toBe('medium');
+  });
+});
+
+describe('links and ordinary reports are medium; heavy signals make complex (docs/07 §3.1)', () => {
+  const level = (t: string) => classifyRequest({ text: t, modalities: ['text'], images: [] }).complexity;
+
+  it('a voice attendance register with a monthly summary is medium', () => {
+    expect(classifyRequest({ text: '', audioTranscript: 'attendance register for my tuition class where each student is present or absent and I can see a monthly summary', modalities: ['audio'], images: [] }).complexity).toBe('medium');
+  });
+
+  it('records with a history or a monthly report stay medium', () => {
+    expect(level('Clinic app with patients, doctors, appointments and visit history')).toBe('medium');
+    expect(level("Student fee register: each student's fees paid and pending, with a monthly report")).toBe('medium');
+  });
+
+  it('roles, workflows and whole systems stay complex', () => {
+    expect(level('ERP for my factory')).toBe('complex');
+    expect(level('Hospital app where patients book appointments, doctors approve them, then the pharmacy dispenses medicines and billing generates invoices automatically')).toBe('complex');
+    expect(level('Tailor shop with admin and staff logins, roles and permissions, customers, orders and payments')).toBe('complex');
+  });
+
+  it('a tuition class is not a fee', () => {
+    const r = classifyRequest({ text: 'attendance for my tuition class', modalities: ['text'], images: [] });
+    expect(r.estimatedCollections).toBeLessThanOrEqual(1);
+  });
+});

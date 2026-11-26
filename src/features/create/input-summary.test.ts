@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { answersToText, inputParts, inputSummary, joinParts } from './input-summary';
+import { loadCatalogue } from '@/i18n/catalogue';
+import { createTranslator } from '@/i18n/translator';
+
+import { answersToText, inputParts, inputPartsT, inputSummary, joinParts, sentenceCase } from './input-summary';
 
 const img = (id: string) => ({ id, width: 10, height: 10, source: 'photo' as const, mimeType: 'image/jpeg' as const, base64: '' });
 const base = { text: '', photos: [], voice: undefined, video: undefined, drawing: undefined };
@@ -27,6 +30,28 @@ describe('input summary', () => {
     const d = { ...base, text: '  ', voice: { transcript: ' ', recognizedBy: 'typed' as const }, photos: [img('a')] };
     expect(inputParts(d)).toEqual(['1 photo']);
     expect(joinParts(['text', 'voice'])).toBe('text and voice');
+  });
+
+  it('says the same parts in the UI language', () => {
+    const { t, format } = createTranslator('en', { warn: false });
+    const d = {
+      text: 'A ledger', photos: [img('a')], voice: undefined, video: undefined,
+      drawing: { title: 'Sketch', summary: { drawingId: 'd', pageCount: 3, elements: [], texts: [], images: [] } },
+    };
+    expect(inputPartsT(d, t)).toEqual(['text', '1 photo', 'a 3-screen drawing']);
+    expect(sentenceCase(format.list(inputPartsT(d, t)))).toBe('Text, 1 photo and a 3-screen drawing');
+    expect(sentenceCase('')).toBe('');
+    expect(sentenceCase('फ़ोटो')).toBe('फ़ोटो');
+  });
+
+  it('says them in Hindi too, with no English left', async () => {
+    await loadCatalogue('hi');
+    const { t } = createTranslator('hi', { warn: false });
+    const d = { ...base, text: 'A ledger', photos: [img('a'), img('b')], voice: { transcript: 'नाम', recognizedBy: 'typed' as const } };
+    const parts = inputPartsT(d, t);
+    expect(parts).toHaveLength(3);
+    for (const p of parts) expect(p).toMatch(/[ऀ-ॿ]/);
+    expect(parts.join(' ')).not.toMatch(/text|voice|photo/i);
   });
 });
 

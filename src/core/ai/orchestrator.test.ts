@@ -4,8 +4,9 @@ import {
   type InferenceEvent, type InferenceMode, type KalamSettings, type OnDeviceStatus, type StructuredRequest, type TaskType,
 } from '../contracts';
 import { SCHEMA_VERSION } from '../spec/schema';
-import { backoffDelay } from './limits';
-import { promptVersionFor } from './model-config';
+import { installTelemetry, type Telemetry } from '../telemetry';
+import { backoffDelay, INPUT_LIMITS } from './limits';
+import { MAX_OUTPUT_TOKENS, promptVersionFor } from './model-config';
 import { createOrchestrator, detectPlatform, type OrchestratorDeps } from './orchestrator';
 import { TASK_POLICIES } from './routing';
 
@@ -122,14 +123,16 @@ describe('routing matrix (task × mode × consent × online × device × complex
     if (firstFails && fallbackAllowed) {
       expect(fellBack).toBe(true);
       expect(res).toMatchObject({ success: true, source: 'cloud', fallbackUsed: true });
-      expect(h.events[0]!.escalationReason).toContain('one Firebase cloud fallback');
+      expect(h.events.at(-1)!.escalationReason).toContain('one Firebase cloud fallback');
     } else {
       expect(fellBack).toBe(false);
     }
-    // Exactly one event per run, and its success matches the result.
-    expect(h.events).toHaveLength(1);
-    expect(h.events[0]!.success).toBe(res.success);
-    expect(res.eventId).toBe(h.events[0]!.id);
+    // One event per model leg: the failed device attempt and the fallback share a taskId. The last
+    // event is the result's, and its success matches.
+    expect(h.events).toHaveLength(fellBack ? 2 : 1);
+    if (fellBack) expect(h.events[0]).toMatchObject({ source: 'on_device', success: false, taskId: h.events[1]!.taskId });
+    expect(h.events.at(-1)!.success).toBe(res.success);
+    expect(res.eventId).toBe(h.events.at(-1)!.id);
   });
 });
 
@@ -148,6 +151,18 @@ describe('orchestrator', () => {
     expect(res).toMatchObject({ success: false, provider: 'none', errorCode: 'offline' });
     expect(h.firebase.calls).toHaveLength(0);
     expect(h.events[0]).toMatchObject({ success: false, provider: 'none', errorCode: 'offline' });
+  });
+
+  it('holds cloud work back while Connectivity says the cloud is unreachable, though the platform is online (D09-030)', async () => {
+    let reachable = false;
+    const network = { online: () => true, subscribe: () => () => {}, can: () => reachable };
+    const h = harness({ extra: { network } });
+    expect(await h.ai.status()).toMatchObject({ online: false });
+    expect(await h.ai.run(req('only_in_cloud'), { taskType: 'create_app' })).toMatchObject({ success: false, provider: 'none', errorCode: 'offline' });
+    expect(h.firebase.calls).toHaveLength(0);
+    reachable = true;
+    expect(await h.ai.status()).toMatchObject({ online: true });
+    expect((await h.ai.run(req('only_in_cloud'), { taskType: 'create_app' })).success).toBe(true);
   });
 
   it('clamps to only_on_device offline and counts user-facing on-device actions', async () => {
@@ -245,11 +260,44 @@ describe('orchestrator', () => {
     }
   });
 
-  it('turns a throwing provider into a recorded failure', async () => {
-    const h = harness({ firebaseScript: ['throw', 'throw', 'throw'] });
+  it('turns a throwing provider into one recorded failure, never retried', async () => {
+    const h = harness({ firebaseScript: ['throw', 'ok'] });
     const res = await h.ai.run(req('only_in_cloud'), { taskType: 'create_app' });
     expect(res).toMatchObject({ success: false, errorCode: 'provider_error', errorMessage: 'boom' });
-    expect(h.events[0]!.success).toBe(false);
+    expect(h.firebase.calls).toHaveLength(1);
+    expect(h.events[0]).toMatchObject({ success: false, retries: 0 });
+  });
+
+  it('never retries the on-device leg, so the deterministic fallback does not wait twice', async () => {
+    for (const code of ['timeout', 'provider_error', 'quota'] as const) {
+      const strict = harness({ firebaseScript: [code, 'ok'] });
+      expect((await strict.ai.run(req('only_on_device'), { taskType: 'classify' })).errorCode).toBe(code);
+      expect(strict.firebase.calls).toHaveLength(1);
+      const tpl = harness({ firebaseScript: [code, 'ok'] });
+      expect((await tpl.ai.run(req('prefer_on_device'), { taskType: 'extract_template_params' })).errorCode).toBe(code);
+      expect(tpl.firebase.calls).toHaveLength(1);
+      expect(tpl.events[0]!.retries).toBe(0);
+    }
+  });
+
+  it('refuses oversized input before any provider call (docs/07 §16.2 prompt length limits)', async () => {
+    const h = harness();
+    const long = await h.ai.run({ ...req('only_in_cloud'), prompt: 'x'.repeat(INPUT_LIMITS.textChars + 1) }, { taskType: 'create_app' });
+    expect(long).toMatchObject({ success: false, provider: 'none', errorCode: 'bad_request' });
+    expect(long.errorMessage).toMatch(/too much for the AI/);
+    const images = Array.from({ length: INPUT_LIMITS.images + 1 }, () => ({ mimeType: 'image/png' as const, base64: 'AAAA' }));
+    expect((await h.ai.run({ ...req('only_in_cloud'), images }, { taskType: 'interpret_sketch' })).errorCode).toBe('bad_request');
+    expect(h.firebase.calls).toHaveLength(0);
+    expect(h.events[0]).toMatchObject({ errorCode: 'bad_request', escalationReason: expect.stringContaining('the limit is 300000') });
+    expect(h.events[0]!.escalationReason).not.toContain('xxx');
+  });
+
+  it('gives every call an output token cap for its role (docs/07 §16.2 output token limits)', async () => {
+    const h = harness();
+    await h.ai.run(req('only_in_cloud'), { taskType: 'create_app' });
+    await h.ai.run({ ...req('only_in_cloud'), maxOutputTokens: 500 }, { taskType: 'plan_app' });
+    await h.ai.run({ ...req('only_in_cloud'), maxOutputTokens: 1_000_000, prompt: 'other' }, { taskType: 'summarize' });
+    expect(h.firebase.calls.map((c) => c.maxOutputTokens)).toEqual([MAX_OUTPUT_TOKENS.compiler, 500, MAX_OUTPUT_TOKENS.ai_block]);
   });
 
   it('never fails a run because event storage failed, and never mutates the request', async () => {
@@ -292,6 +340,11 @@ describe('status time-box and warm-up', () => {
     expect(s.cloudConfigured).toBe(true);
   });
 
+  it('a slow status check still names the platform it runs on (iOS, never "other")', async () => {
+    const ai = createOrchestrator({ ...deps({ ...base, onDeviceStatus: () => new Promise<OnDeviceStatus>(() => {}) }), platform: 'ios' });
+    expect((await ai.status()).onDevice).toMatchObject({ platform: 'ios', availability: 'unknown' });
+  });
+
   it('warmUpOnDevice delegates to the provider and never throws', async () => {
     let warmed = 0;
     const ok = createOrchestrator(deps({
@@ -313,12 +366,27 @@ describe('status time-box and warm-up', () => {
 });
 
 describe('one Firebase cloud fallback after an on-device failure (lead decision 2)', () => {
-  it('falls back once for eligible tasks, records it, and never cascades', async () => {
+  it('falls back once for eligible tasks, records both legs, and never cascades', async () => {
     const h = harness({ firebaseScript: ['timeout', 'provider_error', 'ok'] });
     const res = await h.ai.run(req('prefer_on_device'), { taskType: 'classify' });
     expect(res).toMatchObject({ success: false, errorCode: 'provider_error', source: 'cloud' });
     expect(h.firebase.calls.map((c) => c.mode)).toEqual(['prefer_on_device', 'only_in_cloud']);
-    expect(h.events[0]).toMatchObject({ success: false, escalationReason: expect.stringContaining('on-device failed (timeout)') });
+    // The failed device attempt is its own event, so on-device metrics count it; a fallback is not a retry.
+    expect(h.events).toHaveLength(2);
+    expect(h.events[0]).toMatchObject({ source: 'on_device', route: 'on_device', provider: 'firebase', success: false, errorCode: 'timeout', retries: 0 });
+    expect(h.events[1]).toMatchObject({
+      source: 'cloud', success: false, retries: 0, taskId: h.events[0]!.taskId,
+      escalationReason: expect.stringContaining('on-device failed (timeout); one Firebase cloud fallback'),
+    });
+    expect(res.eventId).toBe(h.events[1]!.id);
+  });
+
+  it('a successful fallback counts no retry and no on-device action', async () => {
+    const h = harness({ firebaseScript: ['invalid_output', 'ok'] });
+    const res = await h.ai.run(req('prefer_on_device'), { taskType: 'summarize' });
+    expect(res).toMatchObject({ success: true, source: 'cloud', fallbackUsed: true });
+    expect(h.events.map((e) => [e.source, e.success, e.retries])).toEqual([['on_device', false, 0], ['cloud', true, 0]]);
+    expect(h.settings().onDeviceActionCount).toBe(0);
   });
 
   it('never falls back for template parameters, only_on_device or cancelled runs', async () => {
@@ -421,6 +489,51 @@ describe('backoff and the client token bucket', () => {
     }
   });
 
+  it('fits every attempt of a run into twice its timeout (per-task budget, docs/07 §16.2)', async () => {
+    let t = 0;
+    const timeouts: Array<number | undefined> = [];
+    /** Each call takes `ms` of the clock (at most its own timeout) and then fails with `code`. */
+    const clockProvider = (ms: number, code: AIErrorCode): AIProvider => ({
+      name: 'firebase', isConfigured: () => true,
+      onDeviceStatus: async () => ({ platform: 'web', apiExposed: true, availability: 'available' }),
+      async generateStructured<T>(r: StructuredRequest<T>): Promise<AIExecutionResult<T>> {
+        timeouts.push(r.timeoutMs);
+        t += Math.min(ms, r.timeoutMs ?? ms);
+        return { success: false, provider: 'firebase', source: 'cloud', latencyMs: ms, fallbackUsed: false, errorCode: code };
+      },
+    });
+    const run = async (ms: number, code: AIErrorCode) => {
+      t = 0;
+      timeouts.length = 0;
+      const h = harness({ firebase: clockProvider(ms, code), extra: { now: () => t } });
+      const res = await h.ai.run({ ...req('only_in_cloud'), timeoutMs: 10_000 }, { taskType: 'create_app' });
+      return { res, event: h.events.at(-1)! };
+    };
+    // 8 s per failure: two retries fit, the last gets only the 4 s that are left.
+    expect((await run(8_000, 'provider_error')).event.retries).toBe(2);
+    expect(timeouts).toEqual([10_000, 10_000, 4_000]);
+    expect(t).toBeLessThanOrEqual(20_000);
+    // 9.5 s per failure: after two calls only 1 s is left, too little to start a third.
+    const tight = await run(9_500, 'provider_error');
+    expect(timeouts).toHaveLength(2);
+    expect(tight.event).toMatchObject({ retries: 1, escalationReason: expect.stringContaining('run time budget spent') });
+    // A timeout gets its one retry inside the budget.
+    await run(10_000, 'timeout');
+    expect(timeouts).toEqual([10_000, 10_000]);
+    // A caller that says a timeout is not worth repeating (compile and repair, D13 s25 and mx03) gets one call, and the other codes keep theirs.
+    t = 0;
+    timeouts.length = 0;
+    const slow = harness({ firebase: clockProvider(10_000, 'timeout'), extra: { now: () => t } });
+    const done = await slow.ai.run({ ...req('only_in_cloud'), timeoutMs: 10_000, maxRetries: { timeout: 0 } }, { taskType: 'create_app' });
+    expect(done.errorCode).toBe('timeout');
+    expect(timeouts).toEqual([10_000]);
+    expect(slow.events.at(-1)).toMatchObject({ retries: 0 });
+    timeouts.length = 0;
+    const flaky = harness({ firebase: clockProvider(1_000, 'provider_error'), extra: { now: () => t } });
+    await flaky.ai.run({ ...req('only_in_cloud'), timeoutMs: 10_000, maxRetries: { timeout: 0 } }, { taskType: 'create_app' });
+    expect(timeouts).toHaveLength(3);
+  });
+
   it('stops retrying when the caller cancels during the backoff wait', async () => {
     const ac = new AbortController();
     const h = harness({ firebaseScript: ['provider_error', 'ok'], extra: { retryDelayMs: () => 60_000 } });
@@ -477,6 +590,26 @@ function slowProvider() {
     },
   };
   return { provider, calls, release: () => releases.splice(0).forEach((r) => r()) };
+}
+
+/** A cloud provider whose model answers each call with the next raw JSON value. */
+function rawProvider(raws: unknown[]) {
+  const calls: Array<StructuredRequest<unknown>> = [];
+  const queue = [...raws];
+  const provider: AIProvider = {
+    name: 'firebase',
+    isConfigured: () => true,
+    onDeviceStatus: async () => ({ platform: 'web', apiExposed: true, availability: 'unavailable' }),
+    async generateStructured<T>(r: StructuredRequest<T>): Promise<AIExecutionResult<T>> {
+      calls.push(r as StructuredRequest<unknown>);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const parsed = r.parse(queue.length > 1 ? queue.shift() : queue[0]);
+      return parsed.success
+        ? { success: true, output: parsed.data, provider: 'firebase', source: 'cloud', model: 'm', latencyMs: 1, fallbackUsed: false }
+        : { success: false, provider: 'firebase', source: 'cloud', model: 'm', latencyMs: 1, fallbackUsed: false, errorCode: 'invalid_output', errorMessage: parsed.error };
+    },
+  };
+  return { provider, calls };
 }
 
 describe('request de-duplication (docs/07 §16.2, docs/17 §6.1)', () => {
@@ -587,17 +720,94 @@ describe('answer reuse (docs/07 §16.2, docs/00 §29)', () => {
   });
 
   it('checks a stored answer with the caller parser again and treats a mismatch as a miss', async () => {
-    const h = harness();
+    const model = rawProvider([{ answer: 'yes' }, { reply: 'yes' }]);
+    const h = harness({ firebase: model.provider });
     const old: StructuredRequest<{ answer: string }> = { ...req('prefer_on_device'), parse: () => ({ success: true, data: { answer: 'old' } }) };
     await h.ai.run(old, { taskType: 'translate' });
     const current: StructuredRequest<{ answer: string }> = {
       ...req('prefer_on_device'),
-      parse: (raw) => ((raw as { answer?: unknown }).answer === 'yes' ? { success: true, data: { answer: 'yes' } } : { success: false, error: 'old shape' }),
+      parse: (raw) => ((raw as { reply?: unknown }).reply === 'yes' ? { success: true, data: { answer: 'yes' } } : { success: false, error: 'old shape' }),
     };
     const res = await h.ai.run(current, { taskType: 'translate' });
-    expect(h.firebase.calls).toHaveLength(2);
+    expect(model.calls).toHaveLength(2);
     expect(res).toMatchObject({ success: true, output: { answer: 'yes' } });
     expect(h.events.some((e) => e.cacheHit)).toBe(false);
+  });
+
+  // The real parsers reshape the model's JSON (an AI step writes its own output field, translation
+  // returns {strings, rejected}, photo extraction joins the unsure list). The cache keeps the raw JSON.
+  it('reuses answers with parsers that reshape the output: classify into a named field', async () => {
+    const model = rawProvider([{ label: 'Dairy' }]);
+    const h = harness({ firebase: model.provider });
+    const into = (field: string): StructuredRequest<Record<string, string>> => ({
+      ...req('prefer_on_device'),
+      parse: (raw) => {
+        const label = (raw as { label?: unknown } | null)?.label;
+        return typeof label === 'string' ? { success: true, data: { [field]: label } } : { success: false, error: 'no label' };
+      },
+    });
+    expect((await h.ai.run(into('category'), { taskType: 'classify', appId: 'a' })).output).toEqual({ category: 'Dairy' });
+    expect(await h.ai.run(into('category'), { taskType: 'classify', appId: 'a' })).toMatchObject({ success: true, output: { category: 'Dairy' } });
+    // Another step with the same prompt and labels but its own field gets its own shape from the same answer.
+    expect((await h.ai.run(into('kind'), { taskType: 'classify', appId: 'a' })).output).toEqual({ kind: 'Dairy' });
+    expect(model.calls).toHaveLength(1);
+    expect(h.events.map((e) => e.cacheHit)).toEqual([false, true, true]);
+  });
+
+  it('reuses a translation whose parser returns {strings, rejected}', async () => {
+    const model = rawProvider([{ title: 'Hola', save: 'Save' }]);
+    const h = harness({ firebase: model.provider });
+    const translate: StructuredRequest<{ strings: Record<string, string>; rejected: string[] }> = {
+      ...req('prefer_on_device'),
+      parse: (raw) => {
+        const o = raw as Record<string, unknown>;
+        if (!o || typeof o !== 'object' || Object.keys(o).some((k) => k !== 'title' && k !== 'save')) return { success: false, error: 'added keys' };
+        const strings = Object.fromEntries(Object.entries(o).filter(([k, v]) => typeof v === 'string' && !(k === 'save' && v === 'Save'))) as Record<string, string>;
+        return { success: true, data: { strings, rejected: Object.keys(o).filter((k) => !(k in strings)) } };
+      },
+    };
+    const first = await h.ai.run(translate, { taskType: 'translate', appId: 'a' });
+    const again = await h.ai.run(translate, { taskType: 'translate', appId: 'a' });
+    expect(first.output).toEqual({ strings: { title: 'Hola' }, rejected: ['save'] });
+    expect(again).toMatchObject({ success: true, output: first.output });
+    expect(model.calls).toHaveLength(1);
+  });
+
+  it('a repeated photo keeps its uncertain-field flags (docs/16 R-016)', async () => {
+    const model = rawProvider([{ amount: 12, payee: 'Asha', _unsure: ['payee'] }]);
+    const h = harness({ firebase: model.provider });
+    const extract: StructuredRequest<Record<string, unknown>> = {
+      ...req('prefer_on_device'),
+      images: [{ mimeType: 'image/jpeg', base64: 'AAAA' }],
+      parse: (raw) => {
+        const { _unsure: unsure, ...fields } = raw as Record<string, unknown>;
+        return { success: true, data: Array.isArray(unsure) ? { ...fields, _unsure: unsure.join(',') } : fields };
+      },
+    };
+    const first = await h.ai.run(extract, { taskType: 'extract_data', appId: 'a' });
+    const again = await h.ai.run(extract, { taskType: 'extract_data', appId: 'a' });
+    expect(first.output).toEqual({ amount: 12, payee: 'Asha', _unsure: 'payee' });
+    expect(again.output).toEqual(first.output);
+    expect(model.calls).toHaveLength(1);
+  });
+
+  it('identical requests in flight each get their own parser on the shared answer', async () => {
+    const model = rawProvider([{ label: 'Dairy' }]);
+    const h = harness({ firebase: model.provider });
+    const into = (field: string): StructuredRequest<Record<string, string>> => ({
+      ...req('only_in_cloud'),
+      parse: (raw) => ({ success: true, data: { [field]: String((raw as { label?: unknown }).label) } }),
+    });
+    const strict: StructuredRequest<Record<string, string>> = { ...req('only_in_cloud'), parse: () => ({ success: false, error: 'wrong shape' }) };
+    const [a, b, c] = await Promise.all([
+      h.ai.run(into('category'), { taskType: 'create_app' }),
+      h.ai.run(into('kind'), { taskType: 'create_app' }),
+      h.ai.run(strict, { taskType: 'create_app' }),
+    ]);
+    expect(model.calls).toHaveLength(1);
+    expect(a.output).toEqual({ category: 'Dairy' });
+    expect(b.output).toEqual({ kind: 'Dairy' });
+    expect(c).toMatchObject({ success: false, errorCode: 'invalid_output' });
   });
 
   it('persists answers through db.aiCache and reads them back in a later session', async () => {
@@ -606,6 +816,8 @@ describe('answer reuse (docs/07 §16.2, docs/00 §29)', () => {
     await one.ai.run(req('prefer_on_device'), { taskType: 'extract_data', appId: 'a' });
     await settle();
     expect(store.data.size).toBe(1);
+    // The raw model JSON is stored with its app, so an app-scoped purge can find it.
+    expect([...store.data.values()][0]).toMatchObject({ v: 2, raw: { answer: 'yes' }, appId: 'a' });
     const two = harness({ extra: { aiCache: store } });
     const res = await two.ai.run(req('prefer_on_device'), { taskType: 'extract_data', appId: 'a' });
     expect(res).toMatchObject({ success: true, output: { answer: 'yes' } });
@@ -618,6 +830,43 @@ describe('answer reuse (docs/07 §16.2, docs/00 §29)', () => {
     await h.ai.run(req('prefer_on_device'), { taskType: 'classify' });
     await h.ai.run(req('prefer_on_device'), { taskType: 'classify' });
     expect(h.firebase.calls).toHaveLength(2);
+  });
+});
+
+describe('opt-in local counters (docs/14 §30)', () => {
+  const counted: Array<[string, unknown]> = [];
+  const install = () => {
+    counted.length = 0;
+    installTelemetry({ count: async (event: string, dimension: unknown) => { counted.push([event, dimension]); } } as unknown as Telemetry);
+  };
+
+  it('counts a finished run by its source and a reused answer not at all', async () => {
+    install();
+    try {
+      // The counters are tested apart from the benchmark gate (a recorded run can keep a task off the device).
+      const h = harness({ extra: { platform: 'web', localReady: () => 'unproven' } });
+      await h.ai.run(req('prefer_on_device'), { taskType: 'classify' });
+      await h.ai.run(req('prefer_on_device'), { taskType: 'classify' }); // answered from the reuse cache
+      await settle();
+      expect(h.events.map((e) => e.cacheHit === true)).toEqual([false, true]);
+      expect(counted.filter(([e]) => e === 'ai_source')).toEqual([['ai_source', 'on_device']]);
+    } finally {
+      installTelemetry(undefined);
+    }
+  });
+
+  it('counts a failure by its stable code, and leaves out what the person chose', async () => {
+    install();
+    try {
+      const failing = harness({ firebaseScript: ['bad_request'] });
+      await failing.ai.run(req('only_in_cloud'), { taskType: 'classify' });
+      const cloudOff = harness({ settings: { allowCloud: false } });
+      await cloudOff.ai.run(req('only_in_cloud'), { taskType: 'classify' });
+      await settle();
+      expect(counted.filter(([e]) => e === 'error')).toEqual([['error', 'bad_request']]);
+    } finally {
+      installTelemetry(undefined);
+    }
   });
 });
 
@@ -641,6 +890,39 @@ describe('capability registry in routing (docs/07 §14.6)', () => {
     const o = await offline.ai.run({ ...req('prefer_on_device'), images: [png] }, { taskType: 'extract_data' });
     expect(o).toMatchObject({ success: false, errorCode: 'offline' });
     expect(o.errorMessage).toMatch(/cannot handle images/);
+  });
+
+  it('a recording never goes to the on-device model, on any platform (D00-026)', async () => {
+    const wav = { mimeType: 'audio/wav' as const, base64: 'UklGRg==' };
+    for (const platform of ['web', 'android', 'ios', 'other'] as const) {
+      const h = harness({ extra: { platform } });
+      const res = await h.ai.run({ ...req('prefer_on_device'), audio: [wav] }, { taskType: 'voice_action', sessionId: 'sess_a' });
+      expect(res.success).toBe(true);
+      expect(h.firebase.calls.map((c) => c.mode)).toEqual(['only_in_cloud']);
+      expect(h.events[0]!.escalationReason).toContain('on-device model lacks audio_input');
+      expect(h.events[0]!.sessionId).toBe('sess_a');
+    }
+    const strict = harness({ extra: { platform: 'web' } });
+    const r = await strict.ai.run({ ...req('only_on_device'), audio: [wav] }, { taskType: 'voice_action' });
+    expect(r).toMatchObject({ success: false, errorCode: 'unsupported_modality' });
+    expect(strict.firebase.calls).toHaveLength(0);
+    const tooMany = await harness().ai.run({ ...req('only_in_cloud'), audio: [wav, wav] }, { taskType: 'voice_action' });
+    expect(tooMany.errorCode).toBe('bad_request');
+  });
+
+  it('on iOS and any other runtime, images also skip the text-only device model', async () => {
+    for (const platform of ['ios', 'other'] as const) {
+      const h = harness({ extra: { platform } });
+      await h.ai.run({ ...req('prefer_on_device'), images: [png] }, { taskType: 'extract_data' });
+      expect(h.firebase.calls.map((c) => c.mode)).toEqual(['only_in_cloud']);
+    }
+  });
+
+  it('on iOS text still goes to the device model, and the event says ios', async () => {
+    const h = harness({ extra: { platform: 'ios' } });
+    await h.ai.run(req('prefer_on_device'), { taskType: 'classify' });
+    expect(h.firebase.calls[0]!.mode).toBe('prefer_on_device');
+    expect(h.events[0]!.platform).toBe('ios');
   });
 
   it('keeps routing unchanged where the registry allows the input', async () => {

@@ -4,12 +4,15 @@
  * Does NOT bump `version` / `meta.updatedAt` — the edit service / repository owns versioning.
  */
 import type { PatchResult, SpecIssue, SpecPatchOp } from '../contracts';
-import { FONT_FAMILIES, type KalamComponent, type KalamSpec } from '../spec/schema';
+import { limitsPolicy } from '../limits/policy';
+import { PERMISSION_REASON } from '../spec/copy';
+import { FONT_FAMILIES, type KalamComponent, type KalamScreen, type KalamSpec } from '../spec/schema';
 import { validateSpec } from '../spec/validate';
+import { moveInLayout, removeFromLayout, requiredPermissions } from '../spec/v11';
 import { parsePatchOp } from './ops';
 import { THEME_PRESET_TOKENS } from './presets';
 
-const MAX_OPS = 100;
+const MAX_OPS = limitsPolicy.spec.editOperations;
 const LOCKED_PROPERTIES = new Set(['id', 'type', 'constructor', 'prototype']);
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 const own = (obj: object, k: string): boolean => Object.prototype.hasOwnProperty.call(obj, k);
@@ -22,12 +25,25 @@ export function normalizeHex(value: string): string | undefined {
   return m ? `#${m[1]}${m[1]}${m[2]}${m[2]}${m[3]}${m[3]}`.toUpperCase() : undefined;
 }
 
-function findComponent(spec: KalamSpec, id: string): { children: KalamComponent[]; index: number } | undefined {
+function findComponent(spec: KalamSpec, id: string): { screen: KalamScreen; children: KalamComponent[]; index: number } | undefined {
   for (const s of spec.screens) {
     const index = s.children.findIndex((c) => c.id === id);
-    if (index >= 0) return { children: s.children, index };
+    if (index >= 0) return { screen: s, children: s.children, index };
   }
   return undefined;
+}
+
+/**
+ * Keeps `permissions` (KalamSpec 1.1) derived from the components after an edit added or removed a
+ * photo or a reminder: a kind still needed keeps its reason, a new one gets the fixed plain reason.
+ * An app without the section only gains it when an edit adds a reminder (already a 1.1 part).
+ */
+function syncPermissions(d: KalamSpec): void {
+  const needed = requiredPermissions(d);
+  if (!d.permissions && !needed.includes('notifications')) return;
+  const next = needed.map((kind) => d.permissions?.find((p) => p.kind === kind) ?? { kind, reason: PERMISSION_REASON[kind] });
+  if (next.length) d.permissions = next;
+  else delete d.permissions;
 }
 
 /** Applies one op to the draft in place. Returns an error message or undefined. */
@@ -82,11 +98,15 @@ function applyOne(d: KalamSpec, op: SpecPatchOp): string | undefined {
       const at = findComponent(d, op.component);
       if (!at) return `Component "${op.component}" does not exist`;
       at.children.splice(at.index, 1);
+      // A layout group may name it; an emptied group goes too (else the edit fails validation).
+      removeFromLayout(at.screen, op.component);
       return undefined;
     }
     case 'moveComponent': {
       const at = findComponent(d, op.component);
       if (!at) return `Component "${op.component}" does not exist`;
+      // Inside a group the order on screen comes from the layout, so that is what moves.
+      if (moveInLayout(at.screen, op.component, op.direction)) return undefined;
       const to = at.index + (op.direction === 'up' ? -1 : 1);
       if (to < 0 || to >= at.children.length) return undefined; // already at the edge
       const [moved] = at.children.splice(at.index, 1);
@@ -150,6 +170,7 @@ export function applyPatchOps(spec: KalamSpec, ops: readonly SpecPatchOp[]): Pat
     const problem = applyOne(draft, JSON.parse(JSON.stringify(parsed.data)) as SpecPatchOp);
     if (problem) return { ok: false, errors: [opError(i, 'PATCH_FAILED', problem)] };
   }
+  syncPermissions(draft);
   const result = validateSpec(draft);
   return result.ok ? { ok: true, spec: result.spec, errors: [] } : { ok: false, errors: result.errors };
 }

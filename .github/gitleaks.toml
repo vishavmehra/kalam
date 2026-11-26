@@ -33,3 +33,26 @@ paths = [
   '''(^|/)\.firebaserc\.example$''',
   '''\.github/gitleaks\.toml$''',
 ]
+
+# Reported by the scan on 2026-11-26 and checked by hand. Each entry names one file and the exact line shape, so a real
+# secret added to the same file still fails the scan (both the path and the text have to match).
+[[allowlists]]
+description = "Fake App Check debug token in the MCP Firebase test"
+condition = "AND"
+paths = ['''^mcp/test/firebase\.test\.ts$''']
+regexTarget = "line"
+regexes = ['''EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN: '11111111-2222-3333-4444-555555555555',''']
+
+[[allowlists]]
+description = "Storage key names in the Bazaar cache (the name of an AsyncStorage entry, not a secret)"
+condition = "AND"
+paths = ['''^src/infrastructure/bazaar/cache\.ts$''']
+regexTarget = "line"
+regexes = ['''const [A-Z_]+_KEY = 'kalam\.bazaar\.[a-z.]+\.v[0-9]+';''']
+
+[[allowlists]]
+description = "Sentinel text the data-minimisation test searches for in outgoing requests"
+condition = "AND"
+paths = ['''^tests/unit/data-minimisation\.test\.ts$''']
+regexTarget = "line"
+regexes = ['''const SECRET_TEXT = 'SENTINEL-secret-[0-9]+';''']

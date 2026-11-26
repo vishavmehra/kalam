@@ -1,3 +1,7 @@
+import type { KalamSpec } from '../spec/schema';
+import type { ChartComponent } from './chart-component';
+import { chartToReport, reportDefinitionSchema } from './definition';
+import { schemaErrors, validateReport } from './engine';
 export {
   CHART_KINDS, chartComponentSchema, reportFilterSchema, reportRangeSchema, TIME_UNITS,
   type ChartComponent, type ChartKind, type ReportFilter, type ReportRange, type TimeUnit,
@@ -10,7 +14,7 @@ export {
 } from './definition';
 export { formatPercent, formatValue, plainExplanation, reportToText } from './describe';
 export {
-  MAX_BUCKETS, MAX_GROUPS, percentChange, runReport, trendOf, validateReport,
+  MAX_BUCKETS, MAX_GROUPS, percentChange, runReport, schemaErrors, timeSplitFits, trendOf, validateReport,
   type ReportComparison, type ReportMetricInfo, type ReportOptions, type ReportOutcome, type ReportPoint,
   type ReportResult, type ReportRow, type ReportStatus,
 } from './engine';
@@ -19,10 +23,11 @@ export { barFractions, barPath, donutArcs, lineGeometry, niceMax, type DonutArc,
 export { createReportService, type ReportService, type ReportServiceDeps } from './service';
 export { buildReport, reportableFields, suggestReports, type ReportChoice } from './suggest';
 
-import type { KalamSpec } from '../spec/schema';
-import type { ChartComponent } from './chart-component';
-import { chartToReport } from './definition';
-import { validateReport } from './engine';
-
-/** Reference checks for a v1.1 chart component, for src/core/spec/validate.ts. Empty means valid. */
-export const validateChartComponent = (spec: KalamSpec, c: ChartComponent): string[] => validateReport(spec, chartToReport(c));
+/**
+ * Checks for a v1.1 chart component, for src/core/spec/validate.ts: the report it stands for must
+ * parse and its references must hold, so a chart that validates also renders. Empty means valid.
+ */
+export function validateChartComponent(spec: KalamSpec, c: ChartComponent): string[] {
+  const parsed = reportDefinitionSchema.safeParse(chartToReport(c));
+  return parsed.success ? validateReport(spec, parsed.data) : schemaErrors(parsed.error.issues);
+}

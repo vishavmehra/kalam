@@ -2,6 +2,7 @@ import { Check } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 
 import { Text, useKalamTheme, webData } from '@/design';
+import { pressOnSpace } from './keys';
 
 export interface ChoiceRowProps {
   label: string;
@@ -23,6 +24,7 @@ export function ChoiceRow({ label, description, selected, onPress, testID }: Cho
       accessibilityLabel={description ? `${label}. ${description}` : label}
       onPress={onPress}
       testID={testID}
+      {...pressOnSpace(onPress)}
       {...webData({ kPress: '', kHover: 'surface' })}
       style={{
         minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center', gap: theme.space[3],

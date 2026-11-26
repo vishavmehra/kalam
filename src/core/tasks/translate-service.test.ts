@@ -299,6 +299,40 @@ describe('translate service: validation of the model reply', () => {
   });
 });
 
+describe('translate service: terminology rules (docs/05 §9.7)', () => {
+  const labels = collectTranslatableLabels(spec);
+  const victim = labels.find((l) => l.kind === 'screen_title' && /^[A-Za-z]{4,}/.test(l.text)) as TranslatableLabel;
+  const word = /^[A-Za-z]{4,}/.exec(victim.text)?.[0] as string;
+  const withTerm = (term: Record<string, unknown>): KalamSpec => ({ ...spec, localization: { terminology: [{ term: word, ...term }] } }) as KalamSpec;
+
+  it('puts the word rules in the prompt as quoted data, and leaves the block out when there are none', async () => {
+    const ruled = withTerm({ keep: true });
+    const ai = createFakeAI({ respond: prefixing(ruled) });
+    await createTranslateService({ ai, cache: memoryCache() }).translateApp(ruled, 'hi');
+    expect(ai.calls[0].req.prompt).toContain(`keep exactly: ${JSON.stringify(word)}`);
+    const plain = createFakeAI({ respond: prefixing() });
+    await createTranslateService({ ai: plain, cache: memoryCache() }).translateApp(spec, 'hi');
+    expect(plain.calls[0].req.prompt).not.toContain('Word rules');
+  });
+
+  it('drops a translation that loses a word marked keep, and keeps the others', async () => {
+    const ruled = withTerm({ keep: true });
+    const ai = createFakeAI({ respond: prefixing(ruled, (k, t) => (k === victim.key ? 'अनुवाद बदला' : `अनुवाद ${t}`)) });
+    const r = await createTranslateService({ ai, cache: memoryCache() }).translateApp(ruled, 'hi');
+    expect(r.ok).toBe(true);
+    expect(r.missing).toContain(victim.key);
+    expect(r.strings).not.toHaveProperty(victim.key);
+  });
+
+  it('accepts the fixed translation and rejects a different one', async () => {
+    const ruled = withTerm({ translations: { hi: 'खाता' } });
+    const good = createFakeAI({ respond: prefixing(ruled, (k, t) => (k === victim.key ? `खाता ${t}` : `अनुवाद ${t}`)) });
+    expect((await createTranslateService({ ai: good, cache: memoryCache() }).translateApp(ruled, 'hi')).missing).not.toContain(victim.key);
+    const bad = createFakeAI({ respond: prefixing(ruled, (k, t) => (k === victim.key ? 'अनुवाद बही' : `अनुवाद ${t}`)) });
+    expect((await createTranslateService({ ai: bad, cache: memoryCache() }).translateApp(ruled, 'hi')).missing).toContain(victim.key);
+  });
+});
+
 describe('translate service: offline, consent and fallbacks', () => {
   it('says so and makes no call when offline with nothing saved', async () => {
     const ai = fakeAI({ online: false });

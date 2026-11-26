@@ -16,7 +16,8 @@ export interface InlineConfirmProps {
 
 /**
  * A question that sits inside the card or panel it belongs to, so a sheet never opens on top of a sheet.
- * Screen readers hear the question as it appears, because focus does not move.
+ * Screen readers hear the question once, through `announce`, because focus does not move. (An alert role as
+ * well would read it twice on the web, and iOS ignores that role when something appears.)
  */
 export function InlineConfirm({ title, message, confirmLabel, destructive, onConfirm, onCancel }: InlineConfirmProps) {
   const theme = useKalamTheme();
@@ -32,7 +33,6 @@ export function InlineConfirm({ title, message, confirmLabel, destructive, onCon
   };
   return (
     <View
-      accessibilityRole="alert"
       style={{ gap: theme.space[3], padding: theme.space[3], borderRadius: theme.radius.md, backgroundColor: theme.colors.surfaceAlt }}
     >
       <Text weight="semibold">{title}</Text>

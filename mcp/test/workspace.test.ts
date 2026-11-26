@@ -25,6 +25,8 @@ describe('workspace paths', () => {
   it('allows plain names only, directly inside the folder', () => {
     expect(resolveInWorkspace(ws, 'notes')).toBe(path.join(ws.root, 'notes.kalam.json'));
     expect(resolveInWorkspace(ws, 'my notes.kalam.json')).toBe(path.join(ws.root, 'my notes.kalam.json'));
+    // At most 96 characters with the suffix, as docs/18 section 6 says.
+    expect(resolveInWorkspace(ws, 'x'.repeat(85))).toBe(path.join(ws.root, `${'x'.repeat(85)}.kalam.json`));
     for (const bad of [
       '../notes', '..\\notes', 'sub/notes', 'sub\\notes', '/etc/passwd', 'C:\\Windows\\win', 'C:notes', '..',
       '.hidden', 'a..b', 'CON', 'nul.kalam.json', 'x'.repeat(90), 'notes\u0000', '%2e%2e/notes', 'notes.kalam.json/../../x',
@@ -76,8 +78,10 @@ describe('workspace paths', () => {
 
   it('registers the file tools only with a workspace', async () => {
     const client = await connect(createKalamServer({ workspace: ws }));
-    const names = (await client.listTools()).tools.map((t) => t.name);
-    expect(names).toEqual(expect.arrayContaining(['kalam_workspace_list', 'kalam_workspace_read', 'kalam_workspace_write']));
+    const tools = (await client.listTools()).tools;
+    expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(['kalam_workspace_list', 'kalam_workspace_read', 'kalam_workspace_write']));
+    // overwrite: true replaces a file, so hosts must treat the write as destructive.
+    expect(tools.find((t) => t.name === 'kalam_workspace_write')?.annotations?.destructiveHint).toBe(true);
     const list = data(await client.callTool({ name: 'kalam_workspace_list', arguments: {} }));
     expect(list.files.map((f: { name: string }) => f.name)).toContain('notes.kalam.json');
     const escape = await client.callTool({ name: 'kalam_workspace_write', arguments: { name: '../x', spec } });

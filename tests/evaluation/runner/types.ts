@@ -2,8 +2,8 @@
  * Shapes for the golden evaluation set and the metric report (docs/13 §6-9, §19).
  * No I/O: safe to import from Node scripts, Vitest and the dev-only /lab screen.
  */
-import type { ComplexityLevel, TaskType, TemplateId } from '@/core/contracts';
-import type { KalamComponentType, KalamFieldType } from '@/core/spec/schema';
+import type { CompileAttempt, ComplexityLevel, TaskType, TemplateId, UnderstandingSummary } from '@/core/contracts';
+import type { KalamComponentType, KalamFieldType, KalamSpec } from '@/core/spec/schema';
 
 export type GoldenLanguage = 'en' | 'hinglish' | 'hi';
 export type ModalityName = 'image' | 'audio' | 'video' | 'mixed';
@@ -188,6 +188,8 @@ export interface BuildResult {
   httpCalls?: number;
   errors: string[];
   warnings: number;
+  /** Cloud compile passes: the stage each stopped at and its exact validator codes (docs/13 §6.1, §21). */
+  attempts?: CompileAttempt[];
 }
 
 export interface CaseResult {
@@ -216,6 +218,13 @@ export interface CaseResult {
   needsAssets?: string;
   latencyMs: { classify: number; build: number; total: number };
   failures: string[];
+  /** Scoring-page material. Present when the run captured detail (scripts/eval.mjs always does). */
+  detail?: CaseDetail;
+  /** Live runs: requests, tokens and per-request latency attributed to this case. */
+  usage?: CaseUsage;
+  /** Added by scripts/eval-judge.mjs. Advice for the person scoring, never a human score. */
+  aiPreScore?: AIPreScore;
+  mayDisagree?: DisagreementRisk;
 }
 
 export interface Rate {
@@ -303,14 +312,40 @@ export interface EvalReport {
   failures: Array<{ id: string; dataset: Dataset; reasons: string[] }>;
   /** Failed checks per stage, so a failure is attributable to one stage (docs/13 §6.1). */
   failuresByStage: Record<string, number>;
+  /** Cloud compile passes that did not end valid, by stage and by validator code (docs/13 §21). Absent without cloud compiles. */
+  compileFailures?: { passes: number; byStage: Record<string, number>; byCode: Record<string, number> };
   /** Inference-source accounting from the orchestrator's events (docs/13 §9.2, §9.3). */
   hybrid: HybridSummary;
   /** docs/13 §9.1 scenarios A to E: what this run really exercised, and what it did not. */
   scenarios: ScenarioStatus[];
   /** Which golden labels a person has checked, and what still needs a person (docs/13 §7.3, §18). */
   humanReview: HumanReviewSummary;
+  /** Live runs: what the model requests used. Absent in deterministic runs. */
+  usage?: ReportUsage;
+  /** Set by scripts/eval-judge.mjs: how the AI pre-scores were made. */
+  judge?: JudgeSummary;
   cases: CaseResult[];
   notes: string[];
+}
+
+export interface ReportUsage {
+  httpCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  byModel: Record<string, { httpCalls: number; inputTokens: number; outputTokens: number }>;
+}
+
+export interface JudgeSummary {
+  model: string;
+  budget: number;
+  httpCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  scored: number;
+  failed: number;
+  notBuilt: number;
+  distribution: Record<Verdict, number>;
+  flaggedMayDisagree: number;
 }
 
 export interface HybridSummary {
@@ -356,4 +391,109 @@ export interface GateThresholds {
 export interface GateResult {
   pass: boolean;
   reasons: string[];
+}
+
+// ─── Review: what a person scores, the AI pre-score and the human scores ───────────────────────
+/** One verdict per case. Maps to the docs/13 §18.1 scale: wrong 0, partly right 1, right 2. */
+export type Verdict = 'correct' | 'partly' | 'wrong';
+export const VERDICTS: readonly Verdict[] = ['correct', 'partly', 'wrong'];
+
+/** What the person asked for, in a form the scoring page can show. Never contains pixels. */
+export interface ReviewInput {
+  kind: Dataset;
+  text?: string;
+  audioTranscript?: string;
+  untranscribedAudio?: boolean;
+  images?: { count: number; source: string };
+  video?: { frames: number; durationSec: number; summary?: string };
+  /** The golden sketch layout (stamps and text), so the page can draw it. */
+  sketch?: { title: string; pages: SketchPageDef[] };
+  /** A real photo was used instead of the layout. The file is not embedded (see the page's photo picker). */
+  photo?: { file: string; bytes: number };
+  /** Plain-English description of the media a person still has to supply. */
+  assetNote?: string;
+}
+
+export interface FormulaNote {
+  where: string;
+  label: string;
+  expr: string;
+}
+
+export interface DeterministicCheck {
+  id: string;
+  label: string;
+  status: 'pass' | 'fail' | 'info';
+  detail?: string;
+}
+
+/** Everything the scoring page needs about one case. Added to a report only when the runner captures detail. */
+export interface CaseDetail {
+  title: string;
+  tags: string[];
+  input: ReviewInput;
+  expected: GoldenExpected;
+  /** The golden case's own note, for example why it is ambiguous. */
+  goldenNote?: string;
+  /** Why nothing was built (no model call, placeholder media, too vague). */
+  notBuilt?: string;
+  spec?: KalamSpec;
+  understanding?: UnderstandingSummary;
+  formulas: FormulaNote[];
+  clarifications?: string[];
+  checks: DeterministicCheck[];
+}
+
+/** One model request of one case, attributed from the orchestrator's own event. */
+export interface UsageEvent {
+  taskType: string;
+  model?: string;
+  source: string;
+  success: boolean;
+  latencyMs: number;
+  errorCode?: string;
+  /** The provider's own error text, scrubbed of config values. Explains a failed request. */
+  errorMessage?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+}
+
+export interface CaseUsage {
+  /** Requests that really left the machine for this case (retries count). */
+  httpCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  events: UsageEvent[];
+}
+
+/** The AI's pre-score. It is advice for the person scoring, never a human score. */
+export interface AIPreScore {
+  /** null when the judge could not answer or nothing was built. */
+  score: Verdict | null;
+  reasons: string[];
+  confidence: number | null;
+  model?: string;
+  httpCalls?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  latencyMs?: number;
+  /** Why there is no score (nothing built, judge failed, budget used up). */
+  note?: string;
+}
+
+export interface DisagreementRisk {
+  /** True when the person may well score this case differently from the AI. */
+  flag: boolean;
+  reasons: string[];
+}
+
+/** The file the scoring page exports. */
+export interface HumanScoresFile {
+  schema: 'kalam-human-scores/1';
+  /** evaluationId of the report these scores belong to. */
+  evaluationId: string;
+  datasetHash?: string;
+  reviewer?: string;
+  exportedAt: string;
+  scores: Array<{ id: string; score: Verdict; note?: string }>;
 }

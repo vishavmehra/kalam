@@ -8,6 +8,7 @@ import { collectionFieldDefs, screenFieldDefs } from '../engine/fields';
 import { findScreen } from '../engine/state';
 import type { RuntimeTheme } from '../engine/theme';
 import type { AIProposal, ToastTone } from '../engine/types';
+import { useAppT } from '../use-app-t';
 import { EASE_OUT, font, NATIVE_DRIVER, Pressy, SourceBadge } from './kit';
 
 export interface ToastMessage { id: number; message: string; tone: ToastTone }
@@ -58,6 +59,7 @@ export function Toast({ toast, t, reduced }: { toast: ToastMessage | null; t: Ru
 export function AIReviewSheet({ proposal, spec, t, wide, onAccept, onDiscard }: {
   proposal: AIProposal | null; spec: KalamSpec; t: RuntimeTheme; wide: boolean; onAccept(): void; onDiscard(): void;
 }) {
+  const tr = useAppT(spec.lang);
   if (!proposal) return null;
   const block = spec.aiBlocks[proposal.blockId];
   const screen = findScreen(spec, proposal.screenId);
@@ -73,9 +75,7 @@ export function AIReviewSheet({ proposal, spec, t, wide, onAccept, onDiscard }: 
       onPress={onAccept}
       style={[styles.sheetBtn, { flex: 1, minHeight: Math.max(t.target, 52), borderRadius: t.radius, backgroundColor: t.colors.primary }]}
     >
-      <Text style={[font(t, 16, '600'), { color: t.colors.onPrimary }]}>
-        Fill in {entries.length} field{entries.length === 1 ? '' : 's'}
-      </Text>
+      <Text style={[font(t, 16, '600'), { color: t.colors.onPrimary }]}>{tr('runtime.sheet.fillIn', { count: entries.length })}</Text>
     </Pressy>
   );
   const discard = (
@@ -85,18 +85,18 @@ export function AIReviewSheet({ proposal, spec, t, wide, onAccept, onDiscard }: 
       onPress={onDiscard}
       style={[styles.sheetBtn, { flex: 1, minHeight: Math.max(t.target, 52), borderRadius: t.radius, borderWidth: Math.max(1, t.borderWidth), borderColor: t.colors.border }]}
     >
-      <Text style={[font(t, 16, '600'), { color: t.colors.text }]}>Discard</Text>
+      <Text style={[font(t, 16, '600'), { color: t.colors.text }]}>{tr('common.discard')}</Text>
     </Pressy>
   );
 
   return (
     <Modal transparent visible animationType="fade" onRequestClose={onDiscard} statusBarTranslucent>
       <View style={[styles.scrim, { backgroundColor: t.colors.scrim, justifyContent: wide ? 'center' : 'flex-end' }]}>
-        <Pressable accessibilityLabel="Discard suggestions" style={StyleSheet.absoluteFill} onPress={onDiscard} />
+        <Scrim onPress={onDiscard} />
         <View
           accessibilityViewIsModal
           role="dialog"
-          aria-label="Check the AI suggestions"
+          aria-label={tr('runtime.sheet.checkDialog')}
           style={[
             styles.sheet,
             {
@@ -110,21 +110,27 @@ export function AIReviewSheet({ proposal, spec, t, wide, onAccept, onDiscard }: 
           ]}
         >
           <Text accessibilityRole="header" style={[font(t, 20, '600', 1.3), { color: t.colors.text }]}>
-            Check before filling in
+            {tr('runtime.sheet.checkTitle')}
           </Text>
-          <SourceBadge t={t} source={proposal.source} detail={`${Math.round(proposal.latencyMs)} ms`} />
+          <SourceBadge t={t} source={proposal.source} detail={proposal.latencyMs > 0 ? `${Math.round(proposal.latencyMs)} ms` : undefined} />
           <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={{ gap: 2 }}>
             {entries.map(([field, value]) => (
               <View key={field} style={[styles.kv, { borderBottomColor: t.colors.border }]}>
                 <Text style={[font(t, 14), { color: t.colors.textMuted, flex: 1 }]}>{defs[field]?.label ?? field}</Text>
-                <Text style={[font(t, 16, '600'), { color: t.colors.text, flex: 1.4, textAlign: 'right' }]}>
-                  {formatFieldValue(defs[field], value, spec.lang) || 'Empty'}
-                </Text>
+                <View style={{ flex: 1.4, alignItems: 'flex-end', gap: 2 }}>
+                  <Text style={[font(t, 16, '600'), { color: t.colors.text, textAlign: 'right' }]}>
+                    {formatFieldValue(defs[field], value, spec.lang) || tr('runtime.sheet.empty')}
+                  </Text>
+                  {/* Filled by the engine for a field the reading was unsure of (document scan). */}
+                  {proposal.uncertain?.includes(field) ? (
+                    <Text style={[font(t, 12), { color: t.colors.danger, textAlign: 'right' }]}>{tr('runtime.sheet.hardToRead')}</Text>
+                  ) : null}
+                </View>
               </View>
             ))}
             {proposal.rejected.map((r) => (
               <Text key={r.field} style={[font(t, 13), { color: t.colors.textMuted, paddingTop: 6 }]}>
-                Not used: {r.reason}.
+                {tr('runtime.sheet.notUsed', { reason: r.reason })}
               </Text>
             ))}
           </ScrollView>
@@ -142,9 +148,12 @@ export interface ConfirmRequest { message: string; resolve(ok: boolean): void }
  * In-app confirmation in the app's own theme (docs/02 §19: never the browser's native confirm).
  * Used for deleting records and other actions the app's spec marks as needing confirmation.
  */
-export function ConfirmSheet({ request, t, wide }: { request: ConfirmRequest | null; t: RuntimeTheme; wide: boolean }) {
+export function ConfirmSheet({ request, t, wide, lang }: { request: ConfirmRequest | null; t: RuntimeTheme; wide: boolean; lang?: string }) {
+  const tr = useAppT(lang);
   if (!request) return null;
   const answer = (ok: boolean) => request.resolve(ok);
+  // The question is the first line; what else the delete changes (linked entries deleted or unlinked) follows, one line each.
+  const [question, ...consequences] = request.message.split('\n').filter((line) => line.trim());
   const yes = (
     <Pressy
       key="yes"
@@ -152,7 +161,7 @@ export function ConfirmSheet({ request, t, wide }: { request: ConfirmRequest | n
       onPress={() => answer(true)}
       style={[styles.sheetBtn, { flex: 1, minHeight: Math.max(t.target, 52), borderRadius: t.radius, backgroundColor: t.colors.danger }]}
     >
-      <Text style={[font(t, 16, '600'), { color: t.colors.onDanger }]}>Yes, do it</Text>
+      <Text style={[font(t, 16, '600'), { color: t.colors.onDanger }]}>{tr('runtime.sheet.confirmYes')}</Text>
     </Pressy>
   );
   const no = (
@@ -162,17 +171,17 @@ export function ConfirmSheet({ request, t, wide }: { request: ConfirmRequest | n
       onPress={() => answer(false)}
       style={[styles.sheetBtn, { flex: 1, minHeight: Math.max(t.target, 52), borderRadius: t.radius, borderWidth: Math.max(1, t.borderWidth), borderColor: t.colors.border }]}
     >
-      <Text style={[font(t, 16, '600'), { color: t.colors.text }]}>Cancel</Text>
+      <Text style={[font(t, 16, '600'), { color: t.colors.text }]}>{tr('common.cancel')}</Text>
     </Pressy>
   );
   return (
     <Modal transparent visible animationType="fade" onRequestClose={() => answer(false)} statusBarTranslucent>
       <View style={[styles.scrim, { backgroundColor: t.colors.scrim, justifyContent: wide ? 'center' : 'flex-end' }]}>
-        <Pressable accessibilityLabel="Cancel" style={StyleSheet.absoluteFill} onPress={() => answer(false)} />
+        <Scrim onPress={() => answer(false)} />
         <View
           accessibilityViewIsModal
           role="alertdialog"
-          aria-label={request.message}
+          aria-label={request.message.replace(/\s*\n+\s*/g, ' ')}
           style={[
             styles.sheet,
             {
@@ -185,11 +194,31 @@ export function ConfirmSheet({ request, t, wide }: { request: ConfirmRequest | n
             },
           ]}
         >
-          <Text accessibilityRole="header" style={[font(t, 18, '600', 1.35), { color: t.colors.text }]}>{request.message}</Text>
+          <Text accessibilityRole="header" style={[font(t, 18, '600', 1.35), { color: t.colors.text }]}>{question}</Text>
+          {consequences.map((line) => (
+            <Text key={line} style={[font(t, 15, '400', 1.4), { color: t.colors.textMuted }]}>{line}</Text>
+          ))}
           <View style={{ flexDirection: 'row', gap: 10 }}>{t.mirror ? [yes, no] : [no, yes]}</View>
         </View>
       </View>
     </Modal>
+  );
+}
+
+/**
+ * The dim layer behind a sheet. A tap on it closes the sheet, but it is not a control: the sheet has its own Cancel or
+ * Discard button and Escape, so a screen reader must not hear a second "Cancel" and the keyboard must not stop on it.
+ */
+function Scrim({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessible={false}
+      focusable={false}
+      importantForAccessibility="no-hide-descendants"
+      aria-hidden
+      style={StyleSheet.absoluteFill}
+      onPress={onPress}
+    />
   );
 }
 

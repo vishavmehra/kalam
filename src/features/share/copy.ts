@@ -5,133 +5,140 @@
  */
 import { joinList } from '@/core/share';
 import type { ShareIntent } from './model';
+import { t as gt } from '@/i18n/active';
 
 export const SHARE_UI = {
-  button: 'Share',
-  buttonHint: 'Share entries with another app on this device',
+  get button() { return gt('share.ui.button'); },
+  get buttonHint() { return gt('share.ui.buttonHint'); },
 
-  sheetTitle: (appName: string) => `Sharing for ${appName}`,
-  sheetIntro:
-    'A link lets two of your apps use each other\'s entries. You choose what is shared, and you can turn a link off at any time. Nothing leaves this device.',
-  loading: 'Looking for links',
-  loadFailed: 'The links could not be read from this device. Close this and try again.',
+  sheetTitle: (appName: string) => gt('share.ui.sheetTitle', { appName }),
+  get sheetIntro() { return gt('share.ui.sheetIntro'); },
+  get loading() { return gt('share.ui.loading'); },
+  get loadFailed() { return gt('share.ui.loadFailed'); },
 
   empty: {
-    title: 'No links yet',
-    description: 'Link two of your apps to show one app\'s entries in the other, or to send entries from one to the other.',
+    get title() { return gt('share.ui.empty.title'); },
+    get description() { return gt('share.ui.empty.description'); },
   },
-  newLink: 'New link',
-  listHeading: 'Links for this app',
+  get newLink() { return gt('share.ui.newLink'); },
+  get listHeading() { return gt('share.ui.listHeading'); },
 
   card: {
-    status: { on: 'On', paused: 'Paused', off: 'Turned off' },
-    kind: { read: 'Shows entries', write: 'Sends entries' },
-    to: (source: string, destination: string) => `${source} to ${destination}`,
-    fields: (labels: readonly string[]) => `Shared fields: ${joinList(labels)}`,
-    bazaar: (name: string) => `${name} is from the Bazaar`,
-    sentFromThere: (source: string) => `Entries are sent from ${source}. Open that app to send them.`,
-    turnedOffOn: (date: string) => `Turned off on ${date}.`,
-    history: 'History',
-    send: 'Send entries',
-    turnOff: 'Turn off',
-    remove: 'Remove',
+    status: { get on() { return gt('share.ui.card.status.on'); }, get paused() { return gt('share.ui.card.status.paused'); }, get off() { return gt('share.ui.card.status.off'); } },
+    kind: { get read() { return gt('share.ui.card.kind.read'); }, get write() { return gt('share.ui.card.kind.write'); } },
+    to: (source: string, destination: string) => gt('share.ui.card.to', { source, destination }),
+    fields: (labels: readonly string[]) => gt('share.ui.card.fields', { fields: joinList(labels) }),
+    bazaar: (name: string) => gt('share.ui.card.bazaar', { name }),
+    sentFromThere: (source: string) => gt('share.ui.card.sentFromThere', { source }),
+    turnedOffOn: (date: string) => gt('share.ui.card.turnedOffOn', { date }),
+    get turnedOffNote() { return gt('share.ui.card.turnedOffNote'); },
+    get history() { return gt('share.ui.card.history'); },
+    get send() { return gt('share.ui.card.send'); },
+    get turnOff() { return gt('share.ui.card.turnOff'); },
+    get remove() { return gt('share.ui.card.remove'); },
   },
 
   confirmOff: {
-    title: 'Turn off this link?',
-    message: (source: string, destination: string) =>
-      `${destination} stops using entries from ${source} straight away. Entries that were already sent stay where they are.`,
-    confirm: 'Turn off',
+    get title() { return gt('share.ui.confirmOff.title'); },
+    message: (source: string, destination: string) => gt('share.ui.confirmOff.message', { destination, source }),
+    get confirm() { return gt('share.ui.confirmOff.confirm'); },
   },
   confirmRemove: {
-    title: 'Remove this link?',
-    message: 'The link and its history are deleted from this device.',
-    confirm: 'Remove',
+    get title() { return gt('share.ui.confirmRemove.title'); },
+    get message() { return gt('share.ui.confirmRemove.message'); },
+    get confirm() { return gt('share.ui.confirmRemove.confirm'); },
   },
-  turnedOff: 'The link is turned off.',
-  removed: 'The link is removed.',
-  actionFailed: 'That did not work. Nothing was changed.',
-  cancel: 'Cancel',
-  close: 'Done',
+  get turnedOff() { return gt('share.ui.turnedOff'); },
+  get removed() { return gt('share.ui.removed'); },
+  get actionFailed() { return gt('share.ui.actionFailed'); },
+  get cancel() { return gt('share.ui.cancel'); },
+  get close() { return gt('share.ui.close'); },
 
   history: {
-    created: 'Link made',
-    revoked: 'Turned off',
+    get created() { return gt('share.ui.history.created'); },
+    get revoked() { return gt('share.ui.history.revoked'); },
     sent: (created: number, updated: number) => {
       const parts: string[] = [];
-      if (created) parts.push(`${created} sent`);
-      if (updated) parts.push(`${updated} updated`);
-      return parts.length ? parts.join(', ') : 'Send finished, nothing new';
+      if (created) parts.push(gt('share.ui.history.sentNew', { count: created }));
+      if (updated) parts.push(gt('share.ui.history.sentUpdated', { count: updated }));
+      return parts.length ? parts.join(', ') : gt('share.ui.history.nothingNew');
     },
-    blocked: 'Stopped because the link was paused',
-    someRejected: 'some were not accepted',
+    get blocked() { return gt('share.ui.history.blocked'); },
+    get someRejected() { return gt('share.ui.history.someRejected'); },
   },
 
   intent: {
     view_from: {
-      label: 'Show entries from another app in this app',
-      description: 'This app displays entries that stay in the other app. Nothing is copied.',
+      get label() { return gt('share.ui.intent.view_from.label'); },
+      get description() { return gt('share.ui.intent.view_from.description'); },
     },
     let_view: {
-      label: 'Let another app show this app\'s entries',
-      description: 'The other app displays your entries here. It cannot change them.',
+      get label() { return gt('share.ui.intent.let_view.label'); },
+      get description() { return gt('share.ui.intent.let_view.description'); },
     },
     send_to: {
-      label: 'Send entries from this app to another app',
-      description: 'You choose the entries and confirm each time. The other app checks them.',
+      get label() { return gt('share.ui.intent.send_to.label'); },
+      get description() { return gt('share.ui.intent.send_to.description'); },
     },
     receive_from: {
-      label: 'Receive entries sent from another app',
-      description: 'You choose the entries in the other app. This app checks each one.',
+      get label() { return gt('share.ui.intent.receive_from.label'); },
+      get description() { return gt('share.ui.intent.receive_from.description'); },
     },
   } satisfies Record<ShareIntent, { label: string; description: string }>,
 
   form: {
-    title: 'New link',
-    intentLabel: 'What do you want to do?',
-    appLabel: 'Which app?',
-    noOtherApp: 'You need a second app on this device before you can share.',
-    sourceList: (appName: string) => `Entries to share (list in ${appName})`,
-    destinationList: (appName: string) => `Where they go (list in ${appName})`,
-    noLists: 'This app has no lists to share.',
-    fieldsHeading: 'Which fields?',
-    fieldsHelp: 'Choose where each field goes. Fields left as "Not shared" stay in their own app.',
-    notShared: 'Not shared',
-    fieldGroup: (label: string) => `Where does "${label}" go?`,
-    noFields: 'These two lists have no fields that fit each other.',
-    previewHeading: 'What this link allows',
-    bazaarSwitch: (name: string) => `I trust ${name} with this information`,
-    bazaarHelp: (name: string) => `${name} came from the Bazaar and was made by someone else.`,
-    allow: 'Allow sharing',
-    back: 'Back',
+    get title() { return gt('share.ui.form.title'); },
+    get intentLabel() { return gt('share.ui.form.intentLabel'); },
+    get appLabel() { return gt('share.ui.form.appLabel'); },
+    get noOtherApp() { return gt('share.ui.form.noOtherApp'); },
+    sourceList: (appName: string) => gt('share.ui.form.sourceList', { appName }),
+    destinationList: (appName: string) => gt('share.ui.form.destinationList', { appName }),
+    get noLists() { return gt('share.ui.form.noLists'); },
+    get fieldsHeading() { return gt('share.ui.form.fieldsHeading'); },
+    get fieldsHelp() { return gt('share.ui.form.fieldsHelp'); },
+    get notShared() { return gt('share.ui.form.notShared'); },
+    fieldGroup: (label: string) => gt('share.ui.form.fieldGroup', { label }),
+    get noFields() { return gt('share.ui.form.noFields'); },
+    get previewHeading() { return gt('share.ui.form.previewHeading'); },
+    bazaarSwitch: (name: string) => gt('share.ui.form.bazaarSwitch', { name }),
+    bazaarHelp: (name: string) => gt('share.ui.form.bazaarHelp', { name }),
+    get allow() { return gt('share.ui.form.allow'); },
+    get back() { return gt('share.ui.form.back'); },
     blockers: {
-      pickApp: 'Choose the other app.',
-      pickLists: 'Choose a list in each app.',
-      pickFields: 'Choose at least one field to share.',
-      bazaar: (name: string) => `Confirm that you trust ${name}.`,
+      get pickApp() { return gt('share.ui.form.blockers.pickApp'); },
+      get pickLists() { return gt('share.ui.form.blockers.pickLists'); },
+      get pickFields() { return gt('share.ui.form.blockers.pickFields'); },
+      bazaar: (name: string) => gt('share.ui.form.blockers.bazaar', { name }),
     },
   },
 
   send: {
-    title: (destination: string) => `Send entries to ${destination}`,
-    help: (fields: readonly string[]) => `Choose the entries to send. Only ${joinList(fields)} are sent.`,
-    loading: 'Looking for entries',
-    empty: 'There are no entries to send yet.',
-    failed: 'The entries could not be read. Go back and try again.',
-    selectAll: 'Choose all',
-    clear: 'Clear choice',
-    sentBefore: 'sent before',
-    more: (shown: number, total: number) => `Showing the newest ${shown} of ${total} entries.`,
-    update: 'Update entries sent before',
-    updateHelp: 'Entries you sent earlier are changed to match this app.',
-    action: (n: number) => `Send ${n} ${n === 1 ? 'entry' : 'entries'}`,
-    confirmTitle: (destination: string) => `Send to ${destination}?`,
-    confirmMessage: (n: number, fields: readonly string[], destination: string, changing: number) =>
-      `${n} ${n === 1 ? 'entry is' : 'entries are'} sent. Only ${joinList(fields)} are sent. ${destination} checks each entry before it keeps it.${
-        changing ? ` ${changing} of them are already there and will be changed.` : ''
-      }`,
-    confirm: 'Send',
-    back: 'Back',
-    limit: (n: number) => `You can choose up to ${n} entries at a time.`,
+    title: (destination: string) => gt('share.ui.send.title', { destination }),
+    help: (fields: readonly string[]) => gt(fields.length === 1 ? 'share.ui.send.helpOne' : 'share.ui.send.helpMany', { fields: joinList(fields) }),
+    get loading() { return gt('share.ui.send.loading'); },
+    get empty() { return gt('share.ui.send.empty'); },
+    get failed() { return gt('share.ui.send.failed'); },
+    get selectAll() { return gt('share.ui.send.selectAll'); },
+    get clear() { return gt('share.ui.send.clear'); },
+    get sentBefore() { return gt('share.ui.send.sentBefore'); },
+    more: (shown: number, total: number) => gt('share.ui.send.more', { shown, total }),
+    get listLabel() { return gt('share.ui.send.listLabel'); },
+    chosen: (n: number) => (n === 0 ? gt('share.ui.send.noneChosen') : gt('share.ui.send.chosenCount', { n })),
+    get update() { return gt('share.ui.send.update'); },
+    get updateHelp() { return gt('share.ui.send.updateHelp'); },
+    action: (n: number) => gt('share.ui.send.action', { count: n }),
+    get nothingToDo() { return gt('share.ui.send.nothingToDo'); },
+    confirmTitle: (destination: string) => gt('share.ui.send.confirmTitle', { destination }),
+    confirmMessage: (plan: { create: number; change: number; leftOut: number }, fields: readonly string[], destination: string) => {
+      const parts: string[] = [];
+      if (plan.create) parts.push(gt('share.ui.send.planCreate', { count: plan.create }));
+      if (plan.change) parts.push(gt('share.ui.send.planChange', { count: plan.change }));
+      if (plan.leftOut) parts.push(gt('share.ui.send.planLeftOut', { count: plan.leftOut }));
+      parts.push(gt(fields.length === 1 ? 'share.ui.send.onlyOne' : 'share.ui.send.onlyMany', { fields: joinList(fields), destination }));
+      return parts.join(' ');
+    },
+    get confirm() { return gt('share.ui.send.confirm'); },
+    get back() { return gt('share.ui.send.back'); },
+    limit: (n: number) => gt('share.ui.send.limit', { n }),
   },
 } as const;

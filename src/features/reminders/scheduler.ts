@@ -8,6 +8,9 @@
  *
  * Rules are data. Nothing here evaluates user text as code.
  */
+import { relationDisplayField } from '@/core/spec/v11';
+import { isSignature } from '@/runtime/engine/v11/signature';
+import type { KalamCollection, KalamField, KalamSpec } from '@/core/spec/schema';
 import { NOTIFICATION_ID_PREFIX, type ScheduledNotificationRef } from '@/infrastructure/platform/notifications.shared';
 
 import {
@@ -55,9 +58,56 @@ const whenPhrase = (leadDays: number) =>
 
 const clip = (text: string, max: number) => (text.length > max ? text.slice(0, max).trimEnd() : text);
 
-function itemName(values: Record<string, unknown>, field: string | undefined): string | undefined {
-  const v = field ? values[field] : undefined;
-  return typeof v === 'string' && v.trim() ? clip(v.trim(), 60) : undefined;
+const asText = (v: unknown): string | undefined => {
+  // A drawn signature is strokes as text, never a name.
+  // `isSignature` is a type guard; going through a plain boolean keeps TypeScript from narrowing the string away.
+  const drawn = (x: string): boolean => isSignature(x);
+  const text = typeof v === 'number' && Number.isFinite(v) ? String(v) : typeof v === 'string' && !drawn(v) ? v.trim() : '';
+  return text ? clip(text, 60) : undefined;
+};
+
+/**
+ * What names an entry in a notification or the Due list. Text and a choice are printed as stored. A
+ * link (KalamSpec 1.1) stores the id of another collection's entry, so it is looked up and the linked
+ * entry's own name is printed, never the id. A link to an entry that is gone names nothing.
+ */
+function itemName(
+  spec: SpecView, collectionId: string, values: Record<string, unknown>, field: string | undefined, records: RecordsByCollection,
+): string | undefined {
+  const collection = collectionOf(spec, collectionId);
+  const def = collection && field ? fieldOf(collection, field) : undefined;
+  if (!field || !def) return undefined;
+  const ref = def.type === 'text' ? def.ref : undefined;
+  if (!ref) return asText(values[field]);
+  const id = values[field];
+  const hit = typeof id === 'string' ? (records[ref.collection] ?? []).find((r) => r.id === id) : undefined;
+  // relationDisplayField reads only `collections`, which a SpecView has.
+  const shown = hit ? relationDisplayField(spec as unknown as KalamSpec, ref) : undefined;
+  return hit && shown ? asText(hit.values[shown]) : undefined;
+}
+
+/** The field a rule names entries by: its own when the app still has it, else the collection's default. */
+function titleFieldOf(collection: KalamCollection, rule: ReminderRule): string | undefined {
+  const own = rule.titleField ? fieldOf(collection, rule.titleField) : undefined;
+  return own && (own.type === 'text' || own.type === 'enum') ? rule.titleField : defaultTitleField(collection);
+}
+
+/**
+ * The entry's name: from the rule's field, else the collection's default field, else the first other text or
+ * choice field this entry has a value in (the default may be empty on this entry, or be a link to a deleted one).
+ */
+function nameOf(spec: SpecView, rule: ReminderRule, collection: KalamCollection, values: Record<string, unknown>, records: RecordsByCollection): string | undefined {
+  // Plain text first, then a link, then a choice.
+  const rank = (f: KalamField) => (f.type === 'enum' ? 2 : f.type === 'text' && f.ref ? 1 : 0);
+  const nameable = Object.entries(collection.fields)
+    .filter(([, f]) => f.type === 'text' || f.type === 'enum')
+    .sort(([, a], [, b]) => rank(a) - rank(b))
+    .map(([id]) => id);
+  for (const field of new Set([titleFieldOf(collection, rule), defaultTitleField(collection), ...nameable])) {
+    const name = itemName(spec, rule.collection, values, field, records);
+    if (name) return name;
+  }
+  return undefined;
 }
 
 /** Title is the app's name. Body says what is due and when, or uses the person's own message. */
@@ -106,10 +156,6 @@ export function computePlan(input: PlanInput): PlanResult {
     const collection = collectionOf(spec, rule.collection);
     const time = parseTimeOfDay(rule.timeOfDay);
     if (!collection || !time) continue;
-    const titleField = rule.titleField && fieldOf(collection, rule.titleField)?.type === 'text'
-      ? rule.titleField
-      : defaultTitleField(collection);
-
     for (const record of records[rule.collection] ?? []) {
       stats.considered++;
       const due = parseDateOnly(record.values[rule.dateField]);
@@ -118,7 +164,7 @@ export function computePlan(input: PlanInput): PlanResult {
       const day = addDays(due, -rule.leadDays);
       const fireAt = zone.toEpoch({ ...day, hour: time.hour, minute: time.minute });
       if (!Number.isFinite(fireAt) || fireAt <= now) { stats.past++; continue; }
-      const { title, body } = reminderText(spec, rule, itemName(record.values, titleField));
+      const { title, body } = reminderText(spec, rule, nameOf(spec, rule, collection, record.values, records));
       all.push({
         id: notificationId(appId, rule.id, record.id),
         appId,
@@ -200,9 +246,6 @@ export function computeDue(input: DueInput): DueResult {
   for (const rule of rules) {
     const collection = collectionOf(spec, rule.collection);
     if (!collection) continue;
-    const titleField = rule.titleField && fieldOf(collection, rule.titleField)?.type === 'text'
-      ? rule.titleField
-      : defaultTitleField(collection);
     for (const record of records[rule.collection] ?? []) {
       const due = parseDateOnly(record.values[rule.dateField]);
       if (!due || !matchesCondition(rule.condition, record.values)) continue;
@@ -216,7 +259,7 @@ export function computeDue(input: DueInput): DueResult {
         id: record.id,
         ruleId: rule.id,
         collection: rule.collection,
-        title: itemName(record.values, titleField) ?? 'Untitled',
+        title: nameOf(spec, rule, collection, record.values, records) ?? 'Untitled',
         dueDate: formatDateOnly(due),
         daysFromToday,
       };

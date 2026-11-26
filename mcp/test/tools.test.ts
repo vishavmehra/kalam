@@ -1,26 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { decodeImportLink } from '@/core/import-link';
 import { validateSpec } from '@/core/spec/validate';
-import { optional } from '../src/optional';
 import {
   buildFromTemplateTool, checkFormulaTool, classifyRequestTool, computeReportTool, diffSpecsTool, explainFormulaTool,
   explainSpecTool, listTemplatesTool, packageAppTool, specSchemaTool, validateSpecTool,
 } from '../src/tools';
-import { data, fixture, invalidFixture, text } from './helpers';
+import { data, fixture, invalidFixture, text, NO_DASH_OR_BANG } from './helpers';
 
 const expenses = fixture('expense-tracker');
 const habits = fixture('habit-counter');
 
 describe('kalam_spec_schema', () => {
   it('returns the JSON Schema and a catalogue read from the Zod schemas', () => {
-    const d = data(specSchemaTool({}));
+    const d = data(specSchemaTool({ section: 'all' }));
     expect(d.jsonSchema.type).toBe('object');
     expect(d.jsonSchema.required).toEqual(expect.arrayContaining(['id', 'screens', 'initialScreen']));
     expect(d.catalogue.components.map((c: { name: string }) => c.name)).toContain('bigButton');
     const button = d.catalogue.components.find((c: { name: string }) => c.name === 'bigButton');
     expect(button.required).toEqual(expect.arrayContaining(['id', 'label', 'action']));
     expect(d.catalogue.limits.screens).toBe(8);
-    expect(data(specSchemaTool({ section: 'catalogue' })).jsonSchema).toBeUndefined();
+    expect(data(specSchemaTool({ section: 'json_schema' })).catalogue).toBeUndefined();
+  });
+  it('defaults to the compact catalogue, with compact JSON text', () => {
+    const r = specSchemaTool({});
+    expect(data(r).jsonSchema).toBeUndefined();
+    expect(data(r).catalogue.components.length).toBeGreaterThan(5);
+    expect(text(r)).toBe(JSON.stringify(data(r)));
   });
 });
 
@@ -89,7 +94,7 @@ describe('kalam_explain_spec', () => {
     const r = explainSpecTool({ spec: expenses });
     expect(text(r)).toMatch(/^Daily Expenses: /);
     expect(text(r)).toMatch(/Screens:/);
-    expect(text(r)).not.toMatch(/—/);
+    expect(text(r)).not.toMatch(NO_DASH_OR_BANG);
     expect(data(r).summary.collections[0].name).toBe('Expenses');
   });
   it('refuses an invalid spec with the errors', () => {
@@ -100,16 +105,14 @@ describe('kalam_explain_spec', () => {
 });
 
 describe('kalam_diff_specs', () => {
-  it('describes changes when src/core/history is in the build, and says so when it is not', () => {
-    const after = { ...expenses, name: 'Shop Expenses' };
-    const r = diffSpecsTool({ before: expenses, after });
-    if (optional.describeSpecChanges) {
-      expect(r.isError).toBeFalsy();
-      expect(Array.isArray(data(r).changes)).toBe(true);
-    } else {
-      expect(r.isError).toBe(true);
-      expect(text(r)).toMatch(/not in this build/);
-    }
+  it('describes changes in plain English', () => {
+    const r = diffSpecsTool({ before: expenses, after: { ...expenses, name: 'Shop Expenses' } });
+    expect(r.isError).toBeFalsy();
+    const d = data(r);
+    expect(d.changes.length).toBeGreaterThan(0);
+    expect(d.changes[0]).toMatchObject({ category: expect.any(String), impact: expect.any(String), text: expect.any(String) });
+    expect(d.summary).not.toMatch(NO_DASH_OR_BANG);
+    expect(data(diffSpecsTool({ before: expenses, after: expenses })).changes).toEqual([]);
     expect(diffSpecsTool({ before: expenses, after: { nope: true } }).isError).toBe(true);
   });
 });
@@ -137,6 +140,8 @@ describe('kalam_check_formula', () => {
     expect(d.result).toEqual({ value: 5 });
     const filter = data(checkFormulaTool({ formula: 'category == "Food"', spec: expenses, listCollection: 'expenses' }));
     expect(filter.valid).toBe(true);
+    // In a list filter, bare names are fields, so the dependency is the listed collection.
+    expect(filter.dependencies.collections).toEqual(['expenses']);
     expect(checkFormulaTool({ formula: 'amount > 1', spec: expenses, screenId: 'nowhere' }).isError).toBe(true);
     expect(checkFormulaTool({ formula: '1', sample: { now: 'not a date' } }).isError).toBe(true);
   });
@@ -146,20 +151,51 @@ describe('kalam_check_formula', () => {
 });
 
 describe('kalam_explain_formula', () => {
-  it('returns the check, plus an explanation when src/core/formula-assist is in the build', () => {
-    const d = data(explainFormulaTool({ formula: 'sum(expenses.amount)', spec: expenses }));
+  it('checks the formula and explains it with the labels people see', () => {
+    const d = data(explainFormulaTool({ formula: 'sum(expenses.amount)', spec: expenses, screenId: 'home' }));
     expect(d.valid).toBe(true);
-    if (optional.explainFormula) expect(d.explanation).toBeTruthy();
-    else expect(d.note).toMatch(/not in this build/);
+    expect(d.explanation).toMatch(/amount/i);
+    expect(d.explanation).not.toMatch(/expenses\.amount/);
+    expect(data(explainFormulaTool({ formula: 'sum(nope.x)', spec: expenses })).valid).toBe(false);
+  });
+  it('explains a list filter with the field labels, not raw ids', () => {
+    // A label that differs from the field id, so the test can tell them apart.
+    const cols = expenses.collections as Record<string, { fields: Record<string, object> }>;
+    const fields = { ...cols.expenses.fields, category: { ...cols.expenses.fields.category, label: 'Kind of spend' } };
+    const spec = { ...expenses, collections: { ...cols, expenses: { ...cols.expenses, fields } } };
+    const d = data(explainFormulaTool({ formula: 'category == "Food"', spec, listCollection: 'expenses' }));
+    expect(d.valid).toBe(true);
+    expect(d.dependencies.collections).toEqual(['expenses']);
+    expect(d.explanation).toMatch(/kind of spend/i);
+    expect(d.explanation).not.toMatch(/\bcategory\b/);
+    expect(d.explanation).not.toMatch(NO_DASH_OR_BANG);
   });
 });
 
 describe('kalam_compute_report', () => {
-  it('checks the collection and records, and guards a missing report engine', () => {
+  const records: Array<{ values: Record<string, string | number | boolean | null> }> = [
+    { values: { amount: 120, category: 'Food', date: '2026-11-20', secret: 'dropped' } },
+    { values: { amount: 80, category: 'Travel', date: '2026-11-21' } },
+    { values: { amount: 40, category: 'Food', date: '2026-11-24' } },
+  ];
+  it('computes the suggested reports over the records passed in', () => {
+    const d = data(computeReportTool({ spec: expenses, collection: 'expenses', records, now: '2026-11-25T10:00:00', timeZone: 'Asia/Kolkata' }));
+    expect(d.records).toBe(3);
+    expect(d.reports.length).toBeGreaterThan(0);
+    const done = d.reports.filter((r: { result?: unknown }) => r.result);
+    expect(done.length).toBeGreaterThan(0);
+    expect(done[0].text).toEqual(expect.any(String));
+    expect(JSON.stringify(d)).not.toContain('dropped');
+  });
+  it('runs one given definition, and rejects a bad one or a bad input', () => {
+    const all = data(computeReportTool({ spec: expenses, collection: 'expenses', records, now: '2026-11-25T10:00:00' }));
+    const def = all.reports[0].definition;
+    const one = data(computeReportTool({ spec: expenses, collection: 'expenses', records, report: def, now: '2026-11-25T10:00:00' }));
+    expect(one.reports).toHaveLength(1);
+    expect(computeReportTool({ spec: expenses, collection: 'expenses', records, report: { ...def, metrics: [] } }).isError).toBe(true);
+    expect(computeReportTool({ spec: expenses, collection: 'expenses', records, report: { ...def, sourceCollection: 'x' } }).isError).toBe(true);
     expect(computeReportTool({ spec: expenses, collection: 'orders', records: [] }).isError).toBe(true);
-    const r = computeReportTool({ spec: expenses, collection: 'expenses', records: [{ values: { amount: 3, secret: 'x' } }] });
-    if (optional.computeReport) expect(r.isError).toBeFalsy();
-    else expect(text(r)).toMatch(/not in this build/);
+    expect(computeReportTool({ spec: expenses, collection: 'expenses', records, timeZone: 'Mars/Base' }).isError).toBe(true);
   });
 });
 
@@ -177,6 +213,15 @@ describe('kalam_package_app', () => {
     expect(d.webLink).toMatch(/^https:\/\/kalam\.example\.com\/import#k1\./);
     const back = decodeImportLink(d.webLink);
     expect(back.ok && back.spec.name).toBe('Daily Expenses');
+    expect(d.fileBytes).toBe(Buffer.byteLength(d.file));
+    expect(d.howToOpen.join(' ')).toMatch(/\/import screen/);
+    expect(d.howToOpen.join(' ')).not.toMatch(NO_DASH_OR_BANG);
+  });
+  it('counts bytes, not characters, and keeps file names ASCII', () => {
+    const d = data(packageAppTool({ spec: { ...expenses, name: 'खर्च ट्रैकर' } }));
+    expect(d.fileBytes).toBe(Buffer.byteLength(d.file));
+    expect(d.fileBytes).toBeGreaterThan(d.file.length);
+    expect(d.fileName).toBe(`${String(expenses.id)}.kalam.json`);
   });
   it('refuses an invalid spec', () => {
     expect(packageAppTool({ spec: invalidFixture('script-injection') }).isError).toBe(true);

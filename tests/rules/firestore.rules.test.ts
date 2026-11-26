@@ -104,6 +104,20 @@ describe('listing create', () => {
   it('accepts install-only licences', async () => {
     await assertSucceeds(publish(dbAs('alice'), LISTING, { license: 'all_rights_reserved', remixAllowed: false }));
   });
+  it('accepts a 1.1 permissions disclosure and still accepts one without it', async () => {
+    const base = { stores: ['Expenses'], usesPhotos: true, aiFeatures: [], cloudPossible: false };
+    await assertSucceeds(publish(dbAs('alice'), LISTING, { disclosure: { ...base, permissions: ['Camera: To take photos for this app'] } }));
+    await assertSucceeds(publish(dbAs('alice'), OTHER, { disclosure: { ...base, permissions: [] } }));
+    await assertSucceeds(publish(dbAs('alice'), 'lbbbbbbbbbbbbbbbbbbb', { disclosure: base }));
+  });
+  it('bounds the permissions disclosure and keeps the other disclosure keys closed', async () => {
+    const base = { stores: ['Expenses'], usesPhotos: true, aiFeatures: [], cloudPossible: false };
+    await assertFails(publish(dbAs('alice'), LISTING, { disclosure: { ...base, permissions: ['a', 'b', 'c', 'd', 'e'] } }));
+    await assertFails(publish(dbAs('alice'), LISTING, { disclosure: { ...base, permissions: ['x'.repeat(601)] } }));
+    await assertFails(publish(dbAs('alice'), LISTING, { disclosure: { ...base, permissions: 'Camera' } }));
+    await assertFails(publish(dbAs('alice'), LISTING, { disclosure: { ...base, permissions: ['Camera'], location: ['Home'] } }));
+    await assertFails(publish(dbAs('alice'), LISTING, { disclosure: { permissions: ['Camera'], stores: [], usesPhotos: false, aiFeatures: [] } })); // cloudPossible missing
+  });
   it('allows pending_review and rejected without a passing check', async () => {
     await assertSucceeds(publish(dbAs('alice'), LISTING, { status: 'pending_review', safety: { verdict: 'unavailable', reasons: ['Offline'], specHash: HASH, checkedAt: 1 } }));
     await assertSucceeds(publish(dbAs('alice'), OTHER, { status: 'rejected', safety: { verdict: 'flagged', reasons: ['Asks for card details.'], specHash: HASH, checkedAt: 1 } }));

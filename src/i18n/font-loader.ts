@@ -23,7 +23,15 @@ export interface ScriptFontLoader {
   getVersion(): number;
 }
 
-export function createScriptFontLoader(deps: FontDeps, assets: Record<NonLatinScript, FontMap>): ScriptFontLoader {
+/**
+ * @param families Families a script needs, for `isLoaded`. Defaults to the Noto faces generated apps use;
+ *                 the shell passes `shellFontFamilies` (Anek and Tiro).
+ */
+export function createScriptFontLoader(
+  deps: FontDeps,
+  assets: Record<NonLatinScript, FontMap>,
+  families: (script: Script) => string[] = scriptFontFamilies,
+): ScriptFontLoader {
   const pending = new Map<Script, Promise<void>>();
   const listeners = new Set<() => void>();
   let version = 0;
@@ -33,7 +41,7 @@ export function createScriptFontLoader(deps: FontDeps, assets: Record<NonLatinSc
     for (const listener of [...listeners]) listener();
   };
 
-  const isLoaded: ScriptFontLoader['isLoaded'] = (script) => script === 'latin' || scriptFontFamilies(script).every((family) => deps.isLoaded(family));
+  const isLoaded: ScriptFontLoader['isLoaded'] = (script) => script === 'latin' || families(script).every((family) => deps.isLoaded(family));
 
   const load: ScriptFontLoader['load'] = (script) => {
     if (script === 'latin' || isLoaded(script)) return Promise.resolve();

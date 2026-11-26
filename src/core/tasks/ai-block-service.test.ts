@@ -1,14 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createFakeAI, type FakeReply } from '../../../tests/fixtures/compiler/fake-ai';
+import { AI_COPY } from '../ai/copy';
 import { irToSpec } from '../compiler/convert';
 import { compilerIRSchema } from '../compiler/ir';
 import type { AIBlockVerificationOutcome, StructuredRequest } from '../contracts';
-import type { KalamAIBlock, KalamSpec } from '../spec/schema';
+import { SCHEMA_VERSION, type KalamAIBlock, type KalamSpec } from '../spec/schema';
 import { validateSpec } from '../spec/validate';
 import {
   blockHash, blockPolicy, createAIBlockService, needsReverification, recordVerification, reusableCases, sameValue,
-  splitUnsure, verificationMetrics, verificationReport, VERIFY_PROMPT_VERSION,
+  splitUnsure, verificationMetrics, verificationReport, verifyPromptVersion,
 } from './ai-block-service';
 
 const ir = compilerIRSchema.parse(JSON.parse(readFileSync(new URL('../../../tests/fixtures/compiler/tailor-shop.ir.json', import.meta.url), 'utf8')));
@@ -73,15 +74,37 @@ describe('AI block run', () => {
     const r = await createAIBlockService({ ai }).run(runInput('note_hindi', { notes: 'Hello' }));
     expect(r.output).toEqual({ notes: 'नमस्ते' });
     expect(ai.calls[0].req).toMatchObject({ role: 'translation', taskType: 'translate', mode: 'prefer_on_device' });
+    expect(ai.calls[0].req.prompt).not.toContain('Word rules');
+  });
+
+  it('adds the app word rules to a translate step, for its own language only', async () => {
+    const ruled: KalamSpec = { ...spec, localization: { terminology: [{ term: 'Kurta', keep: true }, { term: 'Advance', translations: { hi: 'अग्रिम' } }] } };
+    const ai = createFakeAI({ onDevice: 'available', respond: () => ({ raw: { text: 'नमस्ते' } }) });
+    await createAIBlockService({ ai }).run({ ...runInput('note_hindi', { notes: 'Hello' }), spec: ruled });
+    expect(ai.calls[0].req.prompt).toContain('keep exactly: "Kurta"');
+    expect(ai.calls[0].req.prompt).toContain('translate "Advance" as "अग्रिम"');
+    const other: KalamSpec = { ...ruled, aiBlocks: { ...ruled.aiBlocks, note_hindi: { ...(ruled.aiBlocks.note_hindi as KalamAIBlock), targetLang: 'mr' } } as KalamSpec['aiBlocks'] };
+    const ai2 = createFakeAI({ onDevice: 'available', respond: () => ({ raw: { text: 'नमस्कार' } }) });
+    await createAIBlockService({ ai: ai2 }).run({ ...runInput('note_hindi', { notes: 'Hello' }), spec: other, block: other.aiBlocks.note_hindi });
+    expect(ai2.calls[0].req.prompt).toContain('keep exactly: "Kurta"');
+    expect(ai2.calls[0].req.prompt).not.toContain('अग्रिम');
   });
 });
 
 describe('sameValue grading', () => {
   it('handles exact, normalised and numeric tolerance', () => {
     expect(sameValue('Urgent', 'urgent.')).toBe(true);
-    expect(sameValue('40', 40.2)).toBe(true);
-    expect(sameValue('40', 42)).toBe(false);
+    expect(sameValue(40, 40.2)).toBe(true);
+    expect(sameValue(40, '40.2')).toBe(true);
+    expect(sameValue(40, 42)).toBe(false);
     expect(sameValue('Payment', 'Urgent')).toBe(false);
+  });
+  it('compares digit strings exactly: phone numbers, PIN codes and number-like labels', () => {
+    expect(sameValue('560001', '560099')).toBe(false);
+    expect(sameValue('9876543210', '9876501234')).toBe(false);
+    expect(sameValue('2023', '2024')).toBe(false);
+    expect(sameValue('2023', 2023)).toBe(false); // a text field never matches a number by tolerance
+    expect(sameValue('560001', ' 560001 ')).toBe(true);
   });
 });
 
@@ -228,6 +251,7 @@ describe('AI block check details (docs/13 §8)', () => {
     expect(await reasonOf(createFakeAI({ onDevice: 'downloadable' }))).toBe('device_not_ready');
     expect(await reasonOf(createFakeAI({ onDevice: 'available', online: false }))).toBe('offline');
     expect(await reasonOf(createFakeAI({ onDevice: 'available', respond: () => ({ error: 'consent_denied' }) }))).toBe('cloud_off');
+    expect(await reasonOf(createFakeAI({ onDevice: 'available', respond: () => ({ error: 'consent_denied', message: AI_COPY.needsCloudOk }) }))).toBe('needs_cloud_ok');
     expect(await reasonOf(createFakeAI({ onDevice: 'available' }), 'slip_to_order')).toBe('needs_samples');
     expect(await reasonOf(createFakeAI({ onDevice: 'available' }), 'gone')).toBe('failed');
   });
@@ -275,8 +299,84 @@ describe('AI block check details (docs/13 §8)', () => {
       },
     });
     const v = await createAIBlockService({ ai }).verify(spec, 'note_summary');
-    expect(v).toMatchObject({ status: 'unverified', reason: 'failed', testCount: 5, judgeUsed: true });
+    // Nothing was graded: no counts that read as "0 of 5 passed", the cases stay for the report only.
+    expect(v).toMatchObject({ status: 'unverified', reason: 'failed', testCount: 0, passCount: 0, judgeUsed: true });
     expect(v.details).toHaveLength(5);
+    expect(recordVerification(spec, 'note_summary', v, 1)).toBe(spec);
+  });
+
+  it('a judge that is offline leaves the step waiting for the network', async () => {
+    const ai = createFakeAI({
+      onDevice: 'available',
+      respond: (r) => {
+        if (isCaseGen(r)) return { raw: { cases: inputs.map((input) => ({ input, expected: `About: ${input}` })) } };
+        if (isJudge(r)) return { error: 'offline' };
+        return { raw: { summary: 'Something else entirely' } };
+      },
+    });
+    const v = await createAIBlockService({ ai }).verify(spec, 'note_summary');
+    expect(v).toMatchObject({ status: 'unverified', reason: 'offline', testCount: 0 });
+  });
+
+  it('flags a summary longer than the limit instead of hiding it by cutting it', async () => {
+    const long = 'one two three four five six seven eight nine ten eleven twelve';
+    const ai = createFakeAI({
+      onDevice: 'available',
+      respond: (r) => (isCaseGen(r)
+        ? { raw: { cases: inputs.map((input) => ({ input, expected: `About: ${input}` })) } }
+        : { raw: { summary: long } }),
+    });
+    const v = await createAIBlockService({ ai }).verify(spec, 'note_summary');
+    expect(v).toMatchObject({ status: 'cloudPreferred', passCount: 0, judgeUsed: false });
+    expect(v.details.every((d) => d.reason === 'too long')).toBe(true);
+    expect(ai.calls.filter((c) => isJudge(c.req))).toHaveLength(0);
+  });
+
+  it('a cancel during the last run does not count as failed tests', async () => {
+    const ctl = new AbortController();
+    let runs = 0;
+    const ai = createFakeAI({
+      onDevice: 'available',
+      respond: (r) => {
+        if (!isCaseGen(r) && ++runs === 5) ctl.abort();
+        return labelAll(r);
+      },
+    });
+    const v = await createAIBlockService({ ai }).verify(spec, 'note_kind', { signal: ctl.signal });
+    expect(v).toMatchObject({ status: 'unverified', reason: 'cancelled', testCount: 0 });
+  });
+
+  it('a slow device is not marked as giving wrong answers', async () => {
+    let runs = 0;
+    const ai = createFakeAI({
+      onDevice: 'available',
+      respond: (r) => (isCaseGen(r) ? labelAll(r) : ++runs <= 2 ? { error: 'timeout' } : labelAll(r)),
+    });
+    const v = await createAIBlockService({ ai }).verify(spec, 'note_kind');
+    expect(v).toMatchObject({ status: 'unverified', reason: 'timeout', testCount: 0 });
+    expect(v.details).toHaveLength(5);
+  });
+
+  it('says a device without on-device AI cannot run the step, rather than that it is not ready', async () => {
+    const none = await createAIBlockService({ ai: createFakeAI({ onDevice: 'unavailable' }) }).verify(spec, 'note_kind');
+    const later = await createAIBlockService({ ai: createFakeAI({ onDevice: 'downloadable' }) }).verify(spec, 'note_kind');
+    expect(none.message).toMatch(/cannot run AI steps/);
+    expect(later.message).toMatch(/not ready/);
+  });
+
+  it('a step set to run only on this device never says it will use the cloud', async () => {
+    const strict: KalamSpec = { ...spec, aiBlocks: { ...spec.aiBlocks, note_kind: { ...spec.aiBlocks.note_kind!, fallback: 'none' } as KalamAIBlock } };
+    const three = (r: StructuredRequest<unknown>): FakeReply => {
+      if (isCaseGen(r)) return labelAll(r);
+      const i = inputs.findIndex((t) => r.prompt.includes(t));
+      return { raw: { label: i < 3 ? expected[i] : 'Normal' } };
+    };
+    const weak = await createAIBlockService({ ai: createFakeAI({ onDevice: 'available', respond: three }) }).verify(strict, 'note_kind');
+    expect(weak.status).toBe('cloudPreferred');
+    expect(weak.message).toMatch(/only on this device/);
+    expect(weak.message).not.toMatch(/cloud/);
+    const none = await createAIBlockService({ ai: createFakeAI({ onDevice: 'unavailable' }) }).verify(strict, 'note_kind');
+    expect(none.message).toMatch(/will not work here/);
   });
 });
 
@@ -293,7 +393,7 @@ describe('check records', () => {
     const out = recordVerification(spec, 'note_kind', { ...ran, passCount: 99 }, 1_700_000_000_123.4);
     expect(out.aiBlocks.note_kind).toMatchObject({
       verified: 'cloudPreferred',
-      verification: { status: 'cloudPreferred', testCount: 5, passCount: 5, model: 'gemini-nano', verifiedAt: 1_700_000_000_123, schemaVersion: '1.0.0' },
+      verification: { status: 'cloudPreferred', testCount: 5, passCount: 5, model: 'gemini-nano', verifiedAt: 1_700_000_000_123, schemaVersion: SCHEMA_VERSION },
     });
     expect(validateSpec(out).ok).toBe(true);
     expect(spec.aiBlocks.note_kind?.verified).toBe('unverified');
@@ -302,7 +402,7 @@ describe('check records', () => {
   it('builds a report with prompt version, block hash, app version and cases', () => {
     const r = verificationReport(spec, 'note_kind', ran, 42);
     expect(r).toMatchObject({
-      blockId: 'note_kind', appVersion: spec.version, promptVersion: VERIFY_PROMPT_VERSION, status: 'cloudPreferred',
+      blockId: 'note_kind', appVersion: spec.version, promptVersion: verifyPromptVersion(), status: 'cloudPreferred',
       testCount: 5, passCount: 3, model: 'gemini-nano', judgeUsed: false, checkedAt: 42, cases: ran.details,
     });
     expect(r.blockHash).toBe(blockHash(spec, 'note_kind'));
@@ -329,6 +429,11 @@ describe('check records', () => {
       ...spec, collections: { ...spec.collections, orders: { ...orders, fields: { ...orders.fields, chest: { type: 'number', label: 'Chest (cm)', unit: 'cm' } } } },
     };
     expect(blockHash(relabelled, 'slip_to_order')).not.toBe(blockHash(spec, 'slip_to_order'));
+    // How the step falls back does not change what the model does, so the check still counts.
+    const local: KalamSpec = {
+      ...spec, aiBlocks: { ...spec.aiBlocks, note_kind: { ...spec.aiBlocks.note_kind!, fallback: 'none', onError: 'manual_entry' } as KalamAIBlock },
+    };
+    expect(blockHash(local, 'note_kind')).toBe(h);
   });
 
   it('offers stored cases for a re-check only while the step is unchanged', () => {
@@ -346,6 +451,7 @@ describe('check records', () => {
     expect(needsReverification(spec, 'note_kind')).toBe(true);
     expect(needsReverification(spec, 'note_kind', report)).toBe(false);
     expect(needsReverification(spec, 'note_kind', { ...report, testCount: 0 })).toBe(true);
+    expect(needsReverification(spec, 'note_kind', { ...report, status: 'unverified', reason: 'offline' })).toBe(true);
     expect(needsReverification(spec, 'note_kind', { ...report, promptVersion: 'ai-block-verify/0' })).toBe(true);
     const changed: KalamSpec = { ...spec, aiBlocks: { ...spec.aiBlocks, note_kind: { ...spec.aiBlocks.note_kind!, labels: ['Urgent', 'Later'] } as KalamAIBlock } };
     expect(needsReverification(changed, 'note_kind', report)).toBe(true);
@@ -359,6 +465,15 @@ describe('check metrics (docs/07 §13.5)', () => {
       ...(i === 4 ? { errorCode: 'invalid_output' as const } : {}),
     }));
     expect(verificationMetrics({ cases })).toEqual({ cases: 5, accuracy: 0.8, jsonValidity: 0.8, failureRate: 0.2, meanLatencyMs: 30, maxLatencyMs: 50 });
+  });
+
+  it('does not count runs that returned nothing as valid output', () => {
+    expect(verificationMetrics({ cases: [] })).toMatchObject({ cases: 0, accuracy: 0, jsonValidity: 0, failureRate: 0 });
+    const codes = ['timeout', 'model_unavailable', undefined, 'invalid_output'] as const;
+    const cases = codes.map((code, i) => ({
+      input: `t${i}`, expected: 'Urgent', actual: code ? null : 'Urgent', pass: !code, ...(code ? { errorCode: code } : {}),
+    }));
+    expect(verificationMetrics({ cases }).jsonValidity).toBe(0.5);
   });
 
   it('measures photo fields from a saved report that keeps field names only', () => {
@@ -424,6 +539,17 @@ describe('unsure photo fields (docs/16 R-016)', () => {
     const ai = createFakeAI({
       onDevice: 'available',
       respond: (r) => ({ raw: r.mode === 'only_in_cloud' ? slip : { ...slip, _unsure: ['chest'] } }),
+    });
+    const v = await createAIBlockService({ ai }).verify(spec, 'slip_to_order', { samplePhotos: [photo(0), photo(1), photo(2)] });
+    expect(v).toMatchObject({ status: 'onDevice', passCount: 3 });
+  });
+
+  it('ignores the confidence and place notes when grading sample photos (docs/14 §9.4)', async () => {
+    const photo = (n: number) => ({ mimeType: 'image/jpeg' as const, base64: `/9j/PHOTO${n}` });
+    const slip = { customer: 'Raju', chest: 40 };
+    const ai = createFakeAI({
+      onDevice: 'available',
+      respond: (r) => ({ raw: r.mode === 'only_in_cloud' ? slip : { ...slip, _reading: [{ field: 'chest', confidence: 'low', area: 'center' }] } }),
     });
     const v = await createAIBlockService({ ai }).verify(spec, 'slip_to_order', { samplePhotos: [photo(0), photo(1), photo(2)] });
     expect(v).toMatchObject({ status: 'onDevice', passCount: 3 });

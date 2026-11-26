@@ -6,8 +6,8 @@
  */
 import type { DrawingElement, DrawingPage, DrawingPoint } from '@/core/contracts';
 import {
-  elementCorners, elementPrimitives, frameCorners, handlePositions, PAGE_HEIGHT, PAGE_WIDTH, pagePrimitives,
-  SELECTION_COLORS, selectionFrame, STAMPS, type Primitive,
+  elementCorners, elementPrimitives, frameCorners, groupMembers, handlePositions, PAGE_HEIGHT, PAGE_WIDTH, pagePrimitives,
+  pagePrimitivesIn, pointerStateOf, SELECTION_COLORS, selectionFrame, singleGroupSize, SPATIAL_MIN, STAMPS, type PointerState, type Primitive,
 } from './model';
 import type { StudioState, Tool, ViewTransform } from './studio-store';
 
@@ -38,6 +38,24 @@ export function selectBase(s: StudioState): Primitive[] {
   }
   // Objects being moved, resized or turned are drawn in the overlay.
   return pagePrimitives(page, s.preview);
+}
+
+/**
+ * Like `selectBase`, but only the objects on screen (docs/08 §17.2). For canvases that redraw the whole page
+ * every frame, such as the web canvas. Small pages return the cached `selectBase` array. Not cached across frames.
+ */
+export function selectBaseVisible(s: StudioState): Primitive[] {
+  const page = s.erasing ?? currentPage(s);
+  if (page.elements.length < SPATIAL_MIN || s.viewport.w <= 0 || s.viewport.h <= 0) return selectBase(s);
+  const { scale, tx, ty } = s.view;
+  const margin = 16 / scale;
+  const view = { x: -tx / scale - margin, y: -ty / scale - margin, w: s.viewport.w / scale + margin * 2, h: s.viewport.h / scale + margin * 2 };
+  return pagePrimitivesIn(page, view, s.preview);
+}
+
+/** The explicit pointer state the studio is in right now (docs/08 §8.2). */
+export function selectPointerState(s: StudioState): PointerState {
+  return pointerStateOf(s);
 }
 
 function outline(corners: ReadonlyArray<{ x: number; y: number }>, stroke: string, width: number, dash: boolean): Primitive[] {
@@ -122,6 +140,14 @@ export const TOOL_LABELS: Readonly<Record<Tool, string>> = {
   ellipse: 'Ellipse', line: 'Line', arrow: 'Arrow', text: 'Text', stamp: 'Component stamps',
 };
 
+/** Plain name of an object plus its group, for the object list: "Rectangle, in a group of 3". */
+export function describeInPage(page: DrawingPage, el: DrawingElement): string {
+  const name = describeElement(el);
+  if (!el.groupId) return name;
+  const n = groupMembers(page, el.groupId).length;
+  return n > 1 ? `${name}, in a group of ${n}` : name;
+}
+
 /** Plain name of an object for the object list and screen readers (docs/10 §10.2). */
 export function describeElement(el: DrawingElement): string {
   switch (el.kind) {
@@ -141,10 +167,12 @@ export function canvasLabel(s: StudioState): string {
   const pages = s.history.present.pages;
   const page = currentPage(s);
   const index = pages.findIndex((p) => p.id === page.id);
+  const chosen = page.elements.filter((e) => s.selectedIds.includes(e.id));
+  const groupSize = singleGroupSize(page, chosen);
   const sel = s.selectedIds.length
     ? s.selectedIds.length === 1
       ? ` ${describeElement(page.elements.find((e) => e.id === s.selectedIds[0]) ?? page.elements[0]!)} selected.`
-      : ` ${s.selectedIds.length} objects selected.`
+      : groupSize ? ` Group of ${groupSize} objects selected.` : ` ${s.selectedIds.length} objects selected.`
     : '';
   return `Drawing canvas. Screen ${index + 1} of ${pages.length}, ${page.title}. ${TOOL_LABELS[s.tool]} tool. ${page.elements.length} objects.${sel} Keys: P pen, E eraser, V select, T text.`;
 }

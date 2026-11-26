@@ -1,0 +1,423 @@
+{
+  "kind": "web-matrix",
+  "recordedAt": "2026-11-26T01:24:04.363Z",
+  "command": "node scripts/verify-firebase-ai.mjs --web-matrix --cdp-port 9333",
+  "exitCode": 0,
+  "environment": {
+    "node": "v24.18.1",
+    "os": "win32 x64",
+    "sdk": {
+      "firebase": "13.4.0",
+      "@firebase/ai": "3.1.0"
+    },
+    "chrome": "Chrome/158.0.8127.36",
+    "cdpPort": "9333"
+  },
+  "result": {
+    "ok": true,
+    "kalamChrome": "Chrome/158.0.8127.36",
+    "withoutLocalModel": "Chromium 159.0.8154.6 (Playwright)",
+    "scenarios": [
+      {
+        "id": "A",
+        "failures": [],
+        "pass": true,
+        "title": "Chrome with a local model",
+        "how": "Real Gemini Nano in the Kalam Chrome. Nothing patched.",
+        "observed": {
+          "availability": "available",
+          "warm": true,
+          "warmUpMs": 9279,
+          "source": "on_device",
+          "model": "gemini-nano",
+          "latencyMs": 12775,
+          "output": {
+            "category": "shopping",
+            "confidence": "high"
+          }
+        },
+        "events": [
+          {
+            "task": "voice_action",
+            "route": "on_device",
+            "source": "on_device",
+            "provider": "firebase",
+            "model": "gemini-nano",
+            "ms": 12774,
+            "ok": true,
+            "fallback": false
+          }
+        ]
+      },
+      {
+        "id": "B",
+        "failures": [],
+        "pass": true,
+        "title": "Chrome without a local model",
+        "how": "A real Chromium with the Prompt API switched off (launched with --disable-features for it), so the browser exposes no local model. Nothing patched in the page.",
+        "observed": {
+          "apiExposed": false,
+          "availability": "unavailable",
+          "source": "cloud",
+          "model": "gemini-3.5-flash-lite",
+          "latencyMs": 4588,
+          "output": {
+            "category": "shopping",
+            "confidence": "high"
+          },
+          "cloudRequests": 1
+        },
+        "events": [
+          {
+            "task": "voice_action",
+            "route": "cloud",
+            "source": "cloud",
+            "provider": "firebase",
+            "model": "gemini-3.5-flash-lite",
+            "ms": 4588,
+            "ok": true,
+            "fallback": true
+          }
+        ]
+      },
+      {
+        "id": "C",
+        "failures": [],
+        "pass": true,
+        "title": "Local model not ready (simulated signal)",
+        "how": "The page answers the Prompt API availability check with \"downloadable\" and then \"downloading\" (a model that is already installed cannot be made not ready). The requests that follow are real.",
+        "observed": {
+          "downloadable": {
+            "source": "cloud",
+            "fallbackUsed": true,
+            "deviceOnly": {
+              "success": false,
+              "errorCode": "model_unavailable",
+              "message": "On-device AI is not ready on this device (downloadable)."
+            }
+          },
+          "downloading": {
+            "source": "cloud",
+            "fallbackUsed": true,
+            "deviceOnly": {
+              "success": false,
+              "errorCode": "model_unavailable",
+              "message": "On-device AI is not ready on this device (downloading)."
+            }
+          }
+        },
+        "events": [
+          {
+            "task": "voice_action",
+            "route": "cloud",
+            "source": "cloud",
+            "provider": "firebase",
+            "model": "gemini-3.5-flash-lite",
+            "ms": 2310,
+            "ok": true,
+            "fallback": true
+          },
+          {
+            "task": "voice_action",
+            "route": "on_device",
+            "source": "on_device",
+            "provider": "none",
+            "ms": 0,
+            "ok": false,
+            "fallback": false,
+            "error": "model_unavailable"
+          },
+          {
+            "task": "voice_action",
+            "route": "cloud",
+            "source": "cloud",
+            "provider": "firebase",
+            "model": "gemini-3.5-flash-lite",
+            "ms": 1632,
+            "ok": true,
+            "fallback": true
+          },
+          {
+            "task": "voice_action",
+            "route": "on_device",
+            "source": "on_device",
+            "provider": "none",
+            "ms": 0,
+            "ok": false,
+            "fallback": false,
+            "error": "model_unavailable"
+          }
+        ]
+      },
+      {
+        "id": "C2",
+        "failures": [],
+        "pass": true,
+        "title": "Local model not ready (real)",
+        "how": "A real Chromium whose Gemini Nano is not installed (Playwright Chromium, Prompt API exposed, availability reported by Chrome). Nothing patched.",
+        "observed": {
+          "apiExposed": true,
+          "availability": "downloadable",
+          "source": "cloud",
+          "model": "gemini-3.5-flash-lite",
+          "fallbackUsed": true,
+          "deviceOnly": {
+            "success": false,
+            "errorCode": "model_unavailable",
+            "message": "On-device AI is not ready on this device (downloadable)."
+          }
+        },
+        "events": [
+          {
+            "task": "voice_action",
+            "route": "cloud",
+            "source": "cloud",
+            "provider": "firebase",
+            "model": "gemini-3.5-flash-lite",
+            "ms": 12108,
+            "ok": true,
+            "fallback": true
+          },
+          {
+            "task": "voice_action",
+            "route": "on_device",
+            "source": "on_device",
+            "provider": "none",
+            "ms": 0,
+            "ok": false,
+            "fallback": false,
+            "error": "model_unavailable"
+          }
+        ]
+      },
+      {
+        "id": "D",
+        "failures": [],
+        "pass": true,
+        "title": "Cloud fallback after the device fails",
+        "how": "The page makes the Prompt API refuse to start a session (NotAllowedError). The cloud request that follows is real.",
+        "observed": {
+          "availabilityBefore": "available",
+          "source": "cloud",
+          "model": "gemini-3.5-flash-lite",
+          "fallbackUsed": true,
+          "cloudRequests": 1,
+          "output": {
+            "category": "shopping",
+            "confidence": "high"
+          }
+        },
+        "events": [
+          {
+            "task": "voice_action",
+            "route": "on_device",
+            "source": "on_device",
+            "provider": "firebase",
+            "ms": 8,
+            "ok": false,
+            "fallback": false,
+            "error": "model_unavailable"
+          },
+          {
+            "task": "voice_action",
+            "route": "cloud",
+            "source": "cloud",
+            "provider": "firebase",
+            "model": "gemini-3.5-flash-lite",
+            "ms": 1864,
+            "ok": true,
+            "fallback": true
+          }
+        ]
+      },
+      {
+        "id": "E",
+        "failures": [],
+        "pass": true,
+        "title": "Inference with App Check",
+        "how": "Real cloud request with the App Check token Kalam attaches (debug token on localhost). The header is checked for presence only.",
+        "observed": {
+          "appCheck": "debug",
+          "source": "cloud",
+          "model": "gemini-3.5-flash-lite",
+          "latencyMs": 1570,
+          "cloudRequests": 1,
+          "allWithAppCheckHeader": true,
+          "output": {
+            "category": "shopping",
+            "confidence": "high"
+          }
+        },
+        "events": [
+          {
+            "task": "voice_action",
+            "route": "cloud",
+            "source": "cloud",
+            "provider": "firebase",
+            "model": "gemini-3.5-flash-lite",
+            "ms": 1570,
+            "ok": true,
+            "fallback": false
+          }
+        ]
+      },
+      {
+        "id": "F",
+        "failures": [],
+        "pass": true,
+        "title": "Offline",
+        "how": "The driver puts the tab offline with the DevTools network emulation. Real Gemini Nano answers a local task; a cloud-only task (building an app) is refused as offline before anything is sent. Saved apps opening offline is covered by the offline Playwright run (tests/e2e).",
+        "observed": {
+          "online": false,
+          "localSource": "on_device",
+          "localModel": "gemini-nano",
+          "localLatencyMs": 974,
+          "cloudSuccess": false,
+          "cloudErrorCode": "offline",
+          "cloudMessage": "This needs an online model. Your saved apps and local data remain available.",
+          "requestsSentWhileOffline": 0
+        },
+        "events": [
+          {
+            "task": "voice_action",
+            "route": "on_device",
+            "source": "on_device",
+            "provider": "firebase",
+            "model": "gemini-nano",
+            "ms": 974,
+            "ok": true,
+            "fallback": false
+          },
+          {
+            "task": "create_app",
+            "route": "cloud",
+            "source": "cloud",
+            "provider": "none",
+            "ms": 0,
+            "ok": false,
+            "fallback": false,
+            "error": "offline"
+          }
+        ]
+      },
+      {
+        "id": "G",
+        "failures": [],
+        "pass": true,
+        "title": "Reconnect",
+        "how": "The driver takes the tab offline (scenario F) and puts the network back. The first cloud-only request after that is a real, billed request.",
+        "observed": {
+          "online": true,
+          "success": true,
+          "source": "cloud",
+          "model": "gemini-3.8-flash",
+          "latencyMs": 2556,
+          "cloudRequests": 1,
+          "output": {
+            "category": "shopping",
+            "confidence": "high"
+          }
+        },
+        "events": [
+          {
+            "task": "create_app",
+            "route": "cloud",
+            "source": "cloud",
+            "provider": "firebase",
+            "model": "gemini-3.8-flash",
+            "ms": 2556,
+            "ok": true,
+            "fallback": false
+          }
+        ]
+      },
+      {
+        "id": "H",
+        "failures": [],
+        "pass": true,
+        "title": "AI-step check, Nano plus cloud",
+        "how": "Real Gemini Nano runs the step; the cloud writes the test cases. The device benchmark gate is set aside for this run (classify fails it on web today). The test inputs are model-written, not real notes.",
+        "observed": {
+          "status": "onDevice",
+          "testCount": 5,
+          "passCount": 5,
+          "model": "gemini-nano",
+          "judgeUsed": false,
+          "device": {
+            "platform": "web",
+            "availability": "available"
+          },
+          "onDeviceRunMs": [
+            24763,
+            936,
+            1204,
+            1117,
+            1255
+          ]
+        },
+        "events": [
+          {
+            "task": "verify_ai_block",
+            "route": "cloud",
+            "source": "cloud",
+            "provider": "firebase",
+            "model": "gemini-3.8-flash",
+            "ms": 64045,
+            "ok": true,
+            "fallback": false
+          },
+          {
+            "task": "classify",
+            "route": "on_device",
+            "source": "on_device",
+            "provider": "firebase",
+            "model": "gemini-nano",
+            "ms": 24763,
+            "ok": true,
+            "fallback": false
+          },
+          {
+            "task": "classify",
+            "route": "on_device",
+            "source": "on_device",
+            "provider": "firebase",
+            "model": "gemini-nano",
+            "ms": 936,
+            "ok": true,
+            "fallback": false
+          },
+          {
+            "task": "classify",
+            "route": "on_device",
+            "source": "on_device",
+            "provider": "firebase",
+            "model": "gemini-nano",
+            "ms": 1204,
+            "ok": true,
+            "fallback": false
+          },
+          {
+            "task": "classify",
+            "route": "on_device",
+            "source": "on_device",
+            "provider": "firebase",
+            "model": "gemini-nano",
+            "ms": 1117,
+            "ok": true,
+            "fallback": false
+          },
+          {
+            "task": "classify",
+            "route": "on_device",
+            "source": "on_device",
+            "provider": "firebase",
+            "model": "gemini-nano",
+            "ms": 1255,
+            "ok": true,
+            "fallback": false
+          }
+        ]
+      }
+    ]
+  }
+}

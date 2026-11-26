@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { backoffDelay, createTokenBuckets, MAX_RATE_WAIT_MS, rateLimitFor, RETRY_LIMITS, sleep } from './limits';
+import { backoffDelay, createTokenBuckets, INPUT_LIMITS, inputTooLarge, MAX_RATE_WAIT_MS, rateLimitFor, RETRY_LIMITS, sleep } from './limits';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -78,6 +78,33 @@ describe('token bucket per task', () => {
     expect(b.reserve('summarize')).toBe(2000);
     expect(b.reserve('summarize')).toBe(4000);
     expect(b.reserve('summarize')).toBe(-1);
+  });
+});
+
+describe('token bucket and a clock that moves backwards', () => {
+  it('refills nothing instead of draining the bucket when the clock is set back', () => {
+    let t = 10 * 60 * 60 * 1000;
+    const b = createTokenBuckets(() => t);
+    expect(b.reserve('create_app')).toBe(0);
+    t -= 60 * 60 * 1000; // a manual clock change of one hour
+    for (let i = 0; i < 5; i++) expect(b.reserve('create_app')).toBe(0);
+    expect(b.reserve('create_app')).toBe(-1); // capacity spent, as without the clock change
+    t += 10_000;
+    expect(b.reserve('create_app')).toBe(0); // and it refills from the new time
+  });
+});
+
+describe('input size limits (docs/07 §16.2)', () => {
+  const small = { prompt: 'hello', system: 'be brief' };
+  it('accepts ordinary requests and names the limit a large one breaks, without its content', () => {
+    expect(inputTooLarge(small)).toBeUndefined();
+    expect(inputTooLarge({ prompt: 'x'.repeat(INPUT_LIMITS.textChars), system: 'y' })).toMatch(/300001 characters/);
+    const img = { mimeType: 'image/jpeg' as const, base64: 'AAAA' };
+    expect(inputTooLarge({ ...small, images: Array.from({ length: INPUT_LIMITS.images }, () => img) })).toBeUndefined();
+    expect(inputTooLarge({ ...small, images: Array.from({ length: INPUT_LIMITS.images + 1 }, () => img) })).toMatch(/9 images/);
+    const huge = { mimeType: 'image/jpeg' as const, base64: 'A'.repeat(Math.ceil((INPUT_LIMITS.inlineBytes * 4) / 3) + 8) };
+    expect(inputTooLarge({ ...small, images: [huge] })).toMatch(/bytes/);
+    expect(inputTooLarge({ prompt: 'secret salary 52000'.repeat(20_000) })).not.toContain('salary');
   });
 });
 

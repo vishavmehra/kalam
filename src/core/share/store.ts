@@ -10,7 +10,7 @@ export interface ShareLinkStore {
   /** Links where `appId` is the source or the destination. */
   forApp(appId: string): Promise<ShareLink[]>;
   get(id: string): Promise<ShareLink | undefined>;
-  /** Validates, then stores. Throws a `ShareStoreError` for a link that is malformed or names an app that is not there. */
+  /** Validates, then stores. Throws a `ShareStoreError` for a link that is malformed, names an app that is not there, or would turn a turned off link back on. */
   put(link: ShareLink): Promise<void>;
   remove(id: string): Promise<void>;
   /** Deletes every link where `appId` is either side. Returns how many were removed. */
@@ -20,11 +20,15 @@ export interface ShareLinkStore {
 }
 
 export class ShareStoreError extends Error {
+  readonly code = 'share_store';
   constructor(message = 'This link is not in a form Kalam can keep.') {
     super(message);
     this.name = 'ShareStoreError';
   }
 }
+
+/** A turned off link stays off. A write that would switch one back on is refused, so a late save cannot undo a turn off. */
+export const reopens = (stored: ShareLink | undefined, next: ShareLink): boolean => stored?.status === 'revoked' && next.status === 'active';
 
 /** Sorts newest first, the order every store returns. */
 export const newestFirst = (a: ShareLink, b: ShareLink): number => b.createdAt - a.createdAt;
@@ -46,6 +50,8 @@ export function createMemoryShareLinkStore(initial: readonly ShareLink[] = []): 
     async put(link) {
       const p = parseShareLink(link);
       if (!p.ok) throw new ShareStoreError();
+      const stored = rows.get(p.link.id);
+      if (reopens(stored && parseShareLink(stored).ok ? stored : undefined, p.link)) throw new ShareStoreError('This link was turned off.');
       rows.set(p.link.id, JSON.parse(JSON.stringify(p.link)) as ShareLink);
       changed();
     },

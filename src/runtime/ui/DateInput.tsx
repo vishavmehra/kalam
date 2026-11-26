@@ -4,6 +4,7 @@
  */
 import { Text, TextInput, View, type ViewStyle } from 'react-native';
 import { isoDate } from '../engine/fields';
+import { useAppT } from '../use-app-t';
 import type { RuntimeTheme } from '../engine/theme';
 import { font, Pressy } from './kit';
 
@@ -16,14 +17,18 @@ export interface DateInputProps {
   onFocus(): void;
   onBlur(): void;
   boxStyle: ViewStyle;
+  /** The component's a11yDescription. */
+  hint?: string;
 }
 
-export function DateInput({ t, label, labelledBy, value, onChange, onFocus, onBlur, boxStyle }: DateInputProps) {
+export function DateInput({ t, label, labelledBy, value, onChange, onFocus, onBlur, boxStyle, hint }: DateInputProps) {
+  const tr = useAppT();
   return (
     <View style={[boxStyle, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
       <TextInput
         accessibilityLabel={`${label}, year-month-day`}
         accessibilityLabelledBy={labelledBy}
+        accessibilityHint={hint}
         value={value}
         onChangeText={onChange}
         onFocus={onFocus}
@@ -36,11 +41,11 @@ export function DateInput({ t, label, labelledBy, value, onChange, onFocus, onBl
       />
       <Pressy
         accessibilityRole="button"
-        accessibilityLabel={`Set ${label} to today`}
+        accessibilityLabel={tr('inputs.date.setToday', { label })}
         onPress={() => onChange(isoDate(new Date()))}
         style={{ minHeight: t.target, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 999, backgroundColor: t.colors.primarySoft }}
       >
-        <Text style={[font(t, 14, '600'), { color: t.colors.primaryText }]}>Today</Text>
+        <Text style={[font(t, 14, '600'), { color: t.colors.primaryText }]}>{tr('common.today')}</Text>
       </Pressy>
     </View>
   );

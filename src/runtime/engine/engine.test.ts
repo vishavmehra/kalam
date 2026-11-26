@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AccessModes, AIExecutionResult, RecordValue, RuntimeServices } from '@/core/contracts';
+import { installTelemetry, type Telemetry } from '@/core/telemetry';
 import { kalamSpecSchema, type ComponentOf, type KalamSpec } from '@/core/spec/schema';
 import {
-  acceptProposal, collectionValues, contrastRatio, createMemoryStores, createRuntimeState, currentScreen, dispatchAction,
+  acceptProposal, collectionValues, contrastRatio, countingRecords, createMemoryStores, createRuntimeState, currentScreen, dispatchAction,
   evaluate, formatStat, formulaContext, getForm, isoDate, navigate, openRecord, parseNumber, queryList,
   resolveAppTheme, runAIBlockFlow, setFieldValue, stepCounter, visibleChildren, type DataSnapshot, type EngineEnv,
   type RuntimeState,
@@ -96,14 +97,17 @@ const tailor: KalamSpec = kalamSpecSchema.parse({
   meta: { createdAt: 0 },
 });
 
-function harness(opts: { confirm?: boolean; online?: boolean; ai?: AIExecutionResult<Record<string, RecordValue>> } = {}) {
+function harness(opts: { confirm?: boolean; online?: boolean; counted?: boolean; ai?: AIExecutionResult<Record<string, RecordValue>> } = {}) {
   const stores = createMemoryStores(tailor.id);
   const runAIBlock = vi.fn(async () =>
     opts.ai ?? { success: true, output: {}, provider: 'firebase', source: 'cloud', latencyMs: 5, fallbackUsed: false } as AIExecutionResult<Record<string, RecordValue>>);
   const pickImage = vi.fn(async () => ({ mimeType: 'image/jpeg' as const, base64: 'AAAA' }));
   const confirm = vi.fn(async () => opts.confirm ?? true);
+  const online = () => opts.online ?? true;
   const services: RuntimeServices = {
-    ...stores, runAIBlock, pickImage, confirm, speak: vi.fn(), online: () => opts.online ?? true,
+    ...stores, runAIBlock, pickImage, confirm, speak: vi.fn(), online,
+    // Like the installed app: only the persistent repository is wrapped, never the preview's memory stores.
+    ...(opts.counted ? { records: countingRecords(stores.records, online) } : {}),
   };
   const data: DataSnapshot = { records: {}, state: {} };
   const env = (): EngineEnv => ({ spec: tailor, appId: tailor.id, services, data, now: NOW });
@@ -301,6 +305,54 @@ describe('lists', () => {
   });
 });
 
+describe('opt-in counters (docs/01 §20)', () => {
+  const withCounts = async (run: (counted: string[]) => Promise<void>) => {
+    const counted: string[] = [];
+    installTelemetry({ count: async (event: string, dimension: unknown) => { counted.push(`${event}:${String(dimension)}`); } } as unknown as Telemetry);
+    try {
+      await run(counted);
+    } finally {
+      installTelemetry(undefined);
+    }
+  };
+
+  it('counts a saved entry, and a write made offline as completed offline', () => withCounts(async (counted) => {
+    await addOrder(harness({ counted: true }), { customer: 'Asha', amount: 100 });
+    expect(counted).toEqual(['flow:record_created']);
+    counted.length = 0;
+    await addOrder(harness({ counted: true, online: false }), { customer: 'Ravi', amount: 100 });
+    expect(counted).toEqual(['flow:record_created', 'flow:offline_operation_completed']);
+    counted.length = 0;
+    const rejected = harness({ counted: true });
+    let s = (await dispatchAction(rejected.env(), createRuntimeState(tailor), 'go_new')).state;
+    s = fill(s, 'new', { customer: '', amount: 'abc' });
+    await dispatchAction(rejected.env(), s, 'save_order'); // refused by validation: nothing was written
+    expect(counted).toEqual([]);
+  }));
+
+  it('counts an edit made offline, but not one made online', () => withCounts(async (counted) => {
+    for (const online of [true, false]) {
+      const h = harness({ counted: true, online });
+      const row = await h.env().services.records.insert(tailor.id, 'orders', { customer: 'Asha', amount: 100 });
+      counted.length = 0;
+      await h.env().services.records.update(tailor.id, 'orders', row.id, { amount: 120 });
+      expect(counted).toEqual(online ? [] : ['flow:offline_operation_completed']);
+    }
+  }));
+
+  it('does not count what is not saved: previews run over memory stores and count nothing, online or off', () => withCounts(async (counted) => {
+    await addOrder(harness(), { customer: 'Asha', amount: 100 });
+    await addOrder(harness({ online: false }), { customer: 'Ravi', amount: 100 });
+    expect(counted).toEqual([]);
+  }));
+
+  it('does not count a write that fails', () => withCounts(async (counted) => {
+    const h = harness({ counted: true, online: false });
+    await expect(h.env().services.records.update(tailor.id, 'orders', 'rec_missing', { amount: 1 })).rejects.toThrow();
+    expect(counted).toEqual([]);
+  }));
+});
+
 describe('AI blocks', () => {
   it('runAI returns a validated proposal; nothing is applied until accepted', async () => {
     const h = harness({
@@ -332,6 +384,24 @@ describe('AI blocks', () => {
     expect(h.pickImage).not.toHaveBeenCalled();
     expect(h.runAIBlock).not.toHaveBeenCalled();
     expect(r.effects[0]).toMatchObject({ type: 'aiUnavailable', badge: 'offline' });
+  });
+
+  it('a step set to fallback none is not refused offline, and a failed step can offer typing it in', async () => {
+    const h = harness({
+      online: false,
+      ai: { success: false, provider: 'firebase', source: 'on_device', latencyMs: 9, fallbackUsed: false, errorCode: 'model_unavailable' },
+    });
+    const slip = tailor.aiBlocks.slip;
+    const local = { ...tailor, aiBlocks: { slip: { ...slip, fallback: 'none' as const, onError: 'manual_entry' as const } } };
+    const state = navigate(local, createRuntimeState(local), 'new')!;
+    const r = await runAIBlockFlow({ ...h.env(), spec: local }, state, 'slip');
+    expect(h.runAIBlock).toHaveBeenCalledOnce(); // the offline gate let it through
+    expect(r.effects[0]).toMatchObject({ type: 'aiUnavailable', message: expect.stringMatching(/Type it in yourself for now\.$/) });
+    // Without onError the message is the plain one.
+    const plain = { ...tailor, aiBlocks: { slip: { ...slip, fallback: 'none' as const } } };
+    const p = await runAIBlockFlow({ ...h.env(), spec: plain }, navigate(plain, createRuntimeState(plain), 'new')!, 'slip');
+    expect(p.effects[0]).toMatchObject({ type: 'aiUnavailable' });
+    expect(JSON.stringify(p.effects[0])).not.toContain('Type it in yourself');
   });
 
   it('provider failures surface an honest badge and message', async () => {

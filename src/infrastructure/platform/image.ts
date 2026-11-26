@@ -11,6 +11,7 @@ import type { NormalizedImage } from '@/core/contracts';
 import { fitWithin, JPEG_QUALITY, MAX_IMAGE_SIDE, MAX_VIDEO_SECONDS } from '@/features/input/media-math';
 
 export class MediaPermissionError extends Error {
+  readonly code = 'media_permission';
   constructor(public readonly what: 'camera' | 'library') {
     super(what === 'camera'
       ? 'Camera access is off. Allow it in system settings, or choose an existing photo instead.'

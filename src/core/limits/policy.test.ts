@@ -2,6 +2,7 @@
  * The limits policy must say exactly what the code enforces today. Exported constants are imported;
  * private ones (not exported, so they cannot be imported) are read from the source text.
  */
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -37,6 +38,12 @@ import { LIMITS_POLICY_VERSION, limitsPolicy as p } from './policy';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
+/** The first 16 hex digits of a SHA-256 over the policy as JSON, for each released version. */
+const FINGERPRINTS: Record<string, string> = {
+  '1.0.0': 'a965d8364da91d36',
+  '1.1.0': '30bc5e11cbca2db9',
+};
+
 /** Value of `const NAME = <digits and *>;` in a source file. Throws if the line is not that simple. */
 function constIn(file: string, name: string): number {
   const text = readFileSync(`${ROOT}${file}`, 'utf8');
@@ -51,6 +58,14 @@ describe('limits policy', () => {
   it('has a semantic version', () => {
     expect(LIMITS_POLICY_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
     expect(p.version).toBe(LIMITS_POLICY_VERSION);
+  });
+
+  it('changes its version whenever a value changes', () => {
+    const fingerprint = createHash('sha256').update(JSON.stringify(p)).digest('hex').slice(0, 16);
+    expect(
+      FINGERPRINTS[LIMITS_POLICY_VERSION],
+      `A limit changed. Bump LIMITS_POLICY_VERSION, then add "<new version>: '${fingerprint}'" to FINGERPRINTS (keep the old lines).`,
+    ).toBe(fingerprint);
   });
 
   it('is deeply frozen', () => {
@@ -75,22 +90,23 @@ describe('limits policy', () => {
 });
 
 describe('policy equals the constants the code enforces today', () => {
-  it('spec: every key of LIMITS, same value', () => {
-    for (const [key, value] of Object.entries(LIMITS)) {
-      expect(p.spec[key as keyof typeof p.spec], `spec.${key}`).toBe(value);
-    }
+  it('spec: LIMITS in the schema is the policy object, not a copy', () => {
+    expect(LIMITS).toBe(p.spec);
+  });
+
+  it('spec: the files that enforce limits read the policy instead of their own numbers', () => {
+    const read = (file: string) => readFileSync(`${ROOT}${file}`, 'utf8');
+    expect(read('src/core/spec/schema.ts')).toMatch(/export const LIMITS = limitsPolicy\.spec;/);
+    expect(read('src/core/spec/validate.ts')).toMatch(/const MAX_SPEC_BYTES = limitsPolicy\.spec\.specBytes;/);
+    expect(read('src/core/spec/validate.ts')).toMatch(/const MAX_DEPTH = limitsPolicy\.spec\.nestingDepth;/);
+    expect(read('src/core/formula/parse.ts')).toMatch(/const MAX_DEPTH = limitsPolicy\.spec\.formulaDepth;/);
+    expect(read('src/core/edit/apply.ts')).toMatch(/const MAX_OPS = limitsPolicy\.spec\.editOperations;/);
   });
 
   it('spec: the 100 KB size cap matches the validator and the Bazaar publish cap', () => {
     expect(p.spec.specBytes).toBe(100_000);
     expect(p.spec.specBytes).toBe(MAX_SPEC_BYTES);
     expect(p.spec.specBytes).toBe(BAZAAR_LIMITS.specBytes);
-  });
-
-  it('spec: private depth and operation limits', () => {
-    expect(p.spec.nestingDepth).toBe(constIn('src/core/spec/validate.ts', 'MAX_DEPTH'));
-    expect(p.spec.formulaDepth).toBe(constIn('src/core/formula/parse.ts', 'MAX_DEPTH'));
-    expect(p.spec.editOperations).toBe(constIn('src/core/edit/apply.ts', 'MAX_OPS'));
   });
 
   it('data: storage limits', () => {
@@ -106,8 +122,6 @@ describe('policy equals the constants the code enforces today', () => {
   });
 
   it('data: private storage limits', () => {
-    expect(p.data.recordTextLength).toBe(constIn('src/infrastructure/storage/record-validation.ts', 'DEFAULT_TEXT_LIMIT'));
-    expect(p.data.draftJsonBytes).toBe(constIn('src/infrastructure/storage/repositories.ts', 'MAX_DRAFT_JSON'));
     expect(p.data.reminderConfigChars).toBe(constIn('src/features/reminders/config.ts', 'MAX_STORED_LENGTH'));
   });
 

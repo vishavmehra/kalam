@@ -37,7 +37,7 @@ function isNetworkFailure(msg: string): boolean {
 
 /** The service refused the response schema itself: worth one attempt without constrained decoding. */
 export function isSchemaRejection(e: unknown): boolean {
-  const err = typeof e === 'object' && e !== null ? (e as ErrorLike) : {};
+  const err: ErrorLike = typeof e === 'object' && e !== null ? (e as ErrorLike) : {};
   return err.code === 'invalid-schema' || (err.code === 'fetch-error' && err.customErrorData?.status === 400);
 }
 
@@ -49,6 +49,8 @@ export function mapFirebaseError(e: unknown): MappedError {
   if (err.name === 'AbortError') return { code: 'cancelled', message: 'The request was cancelled.' };
   switch (err.code) {
     case 'api-not-enabled':
+      // ONLY_ON_DEVICE meeting an unavailable adapter (web, Android and iOS all throw this one).
+      if (/LanguageModel/.test(msg)) return { code: 'model_unavailable', message: 'On-device AI is not available on this device right now.' };
       return {
         code: 'not_configured',
         message: 'Firebase AI Logic is not enabled for this Firebase project. In the Firebase console open AI Logic → Get started '

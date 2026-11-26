@@ -5,7 +5,7 @@ import { luminance } from '../engine/theme';
 import { font } from './kit';
 import type { DateInputProps } from './DateInput';
 
-export function DateInput({ t, label, labelledBy, value, onChange, onFocus, onBlur, boxStyle }: DateInputProps) {
+export function DateInput({ t, label, labelledBy, value, onChange, onFocus, onBlur, boxStyle, hint }: DateInputProps) {
   const f = font(t, 17, '500');
   return (
     <View style={[boxStyle, { justifyContent: 'center' }]}>
@@ -14,6 +14,7 @@ export function DateInput({ t, label, labelledBy, value, onChange, onFocus, onBl
         value,
         'aria-label': label,
         'aria-labelledby': labelledBy,
+        ...(hint ? { 'aria-description': hint } : {}),
         onChange: (e: { target: { value: string } }) => onChange(e.target.value),
         onFocus,
         onBlur,

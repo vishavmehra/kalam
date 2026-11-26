@@ -2,7 +2,7 @@
  * Renders every raster brand asset in assets/images from the one master, assets/images/src/kalam-mark.svg.
  *
  *   node assets/images/src/render.mjs            write the PNGs
- *   node assets/images/src/render.mjs --check    render in memory, compare with the files on disk, exit 1 on a difference
+ *   node assets/images/src/render.mjs --check    render in memory, compare the pixels with the files on disk, exit 1 on a difference
  *
  * Rasteriser: Skia through canvaskit-wasm. It already ships with @shopify/react-native-skia (the Drawing Studio
  * uses it on the web), so there is no new package and no browser. Each size is drawn from the vector paths at
@@ -12,12 +12,13 @@
  * marigold); the dark and tinted variants below repeat the dark tokens of src/design/tokens.ts, and
  * src/components/brand/brand-assets.test.ts fails if they drift.
  */
+import { Buffer } from 'node:buffer';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { encodePng } from './png.mjs';
+import { decodePng, encodePng } from './png.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, '..');
@@ -256,10 +257,27 @@ function drawTarget(CK, master, box, t) {
   return encodePng({ width: t.size, height: t.size, rgba: new Uint8Array(rgba), alpha: t.alpha });
 }
 
+/** Same image? Compares decoded pixels, so a different zlib build (Node version, CPU) cannot make a file look stale. */
+function samePixels(a, b) {
+  const [x, y] = [decodePng(a), decodePng(b)];
+  return (
+    x.width === y.width &&
+    x.height === y.height &&
+    x.hasAlpha === y.hasAlpha &&
+    Buffer.from(x.rgba).equals(Buffer.from(y.rgba))
+  );
+}
+
 /** Renders every target and returns [{ file, png }]. */
 export async function renderAll() {
-  const CanvasKitInit = require('canvaskit-wasm');
-  const wasmDir = dirname(require.resolve('canvaskit-wasm'));
+  let CanvasKitInit;
+  let wasmDir;
+  try {
+    CanvasKitInit = require('canvaskit-wasm');
+    wasmDir = dirname(require.resolve('canvaskit-wasm'));
+  } catch {
+    throw new Error('canvaskit-wasm not found. It is installed with @shopify/react-native-skia; run npm ci first.');
+  }
   const CK = await CanvasKitInit({ locateFile: (name) => join(wasmDir, name) });
   const master = readMaster();
   const box = measure(CK, master);
@@ -273,7 +291,7 @@ async function main() {
   for (const { file, png } of rendered) {
     const path = join(OUT, file);
     if (check) {
-      const same = existsSync(path) && readFileSync(path).equals(png);
+      const same = existsSync(path) && samePixels(readFileSync(path), png);
       if (!same) stale += 1;
       console.log(`${same ? 'ok   ' : 'STALE'} ${file}`);
     } else {

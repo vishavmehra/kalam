@@ -1,0 +1,375 @@
+{
+  "kind": "web-hybrid-ui-matrix",
+  "recordedAt": "2026-11-26T03:32:16.722Z",
+  "how": "Real web app at http://localhost:8095 (Expo dev server), signed in with a demo email account, in Chrome with real Gemini Nano (CDP port 9333). Driven through the UI with Playwright (.playwright-mcp/hm/matrix.mjs). Cloud requests are counted from the browser network log (host and path only). Inference events are read from the app activity log (IndexedDB) and compared with the Activity screen.",
+  "environment": {
+    "chrome": "158.0.8127.36",
+    "appUrl": "http://localhost:8095",
+    "onDeviceStatusShown": "On-device AI ready",
+    "platformShown": "web: on-device AI found",
+    "appCheck": "Active with a debug token, for development only",
+    "cloudBackend": "Firebase AI Logic (agent platform backend, global)",
+    "demoAccount": "one email account created through the app sign-up form; credentials kept only in the gitignored .handoff/demo-account.local"
+  },
+  "scenarios": [
+    {
+      "id": "S1",
+      "title": "Simple template app with on-device help (Nano)",
+      "pass": true,
+      "observed": {
+        "coldFirstBuild": "Nano was not warm yet, so the template step skipped it by design: Template route, 71 ms, no on-device event, no cloud request.",
+        "warmBuild": {
+          "stamp": "On-device",
+          "review": "Template filled in by on-device AI",
+          "targetFilledByNano": 100,
+          "events": [
+            {
+              "taskType": "extract_template_params",
+              "route": "on_device",
+              "source": "on_device",
+              "provider": "firebase",
+              "model": "gemini-nano",
+              "latencyMs": 4014,
+              "success": true,
+              "errorCode": null,
+              "fallbackUsed": false,
+              "taskId": "58089ddd-ef25-4082-96ec-69f569c136f9",
+              "escalationReason": "template parameters incomplete"
+            }
+          ],
+          "cloudRequests": 0
+        },
+        "firstEverBuildInThisTab": "Nano ran but hit the 6 s template budget: on-device event errorCode cancelled (Failed, 6.0 s); the build finished from the deterministic template. See the s1x files."
+      },
+      "screenshots": [
+        "s1-0-settings-status.png",
+        "s1a-cold-1-create-forecast.png",
+        "s1a-cold-4-after-build.png",
+        "s1b-warm-1-create-forecast.png",
+        "s1b-warm-3-progress.png",
+        "s1b-warm-4-after-build.png",
+        "s1x-first-run-nano-budget-cancel-4-after-build.png",
+        "s1-5-activity.png"
+      ]
+    },
+    {
+      "id": "S2",
+      "title": "Complex app that needs Firebase cloud inference",
+      "pass": true,
+      "observed": {
+        "attempt1": {
+          "prompt": "cloud kitchen with customers, orders, dues and a weekly report",
+          "stamp": "Cloud",
+          "cloudNoticeShownAndAccepted": true,
+          "events": [
+            {
+              "taskType": "create_app",
+              "route": "cloud",
+              "source": "cloud",
+              "provider": "firebase",
+              "model": "gemini-3.8-flash",
+              "latencyMs": 29152,
+              "success": true,
+              "errorCode": null,
+              "fallbackUsed": false,
+              "taskId": "7dddb761-5c87-41c6-85f5-b24e1f4d885e",
+              "escalationReason": null
+            },
+            {
+              "taskType": "repair_spec",
+              "route": "cloud",
+              "source": "cloud",
+              "provider": "firebase",
+              "model": "gemini-3.8-flash",
+              "latencyMs": 15978,
+              "success": true,
+              "errorCode": null,
+              "fallbackUsed": false,
+              "taskId": "79e78c1c-54e2-4122-bc97-4dabc3ece2ae",
+              "escalationReason": null
+            }
+          ],
+          "cloudRequests": 2,
+          "result": "Both model runs succeeded but the app did not pass the checks: \"Kalam could not build this app yet\", description kept, nothing saved."
+        },
+        "attempt2": {
+          "prompt": "tailor order book (golden case t15, medium)",
+          "stamp": "Cloud",
+          "review": "Built with Firebase cloud AI",
+          "events": [
+            {
+              "taskType": "create_app",
+              "route": "cloud",
+              "source": "cloud",
+              "provider": "firebase",
+              "model": "gemini-3.8-flash",
+              "latencyMs": 14138,
+              "success": true,
+              "errorCode": null,
+              "fallbackUsed": false,
+              "taskId": "14649c5f-fed7-4a3f-9e7a-28f8a508183d",
+              "escalationReason": "task requires cloud reasoning"
+            }
+          ],
+          "cloudRequests": 1,
+          "model": "gemini-3.8-flash",
+          "result": "Built, Checked, reviewable"
+        }
+      },
+      "screenshots": [
+        "s2-0-settings-status.png",
+        "s2-complex-cloud-1-create-forecast.png",
+        "s2-complex-cloud-2-cloud-notice.png",
+        "s2-complex-cloud-3-progress.png",
+        "s2-complex-cloud-4-after-build.png",
+        "s2-5-activity.png",
+        "s2b-cloud-medium-1-create-forecast.png",
+        "s2b-cloud-medium-3-progress.png",
+        "s2b-cloud-medium-4-after-build.png",
+        "s2b-5-activity.png"
+      ]
+    },
+    {
+      "id": "S3",
+      "title": "Offline: cloud task refused gracefully, local work still builds",
+      "pass": true,
+      "observed": {
+        "navigatorOnLine": false,
+        "cloudTask": {
+          "stamp": "Needs the cloud",
+          "message": "This app needs the cloud to build. You are offline, and this idea is too detailed to build on this device. Your input is kept.",
+          "options": [
+            "Queue until online",
+            "Try again",
+            "Close"
+          ],
+          "cloudRequestsMade": 0
+        },
+        "localTask": {
+          "stamp": "On-device",
+          "review": "Template filled in by on-device AI",
+          "cloudRequestsMade": 0
+        },
+        "events": [
+          {
+            "taskType": "create_app",
+            "route": "cloud",
+            "source": "deterministic",
+            "provider": "deterministic",
+            "model": null,
+            "latencyMs": 30,
+            "success": false,
+            "errorCode": "offline",
+            "fallbackUsed": false,
+            "taskId": "task_n89jf3f7",
+            "escalationReason": "cloud compiler required but unavailable"
+          },
+          {
+            "taskType": "extract_template_params",
+            "route": "on_device",
+            "source": "on_device",
+            "provider": "firebase",
+            "model": "gemini-nano",
+            "latencyMs": 3855,
+            "success": true,
+            "errorCode": null,
+            "fallbackUsed": false,
+            "taskId": "a9bbc642-38be-4e63-9a70-3f119e6ef47a",
+            "escalationReason": "template parameters incomplete"
+          },
+          {
+            "taskType": "create_app",
+            "route": "template",
+            "source": "deterministic",
+            "provider": "deterministic",
+            "model": "template:counter",
+            "latencyMs": 3932,
+            "success": true,
+            "errorCode": null,
+            "fallbackUsed": false,
+            "taskId": "task_z6ab13mb",
+            "escalationReason": null
+          }
+        ],
+        "statusUiOffline": {
+          "network": "Offline",
+          "onDevice": "On-device AI ready",
+          "activityLogReadable": true,
+          "cloudRequests": 0
+        }
+      },
+      "screenshots": [
+        "s3a-offline-cloud-task-1-create-forecast.png",
+        "s3a-offline-cloud-task-4-after-build.png",
+        "s3b-offline-template-4-after-build.png",
+        "s3c-offline-settings-a-on-device.png",
+        "s3c-offline-settings-b-cloud.png",
+        "s3c-offline-activity.png"
+      ]
+    },
+    {
+      "id": "S4",
+      "title": "Single cloud fallback after the device fails",
+      "pass": true,
+      "observed": {
+        "task": "voice_action (typed command to the app voice agent). Its web benchmark passed, so it is on-device first.",
+        "deviceFirst": {
+          "events": [
+            {
+              "taskType": "voice_action",
+              "route": "on_device",
+              "source": "on_device",
+              "provider": "firebase",
+              "model": "gemini-nano",
+              "latencyMs": 2548,
+              "success": true,
+              "errorCode": null,
+              "fallbackUsed": false,
+              "taskId": "9b8c3461-76ec-4a7b-a04d-799ef3102b63",
+              "escalationReason": null
+            }
+          ],
+          "cloudRequests": 0,
+          "result": "Opened Add expense. | You said: jot down lunch for 250 rupees | Send | Repeat | Close"
+        },
+        "fallback": {
+          "how": "The page makes LanguageModel.create throw NotAllowedError. Nothing else is patched.",
+          "nanoCreateRefusedCount": 1,
+          "events": [
+            {
+              "taskType": "voice_action",
+              "route": "on_device",
+              "source": "on_device",
+              "provider": "firebase",
+              "model": null,
+              "latencyMs": 6,
+              "success": false,
+              "errorCode": "model_unavailable",
+              "fallbackUsed": false,
+              "taskId": "b78b5500-eef9-4333-9309-d8fb80d43071",
+              "escalationReason": null
+            },
+            {
+              "taskType": "voice_action",
+              "route": "cloud",
+              "source": "cloud",
+              "provider": "firebase",
+              "model": "gemini-3.5-flash-lite",
+              "latencyMs": 1958,
+              "success": true,
+              "errorCode": null,
+              "fallbackUsed": true,
+              "taskId": "b78b5500-eef9-4333-9309-d8fb80d43071",
+              "escalationReason": "hybrid fallback to cloud; on-device failed (model_unavailable); one Firebase cloud fallback"
+            }
+          ],
+          "cloudRequestsDuringCommand": 1,
+          "result": "Opened Add expense. | You said: jot down lunch for 250 rupees | Send | Repeat | Close",
+          "activityMetric": "Cloud after on-device failed: 1 of 1 worked"
+        },
+        "assistantQuestion": {
+          "note": "classify on web is not on-device first: its benchmark failed (83.3% correct, needs 85%), so the App Assistant goes straight to the cloud and says so.",
+          "events": [
+            {
+              "taskType": "classify",
+              "route": "cloud",
+              "source": "cloud",
+              "provider": "firebase",
+              "model": "gemini-3.5-flash-lite",
+              "latencyMs": 2044,
+              "success": true,
+              "errorCode": null,
+              "fallbackUsed": true,
+              "taskId": "d6cb78f9-2630-4a14-90f3-1f5dfe2c5e32",
+              "escalationReason": "on-device model failed its benchmark for this task; hybrid fallback to cloud"
+            }
+          ],
+          "answer": "count(filter(expenses, amount > 500)) = 0, badge \"Formula written online, calculated on this device\"",
+          "cloudRequests": 1
+        }
+      },
+      "screenshots": [
+        "s4c-device-first-1-command.png",
+        "s4c-device-first-2-result.png",
+        "s4d-fallback-1-command.png",
+        "s4d-fallback-2-result.png",
+        "s4d-3-activity.png",
+        "final-activity-fallback-rows.png",
+        "final-activity-metrics.png",
+        "s4a-device-first-2-answer.png"
+      ]
+    }
+  ],
+  "totals": {
+    "cloudRequests": {
+      "s2": 2,
+      "s2b": 1,
+      "s3": 0,
+      "s4a": 1,
+      "s4d": 1
+    },
+    "activityEventsOnThisBrowser": 23
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "minor",
+      "area": "activity metrics",
+      "text": "A template-parameter Nano run that hits its own 6 s budget is stored with errorCode cancelled, and the Activity table counts it under \"Cancelled by you\" although the person did nothing."
+    },
+    {
+      "id": "F2",
+      "severity": "minor",
+      "area": "template quality",
+      "text": "The counter template names its label \"Counting my\" from \"counting my daily push-ups\" (the screen reads \"Counter: Counting my\" and \"Counts counting my with one tap\"), with or without Nano."
+    },
+    {
+      "id": "F3",
+      "severity": "minor",
+      "area": "offline UX",
+      "text": "The offline cloud refusal shows two messages: the correct \"This app needs the cloud to build\" card and, below it, a generic recovery card \"Something went wrong.\""
+    },
+    {
+      "id": "F4",
+      "severity": "minor",
+      "area": "activity labels",
+      "text": "A call sent to the cloud because the task failed its benchmark (assistant \"Sort the request\") carries the Fallback chip and counts in the Fallbacks tile (2), though the device never failed. The \"Cloud after on-device failed\" row correctly says 1."
+    },
+    {
+      "id": "F5",
+      "severity": "minor",
+      "area": "copy",
+      "text": "The run screen stamp reads \"On this phone\" in a desktop browser."
+    },
+    {
+      "id": "F6",
+      "severity": "note",
+      "area": "compiler",
+      "text": "The 33-word cloud-kitchen request used a compile run (29 s) and a repair run (16 s), then failed the checks. The failure is graceful, but the questions offered are generic. The eval shows 93% valid after repair on cloud-routed cases."
+    },
+    {
+      "id": "F7",
+      "severity": "note",
+      "area": "on-device coverage",
+      "text": "On web only voice_action is local-ready. classify (83.3%), summarize (60%) and translate (75%) failed their benchmarks, so those tasks go to the cloud."
+    },
+    {
+      "id": "F8",
+      "severity": "note",
+      "area": "first run",
+      "text": "On-device help for templates only starts once Nano is warm (about 30 s after Create opens in a fresh tab). Earlier builds are deterministic, as designed."
+    },
+    {
+      "id": "F9",
+      "severity": "info",
+      "area": "console",
+      "text": "No page errors. One report-only CSP message about framing https://www.google.com/ (reCAPTCHA Enterprise for App Check) in development, and one expected net::ERR_INTERNET_DISCONNECTED while offline."
+    },
+    {
+      "id": "F10",
+      "severity": "infra",
+      "area": "dev server",
+      "text": "The Metro dev server on 8095 (pid 9724, up since 25 Nov) sat at 100% CPU for 19 minutes and answered nothing. It was stopped and restarted with npx expo start --web --port 8095."
+    }
+  ]
+}

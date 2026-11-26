@@ -82,8 +82,8 @@ export function outputTokensFor(role: ModelRole, requested?: number): number {
  * with a bump. Ship a second text per role (and a fingerprint test) when prompts are A/B tested.
  */
 export const PROMPT_VERSIONS: Readonly<Record<ModelRole, readonly [string, ...string[]]>> = {
-  compiler: ['compile-v1'],
-  repair: ['repair-v1'],
+  compiler: ['compile-v2'],
+  repair: ['repair-v2'],
   judge: ['judge-v1'],
   safety: ['safety-v1'],
   local_assistant: ['assistant-v1'],

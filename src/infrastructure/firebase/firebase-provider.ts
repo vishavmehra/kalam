@@ -10,15 +10,20 @@ import {
 } from 'firebase/ai';
 import { cloudResponseSchema } from '@/core/ai/json-schema';
 import { DEFAULT_TIMEOUT_MS } from '@/core/ai/limits';
-import { modelForRole, ON_DEVICE_MODEL } from '@/core/ai/model-config';
+import { modelForRole } from '@/core/ai/model-config';
 import { withBudget } from '@/core/ai/orchestrator';
 import { isFallback } from '@/core/ai/routing';
 import type { AIErrorCode, AIExecutionResult, AIProvider, InferenceMode, StructuredRequest } from '@/core/contracts';
 import { appCheckReady, getFirebaseApp, isFirebaseConfigured } from './app';
 import { isSchemaRejection, mapFirebaseError } from './errors';
-import { getLanguageModel, onDeviceStatus, prepareOnDevice, warmUpOnDevice } from './on-device';
+import { getLanguageModel, ON_DEVICE_MODEL_NAME, onDeviceStatus, prepareOnDevice, warmUpOnDevice } from './on-device';
 import { textIO } from './prompt-io';
 import { loadRemoteConfig } from './remote-config';
+
+/** DOMException names the Prompt API and the native on-device bridges throw (see errors.ts). */
+const ON_DEVICE_ERRORS: ReadonlySet<string> = new Set([
+  'NotAllowedError', 'NotSupportedError', 'QuotaExceededError', 'UnknownError', 'InvalidStateError', 'OperationError',
+]);
 
 /** A debug-token exchange takes ~1 s and a first reCAPTCHA Enterprise token a few seconds. */
 const APP_CHECK_BUDGET_MS = 8_000;
@@ -111,10 +116,11 @@ export function createFirebaseProvider(): AIProvider {
     async generateStructured<T>(req: StructuredRequest<T>): Promise<AIExecutionResult<T>> {
       const started = Date.now();
       const images = req.images ?? [];
+      const audio = req.audio ?? [];
       // Which leg the SDK will use, so a failure reports where it happened (the orchestrator's one
       // cloud fallback depends on it). prefer_on_device mirrors the SDK: on-device only when available.
       const leg: 'on_device' | 'cloud' = req.mode === 'only_on_device'
-        || (req.mode === 'prefer_on_device' && !!getLanguageModel()
+        || (req.mode === 'prefer_on_device' && !audio.length && !!getLanguageModel()
           && (await withBudget(onDeviceStatus(), 1_500, { platform: 'web', apiExposed: true, availability: 'unknown' })).availability === 'available')
         ? 'on_device' : 'cloud';
       const fail = (code: AIErrorCode, message: string, source: 'on_device' | 'cloud' = leg, model?: string): AIExecutionResult<T> => ({
@@ -134,6 +140,7 @@ export function createFirebaseProvider(): AIProvider {
         // Without the Prompt API the SDK builds no on-device adapter and would silently call the cloud.
         if (!getLanguageModel()) return fail('model_unavailable', 'On-device AI is not available on this platform.');
         if (images.some((i) => i.mimeType === 'image/webp')) return fail('unsupported_modality', 'On-device AI accepts JPEG or PNG images only.');
+        if (audio.length) return fail('unsupported_modality', 'On-device AI does not hear recordings here. Transcription runs in the cloud.');
       }
 
       // The SDK awaits an App Check token before each cloud request with no timeout of its own.
@@ -167,7 +174,8 @@ export function createFirebaseProvider(): AIProvider {
         };
         const schemaNote = `Reply with one JSON value that matches this JSON Schema:\n${JSON.stringify(cloudSchema)}`;
         return getGenerativeModel(ai, {
-          mode: SDK_MODE[req.mode],
+          // The device models are not assumed to hear audio: a recording always goes to the cloud leg.
+          mode: audio.length && req.mode === 'prefer_on_device' ? SDK_MODE.only_in_cloud : SDK_MODE[req.mode],
           inCloudParams: {
             model,
             systemInstruction: placement === 'config' ? req.system : [req.system, schemaNote].filter(Boolean).join('\n\n'),
@@ -198,6 +206,8 @@ export function createFirebaseProvider(): AIProvider {
       const parts: Part[] = [
         { type: 'text', text: req.prompt },
         ...images.map((img): Part => ({ type: 'inlineData', inlineData: { mimeType: img.mimeType, data: img.base64 } })),
+        // Gemini names an MP3 "audio/mp3"; the file sniffer (core/media/sniff.ts) calls it "audio/mpeg".
+        ...audio.map((a): Part => ({ type: 'inlineData', inlineData: { mimeType: a.mimeType === 'audio/mpeg' ? 'audio/mp3' : a.mimeType, data: a.base64 } })),
       ];
       const generate = async (placement: SchemaPlacement) => {
         const call = generativeModel(placement).generateContent(parts, {
@@ -219,7 +229,7 @@ export function createFirebaseProvider(): AIProvider {
         }
 
         const source = response.inferenceSource === 'on_device' ? 'on_device' : 'cloud';
-        const usedModel = source === 'on_device' ? ON_DEVICE_MODEL : model;
+        const usedModel = source === 'on_device' ? ON_DEVICE_MODEL_NAME : model;
         reportUsage(req, response.usageMetadata);
         let raw: unknown;
         try {
@@ -236,7 +246,10 @@ export function createFirebaseProvider(): AIProvider {
       } catch (e) {
         if (timedOut) return fail('timeout', `No response within ${Math.round((req.timeoutMs ?? DEFAULT_TIMEOUT_MS) / 1000)} s.`);
         const mapped = mapFirebaseError(e);
-        return fail(mapped.code, mapped.message);
+        // The status probe can time out and label the leg 'cloud' although the device ran and threw. A Prompt API
+        // error name proves the device leg, so the orchestrator's one cloud fallback (lead decision 2) still runs.
+        const onDeviceError = req.mode === 'prefer_on_device' && ON_DEVICE_ERRORS.has(String((e as { name?: unknown } | null)?.name));
+        return fail(mapped.code, mapped.message, onDeviceError ? 'on_device' : undefined);
       } finally {
         clearTimeout(timer);
         req.signal?.removeEventListener('abort', forwardAbort);

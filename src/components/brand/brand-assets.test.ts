@@ -1,12 +1,15 @@
 /**
  * Guards the brand rasters in assets/images (rendered by assets/images/src/render.mjs from kalam-mark.svg):
  * sizes and alpha, adaptive icon safe zone, single-colour monochrome layer, contrast, and that app.json and
- * scripts/build-pwa.mjs point at files that exist. Reads the finished PNGs; it does not re-render them
- * (run `node assets/images/src/render.mjs --check` for that).
+ * scripts/build-pwa.mjs point at files that exist. It also runs `render.mjs --check` (the PNGs match the master SVG)
+ * and the real build-pwa.mjs on a scratch dist (manifest, touch icon, precache), so none of that can drift unnoticed.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { decodePng, type DecodedPng } from '../../../assets/images/src/png.mjs';
 
@@ -93,12 +96,15 @@ const token = (source: string, name: string) => {
   if (!m?.[1]) throw new Error(`token ${name} not found`);
   return m[1].toUpperCase();
 };
-const darkBlock = tokens.slice(tokens.indexOf('export const darkColors'));
-const INK = token(tokens, 'ink');
-const MARIGOLD = token(tokens, 'marigold');
-const PAPER = token(tokens, 'paper');
+// The icon keeps its own colours until it is redrawn for "Khata and Kalam" (tokens.ts iconColors).
+const iconBlock = tokens.slice(tokens.indexOf('export const iconColors'));
+const darkBlock = iconBlock.slice(iconBlock.indexOf('dark:'));
+const INK = token(iconBlock, 'ink');
+const MARIGOLD = token(iconBlock, 'marigold');
+const PAPER = token(iconBlock, 'paper');
 const DARK = {
   background: token(darkBlock, 'background'),
+  splash: token(darkBlock, 'splash'),
   ink: token(darkBlock, 'primary'),
   marigold: token(darkBlock, 'accent'),
 };
@@ -242,8 +248,9 @@ describe('contrast of the finished art', () => {
     expect(contrast(INK, PAPER)).toBeGreaterThanOrEqual(7);
     expect(contrast(DARK.ink, DARK.background)).toBeGreaterThanOrEqual(7);
     expect(contrast(DARK.marigold, DARK.background)).toBeGreaterThanOrEqual(3);
-    // The marigold dot on paper is about 1.9:1 by design: a full stop that carries no meaning, the K does.
-    expect(contrast(MARIGOLD, PAPER)).toBeLessThan(3);
+    expect(contrast(DARK.ink, DARK.splash)).toBeGreaterThanOrEqual(7);
+    expect(contrast(DARK.marigold, DARK.splash)).toBeGreaterThanOrEqual(3);
+    // The marigold dot on paper is only 1.8:1. It is decorative (the K carries the meaning), so it is not asserted.
   });
 });
 
@@ -278,8 +285,9 @@ describe('wiring', () => {
   const config = JSON.parse(text('app.json')) as {
     expo: {
       icon: string;
+      ios: { icon: { light: string; dark: string; tinted: string } };
       android: { adaptiveIcon: { foregroundImage: string; backgroundImage: string; monochromeImage: string } };
-      web: { favicon: string };
+      web: { favicon: string; themeColor: string; backgroundColor: string };
       plugins: Array<string | [string, Record<string, unknown>]>;
     };
   };
@@ -303,23 +311,133 @@ describe('wiring', () => {
     paths.forEach((p) => expect(exists(p), p).toBe(true));
   });
 
+  it('gives iOS the light, dark and tinted icons', () => {
+    expect(config.expo.ios.icon).toEqual({
+      light: './assets/images/icon.png',
+      dark: './assets/images/icon-ios-dark.png',
+      tinted: './assets/images/icon-ios-tinted.png',
+    });
+    Object.values(config.expo.ios.icon).forEach((p) => expect(exists(p), p).toBe(true));
+  });
+
   it('uses a 1024 opaque top-level icon and a 48 px favicon', () => {
     const icon = png('icon.png');
     expect([icon.width, icon.height, icon.hasAlpha]).toEqual([1024, 1024, false]);
     expect(png('favicon.png').width).toBe(48);
   });
 
-  it('paints the splash on the paper and dark background tokens', () => {
+  it('paints the splash on the paper and ink night canvas tokens', () => {
     expect(String(splash.backgroundColor).toUpperCase()).toBe(PAPER);
-    expect(String((splash.dark as { backgroundColor: string }).backgroundColor).toUpperCase()).toBe(DARK.background);
+    expect(String((splash.dark as { backgroundColor: string }).backgroundColor).toUpperCase()).toBe(DARK.splash);
   });
 
-  it('lets build-pwa.mjs ship the 192, 512, maskable and touch icons that exist', () => {
-    const script = text('scripts/build-pwa.mjs');
-    const files = [...script.matchAll(/file: '([^']+\.png)'/g)].map((m) => m[1] as string);
-    const touch = script.match(/TOUCH_ICON = '([^']+)'/)?.[1] ?? '';
-    expect(files).toEqual(['pwa-192.png', 'pwa-512.png', 'pwa-maskable-512.png']);
-    [...files, touch].forEach((file) => expect(existsSync(`${IMAGES}${file}`), file).toBe(true));
-    expect(script).toContain("purpose: 'maskable'");
+  it('uses the paper token for the web theme and background colours', () => {
+    expect(config.expo.web.themeColor.toUpperCase()).toBe(PAPER);
+    expect(config.expo.web.backgroundColor.toUpperCase()).toBe(PAPER);
+  });
+});
+
+describe('render.mjs', () => {
+  it('finds every raster in step with the master SVG (node render.mjs --check)', () => {
+    const run = spawnSync(process.execPath, [`${IMAGES}src/render.mjs`, '--check'], { encoding: 'utf8' });
+    expect(run.status, `${run.stdout}${run.stderr}`).toBe(0);
+    expect(run.stdout.match(/^ok /gm)).toHaveLength(13);
+  }, 120_000);
+});
+
+describe('one palette', () => {
+  const files = (dir: string): string[] =>
+    readdirSync(`${ROOT}${dir}`, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? files(`${dir}/${e.name}`) : [`${dir}/${e.name}`],
+    );
+  const svgs = files('assets').filter((f) => f.endsWith('.svg'));
+  // The forest green, ochre and cream of the first palette.
+  const OLD = /#(315C4C|D69B52|F8F7F2|202820|151A17|F1F4EF)\b/i;
+
+  it('keeps the three logo SVGs', () => {
+    expect(svgs.sort()).toEqual(['assets/brand/logo.svg', 'assets/brand/mark.svg', 'assets/images/src/kalam-mark.svg']);
+  });
+
+  it.each([...svgs, 'app.json', 'scripts/build-pwa.mjs'])('%s holds no colour of the old green palette', (path) => {
+    expect(text(path)).not.toMatch(OLD);
+  });
+
+  it.each(['assets/brand/logo.svg', 'assets/brand/mark.svg'])('%s draws the same K as the master', (path) => {
+    const svg = text(path);
+    const master = text('assets/images/src/kalam-mark.svg');
+    for (const id of ['stem', 'arm', 'leg']) {
+      const d = master.match(new RegExp(`id="${id}"[^>]*\\sd="([^"]+)"`))?.[1];
+      expect(d).toBeTruthy();
+      expect(svg).toContain(`d="${d}"`);
+    }
+    expect(svg).toContain('cx="39" cy="38.6" r="2.6"');
+    expect(svg).toContain(`fill="${MARIGOLD}"`);
+  });
+
+  it('writes the wordmark in the ink text token', () => {
+    expect(text('assets/brand/logo.svg')).toContain(token(iconBlock, 'inkText'));
+  });
+});
+
+describe('build-pwa.mjs on a scratch dist', () => {
+  const script = `${ROOT}scripts/build-pwa.mjs`;
+  const run = (dist: string) => execFileSync(process.execPath, [script, dist], { encoding: 'utf8' });
+  const html = '<!doctype html><html><head><title>Kalam</title></head><body><div id="root"></div></body></html>';
+  let dist = '';
+  let index = '';
+  let manifest: {
+    theme_color: string;
+    background_color: string;
+    icons: Array<{ src: string; sizes: string; type: string; purpose: string }>;
+  };
+
+  beforeAll(() => {
+    dist = mkdtempSync(join(tmpdir(), 'kalam-pwa-'));
+    writeFileSync(join(dist, 'index.html'), html);
+    run(dist);
+    index = readFileSync(join(dist, 'index.html'), 'utf8');
+    manifest = JSON.parse(readFileSync(join(dist, 'manifest.webmanifest'), 'utf8'));
+  }, 60_000);
+  afterAll(() => rmSync(dist, { recursive: true, force: true }));
+
+  it('lists the 192, 512 and maskable 512 icons with their real sizes and purposes', () => {
+    expect(manifest.icons.map((i) => [i.sizes, i.purpose, i.type])).toEqual([
+      ['192x192', 'any', 'image/png'],
+      ['512x512', 'any', 'image/png'],
+      ['512x512', 'maskable', 'image/png'],
+    ]);
+    const names = ['pwa-192', 'pwa-512', 'pwa-maskable-512'];
+    manifest.icons.forEach((icon, i) => {
+      expect(icon.src).toMatch(new RegExp(`^/icons/${names[i]}\\.[0-9a-f]{12}\\.png$`));
+      expect(readFileSync(join(dist, icon.src)).equals(readFileSync(`${IMAGES}${names[i]}.png`))).toBe(true);
+    });
+  });
+
+  it('paints the install colours with the paper token', () => {
+    expect(manifest.theme_color.toUpperCase()).toBe(PAPER);
+    expect(manifest.background_color.toUpperCase()).toBe(PAPER);
+    expect(index.match(/<meta name="theme-color" content="([^"]+)"/)?.[1]?.toUpperCase()).toBe(PAPER);
+  });
+
+  it('links the manifest and one hashed apple-touch-icon in index.html', () => {
+    expect(index.match(/rel="manifest"/g)).toHaveLength(1);
+    const touch = [...index.matchAll(/<link rel="apple-touch-icon" href="([^"]+)"/g)].map((m) => m[1] as string);
+    expect(touch).toHaveLength(1);
+    expect(touch[0]).toMatch(/^\/icons\/apple-touch-icon\.[0-9a-f]{12}\.png$/);
+    expect(readFileSync(join(dist, touch[0] as string)).equals(readFileSync(`${IMAGES}apple-touch-icon.png`))).toBe(
+      true,
+    );
+  });
+
+  it('precaches every icon in sw.js', () => {
+    const sw = readFileSync(join(dist, 'sw.js'), 'utf8');
+    const precache = JSON.parse(sw.match(/const PRECACHE = (\[.*\]);/)?.[1] ?? '[]') as string[];
+    const touch = index.match(/rel="apple-touch-icon" href="([^"]+)"/)?.[1];
+    [...manifest.icons.map((i) => i.src), touch].forEach((url) => expect(precache).toContain(url));
+  });
+
+  it('adds no second set of tags when it runs again', () => {
+    run(dist);
+    expect(readFileSync(join(dist, 'index.html'), 'utf8')).toBe(index);
   });
 });

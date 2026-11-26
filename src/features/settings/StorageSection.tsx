@@ -2,53 +2,50 @@ import { Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { Button, ConfirmSheet, Text, useBreakpoint, useToast } from '@/design';
-import { getDatabase } from '@/infrastructure/storage/database';
+import { Button, ConfirmSheet, Text, useBreakpoint, useKalamTheme, useToast } from '@/design';
+import { clearDiagnostics } from '@/features/diagnostics';
+import { useT } from '@/i18n/react';
 import { useAppsStore } from '@/state/apps-store';
 
 import { Section } from './Section';
+import { wipeLocalData } from './wipe';
 
 /**
- * Full local wipe. Backups now live in BackupPanel (encrypted) and space per app in
- * StorageManagerPanel, so the old plain JSON export and import are gone from here.
+ * Full local wipe. Backups live in BackupPanel (encrypted) and space per app in StorageManagerPanel.
+ * The wipe also clears the usage counts and timings that diagnostics keeps (M1).
  */
 export function StorageSection() {
+  const theme = useKalamTheme();
+  const t = useT(theme.uiLanguage);
   const toast = useToast();
   const { isPhone } = useBreakpoint();
   const refresh = useAppsStore((s) => s.refresh);
   const [confirmWipe, setConfirmWipe] = useState(false);
 
   const wipe = async () => {
-    const db = getDatabase();
     try {
-      const [apps, drawings, sessions] = await Promise.all([db.apps.list(), db.drawings.list(), db.sessions.list()]);
-      for (const a of apps) await db.apps.remove(a.id);
-      for (const d of drawings) await db.drawings.remove(d.id);
-      // Saved AI answers and unfinished drafts are data too (docs/11 §6.5).
-      for (const s of sessions) await db.sessions.remove(s.id);
-      await db.aiCache.clear();
-      await db.clearTranslations();
-      await db.events.clear();
+      await wipeLocalData();
+      await clearDiagnostics().catch(() => {});
       await refresh();
-      toast.show({ message: 'All apps and data were deleted from this device', tone: 'success' });
-    } catch (e) {
-      toast.show({ message: e instanceof Error ? e.message : 'Could not delete everything. Some data may remain.', tone: 'danger' });
+      toast.show({ message: t('settings.storage.deleted'), tone: 'success' });
+    } catch {
+      toast.show({ message: t('settings.storage.deleteFailed'), tone: 'danger' });
     } finally {
       setConfirmWipe(false);
     }
   };
 
   return (
-    <Section title="Delete everything" description="Your apps and their records are stored only on this device.">
+    <Section title={t('settings.wipe.title')} description={t('settings.wipe.intro')} testID="settings-wipe">
       <View style={{ gap: 8, paddingVertical: 8, alignItems: isPhone ? 'stretch' : 'flex-start' }}>
-        <Button label="Delete all apps and data" icon={Trash2} variant="destructive" onPress={() => setConfirmWipe(true)} fullWidth={isPhone} />
-        <Text variant="bodySmall" tone="muted">Your settings stay. Backups you exported are not affected.</Text>
+        <Button label={t('settings.storage.deleteAll')} icon={Trash2} variant="destructive" onPress={() => setConfirmWipe(true)} fullWidth={isPhone} />
+        <Text variant="bodySmall" tone="muted">{t('settings.wipe.keeps')}</Text>
       </View>
       <ConfirmSheet
         visible={confirmWipe}
-        title="Delete everything on this device?"
-        message="Every app, version, record, drawing, unfinished draft, saved AI answer and the activity log will be permanently removed from this device. This cannot be undone."
-        confirmLabel="Delete everything"
+        title={t('settings.storage.deleteTitle')}
+        message={t('settings.wipe.confirm')}
+        confirmLabel={t('settings.wipe.confirmLabel')}
         destructive
         onCancel={() => setConfirmWipe(false)}
         onConfirm={wipe}

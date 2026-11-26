@@ -173,10 +173,17 @@ module.exports = defineConfig([
     'ios/**',
     'functions/lib/**',
     'functions/node_modules/**',
+    'mcp/dist/**',
     'tests/e2e/.artifacts/**',
     'tests/evaluation/reports/**',
     'coverage/**',
     'expo-env.d.ts',
+    // Local scratch (gitignored): handoff notes, browser-test scripts, test runner cache.
+    '.handoff/**',
+    '.playwright-mcp/**',
+    '.vitest/**',
+    '.impeccable/**',
+    '.remember/**',
   ]),
 
   expoConfig,

@@ -1,0 +1,230 @@
+{
+  "kind": "video-live-run",
+  "recordedAt": "2026-11-26T01:06:27.573Z",
+  "command": "node scripts/eval.mjs --live --budget 12 --video-frames",
+  "what": "Five video cases of the golden set compiled live through the real pipeline and Firebase cloud model. Each case was shown three stills of the golden sketch photos as its video frames, in order, with frame times (Frame at 0:03 and so on) and the case summary. Node has no video decoder, so these are not frames of a recorded video; decoding a video file into frames is done on the device (the video element on the web, expo-video-thumbnails on a phone) and is not exercised here.",
+  "promptVersion": "compiler-prompt@cc6ed5c69312",
+  "models": [
+    "gemini-3.8-flash"
+  ],
+  "cloudRequests": 6,
+  "cases": [
+    {
+      "id": "mv01-video-tap-counter",
+      "built": true,
+      "valid": true,
+      "route": "cloud",
+      "model": "gemini-3.8-flash",
+      "firstPassValid": true,
+      "totalMs": 19637,
+      "passes": [
+        {
+          "pass": "first",
+          "stage": "ok",
+          "issues": []
+        }
+      ],
+      "semantic": {
+        "screens": {
+          "ok": true
+        },
+        "collections": {
+          "ok": true
+        },
+        "fields": {
+          "found": 0,
+          "total": 0,
+          "missing": []
+        },
+        "components": {
+          "found": 0,
+          "total": 1,
+          "missing": [
+            "counter"
+          ]
+        },
+        "forbiddenText": {
+          "ok": true
+        }
+      },
+      "failures": [
+        "semantic.components missing: counter"
+      ],
+      "modelRequests": 1,
+      "inputTokens": 10116,
+      "outputTokens": 1830
+    },
+    {
+      "id": "mv02-video-inventory-walkthrough",
+      "built": true,
+      "valid": true,
+      "route": "cloud+repair",
+      "model": "gemini-3.8-flash",
+      "firstPassValid": false,
+      "totalMs": 38635,
+      "passes": [
+        {
+          "pass": "first",
+          "stage": "validation",
+          "issues": [
+            "UNKNOWN_SCREEN screens[5].children[0].detailScreen",
+            "UNKNOWN_ACTION screens[5].children[2].action"
+          ]
+        },
+        {
+          "pass": "repair",
+          "stage": "ok",
+          "issues": []
+        }
+      ],
+      "semantic": {
+        "screens": {
+          "ok": true
+        },
+        "collections": {
+          "ok": true
+        },
+        "fields": {
+          "found": 2,
+          "total": 2,
+          "missing": []
+        },
+        "components": {
+          "found": 1,
+          "total": 1,
+          "missing": []
+        },
+        "forbiddenText": {
+          "ok": true
+        }
+      },
+      "failures": [],
+      "modelRequests": 2,
+      "inputTokens": 19336,
+      "outputTokens": 6153
+    },
+    {
+      "id": "mv03-video-plus-instruction",
+      "built": true,
+      "valid": true,
+      "route": "cloud",
+      "model": "gemini-3.8-flash",
+      "firstPassValid": true,
+      "totalMs": 76867,
+      "passes": [
+        {
+          "pass": "first",
+          "stage": "ok",
+          "issues": []
+        }
+      ],
+      "semantic": {
+        "screens": {
+          "ok": true
+        },
+        "collections": {
+          "ok": true
+        },
+        "fields": {
+          "found": 1,
+          "total": 1,
+          "missing": []
+        },
+        "components": {
+          "found": 1,
+          "total": 1,
+          "missing": []
+        },
+        "forbiddenText": {
+          "ok": true
+        }
+      },
+      "failures": [],
+      "modelRequests": 1,
+      "inputTokens": 10144,
+      "outputTokens": 3497
+    },
+    {
+      "id": "mv04-video-multi-role-tour",
+      "built": true,
+      "valid": true,
+      "route": "cloud",
+      "model": "gemini-3.8-flash",
+      "firstPassValid": true,
+      "totalMs": 19488,
+      "passes": [
+        {
+          "pass": "first",
+          "stage": "ok",
+          "issues": []
+        }
+      ],
+      "semantic": {
+        "screens": {
+          "ok": true
+        },
+        "collections": {
+          "ok": true
+        },
+        "fields": {
+          "found": 2,
+          "total": 2,
+          "missing": []
+        },
+        "components": {
+          "found": 2,
+          "total": 2,
+          "missing": []
+        },
+        "forbiddenText": {
+          "ok": true
+        }
+      },
+      "failures": [],
+      "modelRequests": 1,
+      "inputTokens": 10175,
+      "outputTokens": 2927
+    },
+    {
+      "id": "mv05-video-whiteboard-flow",
+      "built": true,
+      "valid": true,
+      "route": "cloud",
+      "model": "gemini-3.8-flash",
+      "firstPassValid": true,
+      "totalMs": 20511,
+      "passes": [
+        {
+          "pass": "first",
+          "stage": "ok",
+          "issues": []
+        }
+      ],
+      "semantic": {
+        "screens": {
+          "ok": true
+        },
+        "collections": {
+          "ok": true
+        },
+        "fields": {
+          "found": 0,
+          "total": 0,
+          "missing": []
+        },
+        "components": {
+          "found": 1,
+          "total": 1,
+          "missing": []
+        },
+        "forbiddenText": {
+          "ok": true
+        }
+      },
+      "failures": [],
+      "modelRequests": 1,
+      "inputTokens": 10191,
+      "outputTokens": 2323
+    }
+  ]
+}

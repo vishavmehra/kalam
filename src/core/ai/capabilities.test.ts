@@ -86,6 +86,18 @@ describe('capability registry: known evidence', () => {
     expect(listCapabilities({ provider: 'nano_android', status: 'verified' })).toEqual([]);
   });
 
+  it('Apple Foundation Models on iOS is text only and nothing there has run on a device', () => {
+    for (const c of ['text', 'structured_output'] as const) {
+      expect(getCapability('apple_fm', c).status).toBe('unverified');
+      expect(getCapability('apple_fm', c).evidence).toMatch(/kalam-apple/);
+    }
+    expect(getCapability('apple_fm', 'image_input')).toMatchObject({ status: 'unsupported', evidence: expect.stringMatching(/text input only/) });
+    for (const c of ['audio_input', 'video_input', 'image_generation'] as const) {
+      expect(getCapability('apple_fm', c).status).toBe('not_assumed');
+    }
+    expect(listCapabilities({ provider: 'apple_fm', status: 'verified' })).toEqual([]);
+  });
+
   it('Claude and Nebius text and structured output were verified through the functions emulator, and are off by default', () => {
     for (const p of ['claude', 'nebius'] as const) {
       for (const c of ['text', 'structured_output'] as const) {
@@ -101,7 +113,8 @@ describe('capability registry: known evidence', () => {
     const verified = new Set(listCapabilities({ status: 'verified' }).map((r) => `${r.provider}/${r.capability}`));
     expect([...verified].sort()).toEqual([
       'claude/structured_output', 'claude/text',
-      'firebase_cloud/structured_output', 'firebase_cloud/text',
+      // Image and audio input were each run for real on 2026-11-26 or earlier (docs/evidence): sketch photos and a spoken sentence.
+      'firebase_cloud/audio_input', 'firebase_cloud/image_input', 'firebase_cloud/structured_output', 'firebase_cloud/text',
       'nano_web/structured_output', 'nano_web/text',
       'nebius/structured_output', 'nebius/text',
     ]);
@@ -125,7 +138,9 @@ describe('capability registry: lookups', () => {
 
   it('isVerified is true only for verified rows', () => {
     expect(isVerified('firebase_cloud', 'text')).toBe(true);
-    expect(isVerified('firebase_cloud', 'image_input')).toBe(false); // unverified
+    expect(isVerified('firebase_cloud', 'image_input')).toBe(true); // sketch photos, 2026-11-25
+    expect(isVerified('firebase_cloud', 'audio_input')).toBe(true); // a spoken sentence, 2026-11-26
+    expect(isVerified('firebase_cloud', 'video_input')).toBe(false); // unverified
     expect(isVerified('nano_web', 'audio_input')).toBe(false); // not assumed
     expect(isVerified('nano_android', 'text')).toBe(false); // unverified
   });

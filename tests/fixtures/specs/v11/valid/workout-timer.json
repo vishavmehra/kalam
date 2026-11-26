@@ -1,0 +1,50 @@
+{
+  "id": "workout_timer",
+  "schemaVersion": "1.1.0",
+  "version": 1,
+  "name": "Workout Log",
+  "lang": "en",
+  "theme": { "primary": "#1F4E79", "radius": 16, "fontScale": 1.1, "preset": "ocean_blue" },
+  "collections": {
+    "workouts": {
+      "label": "Workouts",
+      "fields": {
+        "kind": { "type": "enum", "label": "Workout", "options": ["Walk", "Yoga", "Weights"], "required": true },
+        "minutes": { "type": "number", "label": "Minutes", "min": 0, "decimals": 1 },
+        "day": { "type": "date", "label": "Day", "defaultValue": "today" }
+      }
+    }
+  },
+  "screens": [
+    {
+      "id": "home",
+      "title": "This week",
+      "children": [
+        { "id": "minutes_chart", "type": "chart", "label": "Minutes per day", "chart": "line", "source": "workouts", "metric": "sum", "valueField": "minutes", "period": "day", "dateField": "day", "range": { "last": 7, "unit": "day" } },
+        { "id": "rest_timer", "type": "timer", "label": "Rest", "mode": "countdown", "durationSec": 90, "style": { "size": "small" } },
+        { "id": "log_btn", "type": "bigButton", "label": "Log a workout", "action": "go_log" }
+      ]
+    },
+    {
+      "id": "log",
+      "title": "Log a workout",
+      "form": "workouts",
+      "children": [
+        { "id": "kind_choice", "type": "choice", "label": "Workout", "field": "kind", "required": true },
+        { "id": "session_timer", "type": "timer", "label": "Session", "mode": "stopwatch", "field": "minutes", "unit": "minutes" },
+        { "id": "day_input", "type": "date", "label": "Day", "field": "day" },
+        { "id": "save_btn", "type": "bigButton", "label": "Save", "action": "save_workout", "style": { "tone": "success", "fullWidth": true } }
+      ]
+    }
+  ],
+  "initialScreen": "home",
+  "actions": {
+    "go_log": { "type": "navigate", "screen": "log" },
+    "save_workout": { "type": "insert", "collection": "workouts", "then": { "feedback": "Saved", "navigate": "home" } }
+  },
+  "aiBlocks": {},
+  "intents": {},
+  "meta": { "createdAt": 1763500000000, "source": "manual" },
+  "accessibility": { "suggestedModes": ["large"] },
+  "settings": { "timeFormat": "24h" }
+}

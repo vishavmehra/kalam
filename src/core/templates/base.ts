@@ -48,7 +48,8 @@ export function extractBase(text: string): { name?: string; theme?: ThemePreset 
 }
 
 export interface SpecParts {
-  templateId: TemplateId;
+  /** A TemplateId, or the id of a gallery entry (src/core/templates/catalog). Stored as meta.templateId. */
+  templateId: TemplateId | (string & {});
   name: string;
   description: string;
   glyph: IconGlyph;

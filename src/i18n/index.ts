@@ -24,7 +24,7 @@ export {
 export { graphemeCount, graphemes, truncateGraphemes } from './graphemes';
 export { pluralCategory } from './plural';
 export { toLogicalStyle, startSide } from './direction';
-export { LanguageSettings } from './LanguageSettings';
+export { DraftLanguageNote, LanguageSettings } from './LanguageSettings';
 export { useFormat, useI18n, useI18nBoot, useLanguage, useT } from './react';
 export { runtimeFont, type RuntimeFont } from './runtime-font';
 export {
@@ -34,4 +34,5 @@ export {
 } from './scripts';
 export { createTranslator, type DynamicTFunction, type TFunction, type Translator } from './translator';
 export type { MissingEvent, TranslateOptions, TranslateParams } from './types';
-export { isScriptLoaded, loadFontsForText, loadScriptFonts, useRuntimeFont, useScriptFonts, type ScriptFontsState } from './use-script-fonts';
+export { isScriptLoaded, loadFontsForText, loadScriptFonts, useRuntimeFont, useScriptFonts, useShellFonts, type ScriptFontsState } from './use-script-fonts';
+export { shellDisplayFamily, shellFamily, shellFontCssStack, shellFontFamilies } from './shell-fonts';

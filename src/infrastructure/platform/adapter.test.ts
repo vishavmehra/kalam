@@ -5,7 +5,7 @@
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { ADAPTER_MEMBERS, platformNameFor, type PlatformAdapter, type PlatformName } from './adapter.shared';
+import { ADAPTER_MEMBERS, describeCapabilities, platformNameFor, type PlatformAdapter, type PlatformName } from './adapter.shared';
 
 vi.mock('expo-crypto', () => ({
   getRandomBytes: (n: number) => new Uint8Array(n).fill(7),
@@ -54,10 +54,19 @@ describe.each(loaders)('PlatformAdapter on %s', (platform, load) => {
 
   it('has no group or member that the list does not name', () => {
     const all = adapter as unknown as Record<string, unknown>;
-    expect(Object.keys(all).sort()).toEqual(['getPlatform', ...Object.keys(ADAPTER_MEMBERS)].sort());
+    expect(Object.keys(all).sort()).toEqual(['capabilities', 'getPlatform', ...Object.keys(ADAPTER_MEMBERS)].sort());
     for (const [group, members] of Object.entries(ADAPTER_MEMBERS)) {
       expect(Object.keys(all[group] as object).sort(), group).toEqual([...(members as string[])].sort());
     }
+  });
+
+  it('reports what the platform can do, with every field filled in and never rejecting', async () => {
+    const capabilities = await adapter.capabilities();
+    expect(capabilities.platform).toBe(platform);
+    expect(typeof capabilities.speechToText).toBe('boolean');
+    expect(['available', 'downloadable', 'downloading', 'unavailable', 'unknown']).toContain(capabilities.speechOnDevice);
+    expect(typeof capabilities.textToSpeech).toBe('boolean');
+    expect(['system', 'while_open', 'none']).toContain(capabilities.reminders);
   });
 
   it('gives secure random bytes of the length asked and a uuid', () => {
@@ -80,6 +89,42 @@ describe('PlatformAdapter on web', () => {
   it('reads online state from the browser monitor', async () => {
     const { getPlatformAdapter } = await import('./adapter.web');
     expect(typeof getPlatformAdapter().network.getMonitor().online()).toBe('boolean');
+  });
+});
+
+describe('describeCapabilities', () => {
+  const stub = (over: { speech?: (lang: string) => Promise<unknown>; tts?: () => Promise<boolean>; notify?: () => Promise<unknown> } = {}) => ({
+    getPlatform: () => 'android' as const,
+    speech: { getCapability: over.speech ?? (async () => ({ supported: true, onDevice: 'available', locale: 'en-IN' })) },
+    tts: { getAdapter: () => ({ isAvailable: over.tts ?? (async () => true) }) },
+    notifications: { getAdapter: () => ({ capability: over.notify ?? (async () => ({ delivery: 'system' })) }) },
+  }) as unknown as Parameters<typeof describeCapabilities>[0];
+
+  it('puts each answer in its field', async () => {
+    expect(await describeCapabilities(stub())).toEqual({
+      platform: 'android', speechToText: true, speechOnDevice: 'available', textToSpeech: true, reminders: 'system',
+    });
+    expect(await describeCapabilities(stub({
+      speech: async () => ({ supported: false, onDevice: 'unavailable', locale: 'en' }),
+      tts: async () => false,
+      notify: async () => ({ delivery: 'while_open' }),
+    }))).toEqual({
+      platform: 'android', speechToText: false, speechOnDevice: 'unavailable', textToSpeech: false, reminders: 'while_open',
+    });
+  });
+
+  it('says unsupported, not an error, when a platform check fails', async () => {
+    const boom = async (): Promise<never> => { throw new Error('module missing'); };
+    expect(await describeCapabilities(stub({ speech: boom, tts: boom, notify: boom }))).toEqual({
+      platform: 'android', speechToText: false, speechOnDevice: 'unknown', textToSpeech: false, reminders: 'none',
+    });
+  });
+
+  it('asks speech for the language it was given', async () => {
+    const asked: string[] = [];
+    await describeCapabilities(stub({ speech: async (lang) => { asked.push(lang); return { supported: true, onDevice: 'unknown', locale: lang }; } }), 'hi-IN');
+    await describeCapabilities(stub({ speech: async (lang) => { asked.push(lang); return { supported: true, onDevice: 'unknown', locale: lang }; } }));
+    expect(asked).toEqual(['hi-IN', 'en']);
   });
 });
 

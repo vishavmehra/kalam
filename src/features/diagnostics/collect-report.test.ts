@@ -161,4 +161,53 @@ describe('storageTelemetryStore', () => {
     await expect(store.read()).rejects.toThrow('blocked');
     await expect(store.write('x')).rejects.toThrow('full');
   });
+
+  type Handler = (event: { key?: string | null }) => void;
+  const eventTarget = () => {
+    const handlers = new Set<Handler>();
+    return {
+      target: { addEventListener: (_: 'storage', h: Handler) => void handlers.add(h), removeEventListener: (_: 'storage', h: Handler) => void handlers.delete(h) },
+      fire: (key: string | null) => handlers.forEach((h) => h({ key })),
+    };
+  };
+  const nothing = { getItem: async () => null, setItem: async () => undefined };
+
+  it('passes on storage events for its own key, or a cleared storage, and stops when asked', () => {
+    const { target, fire } = eventTarget();
+    const listener = vi.fn();
+    const stop = storageTelemetryStore(nothing, undefined, target).subscribe?.(listener) ?? (() => undefined);
+    fire('some.other.key');
+    expect(listener).not.toHaveBeenCalled();
+    fire(TELEMETRY_STORAGE_KEY);
+    fire(null);
+    expect(listener).toHaveBeenCalledTimes(2);
+    stop();
+    fire(TELEMETRY_STORAGE_KEY);
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it('does nothing where there are no storage events, as on Android and iOS', () => {
+    const stop = storageTelemetryStore(nothing, undefined, {}).subscribe?.(vi.fn());
+    expect(typeof stop).toBe('function');
+    expect(() => stop?.()).not.toThrow();
+  });
+
+  it('keeps counting off in a second tab after the first tab turned it off', async () => {
+    const data = new Map<string, string>();
+    const bus = eventTarget();
+    const storage = { getItem: async (k: string) => data.get(k) ?? null, setItem: async (k: string, v: string) => void data.set(k, v) };
+    const tabA = createTelemetry(storageTelemetryStore(storage, undefined, {}));
+    // Tab B hears the writes of tab A. In a browser the event is not sent to the tab that wrote.
+    const tabB = createTelemetry(storageTelemetryStore(storage, undefined, bus.target));
+    await Promise.all([tabA.ready, tabB.ready]);
+    await tabA.setEnabled(true);
+    bus.fire(TELEMETRY_STORAGE_KEY);
+    await vi.waitFor(() => expect(tabB.isEnabled()).toBe(true));
+    await tabA.setEnabled(false);
+    bus.fire(TELEMETRY_STORAGE_KEY);
+    await vi.waitFor(() => expect(tabB.isEnabled()).toBe(false));
+    await tabB.count('app_opened', 'online');
+    expect(JSON.parse(data.get(TELEMETRY_STORAGE_KEY) ?? '{}').enabled).toBe(false);
+    expect(tabB.snapshot().total).toBe(0);
+  });
 });

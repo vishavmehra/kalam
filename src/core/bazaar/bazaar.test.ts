@@ -108,6 +108,18 @@ describe('preparePublication / listing schema', () => {
     expect(listing.disclosure.aiFeatures.length).toBe(Object.keys(s.aiBlocks).length);
   });
 
+  it('discloses what a 1.1 app asks the phone for, with its reason, and leaves the key out otherwise', async () => {
+    const linked = validateSpec(loadFixture('valid', 'tailor-orders-linked', 'v11')).spec as KalamSpec;
+    const { listing } = await publishedListing(linked);
+    expect(listing.disclosure.permissions).toEqual(['Notifications: To remind you a day before each delivery']);
+    expect(listingSchema.safeParse(listing).success).toBe(true);
+    const plain = await publishedListing(spec('notes-app'));
+    expect(plain.listing.disclosure).not.toHaveProperty('permissions');
+    // A listing made before 1.1 has no key and is still read.
+    expect(listingSchema.safeParse({ ...plain.listing, disclosure: { ...plain.listing.disclosure } }).success).toBe(true);
+    expect(listingSchema.safeParse({ ...listing, disclosure: { ...listing.disclosure, permissions: ['a', 'b', 'c'] } }).success).toBe(false);
+  });
+
   it('rejects an invalid spec with issues and an invalid form with messages', () => {
     const bad = { ...spec('notes-app'), initialScreen: 'nope' } as KalamSpec;
     const r = preparePublication({ spec: bad, form, listingId: LISTING_ID, makerUid: 'u', makerName: 'A' });
@@ -330,10 +342,11 @@ describe('size cap (docs/11 §11.1: 100 KB)', () => {
       children: Array.from({ length: 40 }, (__, j) => ({ id: `t_${i}_${j}`, type: 'text' as const, label: filler })),
     }));
     const big = { ...base, screens: [...base.screens, ...extra] } as KalamSpec;
-    expect(validateSpec(big).ok).toBe(true);
+    expect(validateSpec(big).errors.map((e) => e.code)).toEqual(['SPEC_TOO_LARGE']);
     const r = preparePublication({ spec: big, form, listingId: LISTING_ID, makerUid: 'u', makerName: 'A' });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.message).toMatch(/too large/);
+    // The validator refuses first now that it enforces the same cap; the publish check is the second line of defence.
+    if (!r.ok) expect(r.message).toMatch(/too large|need fixing/);
     expect(BAZAAR_LIMITS.specBytes).toBe(100_000);
   });
 });

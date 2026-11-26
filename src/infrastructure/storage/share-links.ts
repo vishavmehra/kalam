@@ -5,7 +5,7 @@
  * written by a bug or an older build can never widen what a link allows.
  */
 import { parseShareLink, type ShareLink } from '@/core/share/model';
-import { newestFirst, ShareStoreError, type ShareLinkStore } from '@/core/share/store';
+import { newestFirst, reopens, ShareStoreError, type ShareLinkStore } from '@/core/share/store';
 import type { StorageDriver, StorageTables } from './driver';
 
 export interface ShareLinkRepository extends ShareLinkStore {
@@ -61,6 +61,8 @@ export function createShareLinkRepository(driver: StorageDriver): ShareLinkRepos
         if (!(await t.apps.get(row.sourceAppId)) || !(await t.apps.get(row.destinationAppId))) {
           throw new ShareStoreError('One of the two apps is not on this device.');
         }
+        // A turned off link stays off, even if a send that started earlier finishes later.
+        if (reopens(valid([await t.shareLinks.get(row.id)])[0], row)) throw new ShareStoreError('This link was turned off.');
         await t.shareLinks.put(row);
       });
       notifyChanged();

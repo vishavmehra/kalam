@@ -1,20 +1,22 @@
 /** Storage limits (docs/11 §6.4, §15.4) and the errors that explain them to the person. */
+import { limitsPolicy } from '@/core/limits/policy';
+
 export { MAX_BLOB_BYTES } from '@/core/backup/schemas';
 
 /** Activity log entries kept (newest first). */
-export const EVENT_CAP = 500;
+export const EVENT_CAP = limitsPolicy.data.eventLogEntries;
 /** Records one collection (one list in an app) can hold. */
-export const RECORD_CAP = 5_000;
+export const RECORD_CAP = limitsPolicy.data.recordsPerCollection;
 /** Cached AI results kept, least recently used dropped first (docs/04 §13.8). */
-export const AI_CACHE_CAP = 500;
+export const AI_CACHE_CAP = limitsPolicy.data.aiCacheEntries;
 /** Cached AI results older than this are treated as missing (docs/09 §19.4: not indefinitely). */
-export const AI_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+export const AI_CACHE_TTL_MS = limitsPolicy.data.aiCacheTtlMs;
 /** Larger AI results are simply not cached. */
-export const MAX_AI_CACHE_ENTRY_BYTES = 256 * 1024;
+export const MAX_AI_CACHE_ENTRY_BYTES = limitsPolicy.data.aiCacheEntryBytes;
 /** Unfinished creation sessions kept; older ones and their files are removed. */
-export const MAX_SESSIONS = 5;
+export const MAX_SESSIONS = limitsPolicy.data.draftSessions;
 /** Untouched drafts are removed after this long (docs/11 §6.4: temporary compiler input is not kept). */
-export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const SESSION_TTL_MS = limitsPolicy.data.draftTtlMs;
 
 const thousands = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 

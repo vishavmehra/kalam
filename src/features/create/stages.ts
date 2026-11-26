@@ -1,21 +1,36 @@
 /**
  * Maps pipeline stages to plain-language progress steps and an honest route indicator
- * (docs/03 §12.2: only show a step once that operation really started).
+ * (docs/03 §12.2: only show a step once that operation really started). Words live in the i18n
+ * catalogue: `STEP_KEY`, `routeLabelKey` and `failureCopy` hand back keys or translated text.
  */
 import type { CreationResult, CreationRoute, CreationStage } from '@/core/contracts';
+import type { TranslationKey } from '@/i18n/keys';
+import type { TFunction } from '@/i18n/translator';
 
-export type StepId = 'understand' | 'template' | 'on_device' | 'cloud' | 'validate' | 'repair';
+export type StepId = 'understand' | 'template' | 'on_device' | 'cloud' | 'validate' | 'verify_ai' | 'repair';
 export type RouteBadge = 'Template' | 'On-device' | 'Cloud' | 'Specialist' | 'Checking';
 
 export interface ProgressStep { id: StepId; label: string; detail?: string; status: 'active' | 'done' }
 
+/** English labels kept on the step for logs and tests; the screen shows `STEP_KEY`. */
 const LABELS: Record<StepId, string> = {
   understand: 'Understanding your idea',
   template: 'Looking for a ready-made template',
   on_device: 'Filling in details on this device',
   cloud: 'Building the app with cloud AI',
   validate: 'Checking the app works',
+  verify_ai: 'Checking AI steps',
   repair: 'Fixing problems found in the check',
+};
+
+export const STEP_KEY: Record<StepId, TranslationKey> = {
+  understand: 'create.build.step.understand',
+  template: 'create.build.step.template',
+  on_device: 'create.build.step.on_device',
+  cloud: 'create.build.step.cloud',
+  validate: 'create.build.step.validate',
+  verify_ai: 'create.build.step.verify_ai',
+  repair: 'create.build.step.repair',
 };
 
 const mentionsOnDevice = (detail?: string) => !!detail && /on[-_ ]?device|nano|local model/i.test(detail);
@@ -28,8 +43,9 @@ export function stageToStep(stage: CreationStage, detail?: string): StepId | und
     case 'extracting_params': return mentionsOnDevice(detail) ? 'on_device' : 'template';
     case 'generating_cloud':
     case 'planning_specialist': return 'cloud';
-    case 'validating':
-    case 'verifying': return 'validate';
+    case 'validating': return 'validate';
+    // C2: the build-time check of the app's AI steps is its own step (docs/07 §13.3).
+    case 'verifying': return 'verify_ai';
     case 'repairing': return 'repair';
     default: return undefined;
   }
@@ -57,34 +73,57 @@ export function liveRoute(stage: CreationStage | undefined, detail?: string): Ro
   return undefined;
 }
 
-export function routeLabel(route: CreationRoute): string {
+/**
+ * The route the build took so far, from the steps that really ran. While checking, the stamp keeps the
+ * route that built the app instead of disappearing.
+ */
+export function routeFromSteps(steps: readonly ProgressStep[]): RouteBadge | undefined {
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const id = steps[i]!.id;
+    if (id === 'cloud') return 'Cloud';
+    if (id === 'on_device') return 'On-device';
+    if (id === 'template') return 'Template';
+  }
+  return undefined;
+}
+
+/** "Testing AI step 2 of 3" from the pipeline (VERIFY_COPY.progress) as numbers, so the screen can say it in any language. */
+export function verifyCount(detail: string | undefined): { n: number; total: number } | undefined {
+  const m = detail?.match(/(\d+)\D+(\d+)/);
+  return m ? { n: Number(m[1]), total: Number(m[2]) } : undefined;
+}
+
+export function routeLabelKey(route: CreationRoute): TranslationKey {
   switch (route) {
-    case 'template': return 'Built from a template on this device';
-    case 'template+on_device': return 'Template filled in by on-device AI';
-    case 'cloud': return 'Built with Firebase cloud AI';
-    case 'cloud+repair': return 'Built with cloud AI, then repaired';
-    case 'specialist': return 'Planned by a specialist model';
-    case 'import': return 'Imported';
-    case 'manual': return 'Made by hand';
+    case 'template': return 'create.route.template';
+    case 'template+on_device': return 'create.route.templateOnDevice';
+    case 'cloud': return 'create.route.cloud';
+    case 'cloud+repair': return 'create.route.cloudRepair';
+    case 'specialist': return 'create.route.specialist';
+    case 'import': return 'create.route.import';
+    case 'manual': return 'create.route.manual';
   }
 }
 
+/** The build failed because this idea needs the cloud and the device has no signal. Queueing it is offered then. */
+export function needsCloudWhileOffline(result: Pick<CreationResult, 'classification'>, online: boolean): boolean {
+  return !online && (result.classification.requiresCloudReasoning || result.classification.complexity === 'complex');
+}
+
 /** Plain-language failure copy: never raw provider errors (docs/03 §12.4–12.5). */
-export function failureCopy(result: Pick<CreationResult, 'message' | 'errors' | 'route' | 'classification'>, online: boolean): {
-  title: string; body: string; suggestion?: string;
-} {
-  const needsCloud = result.classification.requiresCloudReasoning || result.classification.complexity === 'complex';
-  if (!online && needsCloud) {
-    return {
-      title: 'This app needs the cloud to build',
-      body: 'You are offline, and this idea is too detailed to build on this device. Your input is kept. Try again when you are connected.',
-      suggestion: 'Or describe a simpler app that matches a template, like "a checklist for daily tasks" or "an expense tracker in ₹".',
-    };
+export function failureCopy(
+  result: Pick<CreationResult, 'message' | 'errors' | 'route' | 'classification'>,
+  online: boolean,
+  t: TFunction,
+): { title: string; body: string; suggestion?: string } {
+  if (needsCloudWhileOffline(result, online)) {
+    return { title: t('create.error.cloudTitle'), body: t('create.error.cloudBody'), suggestion: t('create.fail.offlineIdea') };
   }
   const tpl = result.classification.matchingTemplate;
   return {
-    title: 'Kalam could not build this app yet',
-    body: result.message ?? 'The result did not pass Kalam\'s checks, so nothing was saved. Your input is kept.',
-    ...(tpl ? {} : { suggestion: 'Try naming what to track and the fields, for example "a tailor order book with customer name, measurements and delivery date".' }),
+    title: t('create.error.failedTitle'),
+    // The pipeline's own message is already plain words (src/core/pipeline); it stays as written.
+    body: result.message ?? t('create.fail.checks'),
+    ...(tpl ? {} : { suggestion: t('create.fail.nameFields') }),
   };
 }

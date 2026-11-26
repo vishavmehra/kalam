@@ -39,6 +39,24 @@ export function zipFileName(drawingTitle: string): string {
   return `${safeName(drawingTitle, 'drawing')}-screens.zip`;
 }
 
-export interface ExportFile { name: string; bytes: Uint8Array }
+export type ExportFormat = 'png' | 'svg' | 'pdf';
+export const EXPORT_FORMATS: ReadonlyArray<{ id: ExportFormat; label: string; mimeType: string }> = [
+  { id: 'png', label: 'PNG picture', mimeType: 'image/png' },
+  { id: 'svg', label: 'SVG shapes', mimeType: 'image/svg+xml' },
+  { id: 'pdf', label: 'PDF document', mimeType: 'application/pdf' },
+];
+
+export function svgFileName(drawingTitle: string, pageTitle: string, index: number, multiple: boolean): string {
+  const drawing = safeName(drawingTitle, 'drawing');
+  const page = safeName(pageTitle, `screen-${index + 1}`);
+  return multiple ? `${drawing}-${index + 1}-${page}.svg` : `${drawing}-${page}.svg`;
+}
+
+export function pdfFileName(drawingTitle: string): string {
+  return `${safeName(drawingTitle, 'drawing')}.pdf`;
+}
+
+/** A file ready to save. `mimeType` defaults to PNG, which is what the first version of export wrote. */
+export interface ExportFile { name: string; bytes: Uint8Array; mimeType?: string }
 /** 'saved' = downloaded by the browser; 'shared' = handed to the Android share sheet. */
 export type SaveOutcome = 'saved' | 'shared';

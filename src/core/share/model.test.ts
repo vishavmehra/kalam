@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { checkLink, compatibleTargets, isFromBazaar, suggestMappings, typesCompatible } from './contract';
-import { describeLink, joinList } from './copy';
+import { describeLink, joinList, SHARE_COPY } from './copy';
 import { contractIdFor, linkIdFrom, parseShareLink, SHARE_LIMITS, type ShareLink } from './model';
 import { entryTitle, projectValues, valueFits } from './project';
 import type { KalamSpec } from '../spec/schema';
@@ -137,18 +137,57 @@ describe('checkLink', () => {
   });
 
   it('a write link needs the destination to accept every choice the source offers', () => {
-    const l = link({ access: 'write', fields: [{ source: 'city', target: 'city', type: 'enum' }] });
+    // The required customer name is filled, so the choices are the only problem.
+    const l = link({ access: 'write', fields: [{ source: 'name', target: 'customer_name', type: 'text' }, { source: 'city', target: 'city', type: 'enum' }] });
     const dstChoice = { ...orders, fields: { ...orders.fields, city: { type: 'enum' as const, label: 'City', options: ['Delhi'] } } };
     expect(codes(l, src, specWith(APP_O, 'Order Book', { orders: dstChoice }))).toEqual(['destination_choices_missing']);
     // A read link only displays, so it does not care.
     expect(codes({ ...l, access: 'read' }, src, specWith(APP_O, 'Order Book', { orders: dstChoice }))).toEqual([]);
   });
 
-  it('recognises an app installed from the Bazaar', () => {
-    expect(isFromBazaar(specWith('app_b', 'B', {}, { source: 'import', basedOn: 'bazaar:l0123456789abcdefghi' }))).toBe(true);
+  it('a write link also pauses when the destination needs a field it does not fill', () => {
+    const l = link({ access: 'write' });
+    const stricter = { ...orders, fields: { ...orders.fields, amount: { type: 'number' as const, label: 'Amount', required: true } } };
+    expect(codes(l, src, specWith(APP_O, 'Order Book', { orders: stricter }))).toEqual(['destination_required_missing']);
+    expect(codes({ ...l, access: 'read' }, src, specWith(APP_O, 'Order Book', { orders: stricter }))).toEqual([]);
+  });
+
+  it('words a type problem for a link being made differently from one that changed', () => {
+    const targetNumber = specWith(APP_O, 'Order Book', { orders: { ...orders, fields: { ...orders.fields, phone: { type: 'number' as const, label: 'Phone' } } } });
+    const message = (opts?: { creating?: boolean }) => {
+      const h = checkLink(link(), src, targetNumber, opts);
+      return h.ok ? '' : h.problems[0].message;
+    };
+    expect(message()).toBe('The field "Phone" in Order Book is now a number and cannot hold text.');
+    expect(message({ creating: true })).toBe('The field "Phone" in Order Book is a number and cannot hold text.');
+  });
+
+  it('recognises an app made through the Bazaar, installed or remixed', () => {
+    const listing = 'bazaar:l0123456789abcdefghi';
+    expect(isFromBazaar(specWith('app_b', 'B', {}, { source: 'import', basedOn: listing }))).toBe(true);
+    expect(isFromBazaar(specWith('app_b', 'B', {}, { source: 'remix', basedOn: listing }))).toBe(true);
     expect(isFromBazaar(specWith('app_b', 'B', {}, { source: 'remix', basedOn: 'app_other' }))).toBe(false);
     expect(isFromBazaar(specWith('app_b', 'B', {}, { source: 'import' }))).toBe(false);
     expect(isFromBazaar(undefined)).toBe(false);
+  });
+
+  it('follows copies made on this device back to a Bazaar original, and stops at a loop', () => {
+    const original = specWith('app_a', 'A', {}, { source: 'import', basedOn: 'bazaar:l0123456789abcdefghi' });
+    const copy = specWith('app_b', 'B', {}, { source: 'remix', basedOn: 'app_a' });
+    const copyOfCopy = specWith('app_c', 'C', {}, { source: 'remix', basedOn: 'app_b' });
+    const apps: Record<string, KalamSpec> = { app_a: original, app_b: copy, app_c: copyOfCopy };
+    const find = (id: string) => apps[id];
+    expect(isFromBazaar(copyOfCopy, find)).toBe(true);
+    expect(isFromBazaar(copyOfCopy)).toBe(false);
+    const loopA = specWith('app_x', 'X', {}, { source: 'remix', basedOn: 'app_y' });
+    const loopB = specWith('app_y', 'Y', {}, { source: 'remix', basedOn: 'app_x' });
+    expect(isFromBazaar(loopA, (id) => (id === 'app_y' ? loopB : loopA))).toBe(false);
+  });
+
+  it('remembers entries with ids as long as a record id may be', () => {
+    const long = 'x'.repeat(128);
+    expect(parseShareLink(link({ sent: [[long, long]] })).ok).toBe(true);
+    expect(parseShareLink(link({ sent: [['x'.repeat(129), 'y']] })).ok).toBe(false);
   });
 });
 
@@ -179,6 +218,13 @@ describe('copy', () => {
     expect(joinList(['A'])).toBe('A');
     expect(joinList(['A', 'B'])).toBe('A and B');
     expect(joinList(['A', 'B', 'C'])).toBe('A, B and C');
+  });
+
+  it('has words for the screens that end links as a side effect, and they say what happens to the entries', () => {
+    const { deleteApp, replaceApps } = SHARE_COPY.elsewhere;
+    for (const text of [deleteApp, replaceApps]) expect(text).not.toMatch(/[—–!]/);
+    expect(deleteApp).toMatch(/already sent.*stay there/);
+    expect(replaceApps).toMatch(/make them again/);
   });
 
   it('explains both kinds of link without dashes or exclamation marks', () => {

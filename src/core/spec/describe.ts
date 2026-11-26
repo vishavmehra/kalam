@@ -3,7 +3,9 @@
  * Written for non-technical users: labels and titles only, never raw ids in sentences.
  */
 import type { UnderstandingSummary } from '../contracts';
+import { V11_DESCRIBE } from './copy';
 import type { KalamAction, KalamAIBlock, KalamComponent, KalamField, KalamSpec } from './schema';
+import { statCurrency } from './v11';
 
 const LANGUAGES: Record<string, string> = {
   en: 'English', hi: 'Hindi', bn: 'Bengali', ta: 'Tamil', te: 'Telugu', mr: 'Marathi', gu: 'Gujarati',
@@ -26,13 +28,14 @@ const singular = (s: string): string => {
 };
 const quote = (s: string): string => `“${s}”`;
 
-function describeField(f: KalamField): string {
+function describeField(f: KalamField, collectionName: (id: string) => string): string {
   switch (f.type) {
-    case 'text': return f.multiline ? 'Long text' : 'Text';
+    case 'text': return f.ref ? V11_DESCRIBE.relation(lower(collectionName(f.ref.collection))) : f.multiline ? 'Long text' : 'Text';
     case 'number': return f.unit ? `Number (${f.unit})` : 'Number';
     case 'date': return 'Date';
     case 'boolean': return 'Yes / No';
     case 'enum': return `One of: ${f.options.join(', ')}`;
+    case 'image': return 'Photo';
   }
 }
 
@@ -70,6 +73,10 @@ export function describeSpec(spec: KalamSpec): UnderstandingSummary {
       case 'list': return `List of ${lower(c.label || collectionName(c.source))}${c.toggleField ? ' with tick boxes' : ''}${hidden}`;
       case 'stat': return `Summary: ${c.label}${hidden}`;
       case 'photo': return `Photo: ${c.label}${c.aiBlock ? ' (read by AI)' : ''}${hidden}`;
+      case 'chart': return `${V11_DESCRIBE.chart(c.label)}${hidden}`;
+      case 'timer': return `${V11_DESCRIBE.timer(c.label, c.mode)}${hidden}`;
+      case 'reminder': return `${V11_DESCRIBE.reminder(c.label)}${hidden}`;
+      case 'signature': return `${V11_DESCRIBE.signature(c.label)}${hidden}`;
     }
   };
 
@@ -98,6 +105,7 @@ export function describeSpec(spec: KalamSpec): UnderstandingSummary {
       case 'speak': return `Reads ${quote(a.text)} aloud`;
       case 'feedback': return `Shows the message ${quote(a.message)}`;
       case 'clearForm': return 'Clears the form';
+      case 'compute': return then(`Works out a formula and puts the answer in ${target(a.target)}`);
     }
   };
 
@@ -118,7 +126,7 @@ export function describeSpec(spec: KalamSpec): UnderstandingSummary {
   const currencies = new Set<string>();
   const units: string[] = [];
   for (const s of spec.screens) {
-    for (const c of s.children) if (c.type === 'stat' && c.format === 'currency') currencies.add(c.currency ?? 'INR');
+    for (const c of s.children) if (c.type === 'stat' && c.format === 'currency') currencies.add(statCurrency(spec, c));
   }
   for (const col of Object.values(spec.collections)) {
     for (const f of Object.values(col.fields)) {
@@ -155,7 +163,7 @@ export function describeSpec(spec: KalamSpec): UnderstandingSummary {
     collections: Object.entries(spec.collections).map(([id, c]) => ({
       id,
       name: collectionName(id),
-      fields: Object.values(c.fields).map((f) => ({ label: f.label, type: describeField(f), required: !!f.required })),
+      fields: Object.values(c.fields).map((f) => ({ label: f.label, type: describeField(f, collectionName), required: !!f.required })),
     })),
     actions: [...new Set(actions)],
     aiFeatures: Object.entries(spec.aiBlocks).map(([id, b]) => ({

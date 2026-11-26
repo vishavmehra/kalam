@@ -1,0 +1,115 @@
+{
+  "id": "tailor_orders_v11",
+  "schemaVersion": "1.1.0",
+  "version": 1,
+  "name": "Tailor Orders",
+  "description": "Customers, their orders, delivery reminders and signed pickups.",
+  "icon": { "glyph": "scissors" },
+  "lang": "en",
+  "theme": { "primary": "#315C4C", "radius": 12, "fontScale": 1, "preset": "calm_green" },
+  "collections": {
+    "customers": {
+      "label": "Customers",
+      "fields": {
+        "name": { "type": "text", "label": "Name", "required": true },
+        "phone": { "type": "text", "label": "Phone" }
+      }
+    },
+    "orders": {
+      "label": "Orders",
+      "fields": {
+        "customer": { "type": "text", "label": "Customer", "required": true, "ref": { "collection": "customers", "display": "name", "onDelete": "cascade" } },
+        "garment": { "type": "enum", "label": "Garment", "options": ["Kurta", "Shirt", "Pant"] },
+        "advance": { "type": "number", "label": "Advance", "min": 0 },
+        "delivery": { "type": "date", "label": "Delivery date" },
+        "delivered": { "type": "boolean", "label": "Delivered" },
+        "signature": { "type": "text", "label": "Pickup signature" }
+      }
+    },
+    "payments": {
+      "label": "Payments",
+      "fields": {
+        "order": { "type": "text", "label": "Order", "ref": { "collection": "orders", "display": "garment", "onDelete": "clear" } },
+        "amount": { "type": "number", "label": "Amount", "required": true }
+      }
+    }
+  },
+  "screens": [
+    {
+      "id": "home",
+      "title": "Orders",
+      "children": [
+        { "id": "open_orders", "type": "stat", "label": "Open orders", "expr": "count(filter(orders, delivered == false))", "format": "integer" },
+        { "id": "advance_total", "type": "stat", "label": "Advance taken", "expr": "sum(orders.advance)", "format": "currency", "currency": "INR" },
+        { "id": "advance_chart", "type": "chart", "label": "Advance by month", "chart": "bar", "source": "orders", "metric": "sum", "valueField": "advance", "period": "month", "dateField": "delivery", "range": { "last": 6, "unit": "month" } },
+        { "id": "garment_chart", "type": "chart", "label": "Orders by garment", "chart": "donut", "source": "orders", "metric": "count", "groupBy": "garment" },
+        { "id": "delivery_reminder", "type": "reminder", "label": "Delivery reminder", "source": "orders", "dateField": "delivery", "leadDays": 1, "time": "09:30", "doneField": "delivered", "titleField": "garment", "message": "Deliver {title} tomorrow" },
+        { "id": "order_list", "type": "list", "label": "All orders", "source": "orders", "primary": "customer", "secondary": "garment", "detailScreen": "order_detail" },
+        { "id": "add_order", "type": "bigButton", "label": "New order", "action": "go_add", "style": { "size": "large", "fullWidth": true } },
+        { "id": "add_customer", "type": "bigButton", "label": "New customer", "action": "go_customer", "tone": "secondary", "style": { "tone": "success", "align": "end" } }
+      ],
+      "layout": [
+        { "type": "row", "children": ["open_orders", "advance_total"] },
+        { "type": "grid", "columns": 2, "children": ["advance_chart", "garment_chart"] },
+        { "type": "card", "title": "Shortcuts", "style": { "tone": "primary", "emphasis": "strong" }, "children": [{ "type": "row", "children": ["add_order", "add_customer"] }] }
+      ]
+    },
+    {
+      "id": "add",
+      "title": "New order",
+      "form": "orders",
+      "children": [
+        { "id": "customer_input", "type": "textInput", "label": "Customer", "field": "customer", "required": true },
+        { "id": "garment_choice", "type": "choice", "label": "Garment", "field": "garment" },
+        { "id": "advance_input", "type": "number", "label": "Advance", "field": "advance" },
+        { "id": "delivery_input", "type": "date", "label": "Delivery date", "field": "delivery" },
+        { "id": "save_order_btn", "type": "bigButton", "label": "Save order", "action": "save_order" }
+      ]
+    },
+    {
+      "id": "order_detail",
+      "title": "Order",
+      "form": "orders",
+      "children": [
+        { "id": "detail_heading", "type": "heading", "label": "Pickup", "style": { "emphasis": "subtle" } },
+        { "id": "delivered_toggle", "type": "toggle", "label": "Delivered", "field": "delivered" },
+        { "id": "pickup_signature", "type": "signature", "label": "Customer signature", "field": "signature", "a11yDescription": "Ask the customer to sign when they collect the order." },
+        { "id": "update_btn", "type": "bigButton", "label": "Save", "action": "update_order" },
+        { "id": "delete_btn", "type": "bigButton", "label": "Delete order", "action": "delete_order", "tone": "danger" }
+      ]
+    },
+    {
+      "id": "customer_add",
+      "title": "New customer",
+      "form": "customers",
+      "children": [
+        { "id": "name_input", "type": "textInput", "label": "Name", "field": "name", "required": true },
+        { "id": "phone_input", "type": "textInput", "label": "Phone", "field": "phone" },
+        { "id": "save_customer_btn", "type": "bigButton", "label": "Save customer", "action": "save_customer" },
+        { "id": "customer_list", "type": "list", "label": "Customers", "source": "customers", "primary": "name", "secondary": "phone", "allowDelete": true },
+        { "id": "payment_list", "type": "list", "label": "Payments", "source": "payments", "primary": "amount", "secondary": "order" }
+      ]
+    }
+  ],
+  "initialScreen": "home",
+  "actions": {
+    "go_add": { "type": "navigate", "screen": "add" },
+    "go_customer": { "type": "navigate", "screen": "customer_add" },
+    "save_order": { "type": "insert", "collection": "orders", "then": { "feedback": "Order saved", "navigate": "home" } },
+    "save_customer": { "type": "insert", "collection": "customers", "then": { "feedback": "Customer saved" } },
+    "update_order": { "type": "update", "collection": "orders", "record": "selected", "then": { "navigate": "home" } },
+    "delete_order": { "type": "delete", "collection": "orders", "record": "selected", "confirm": "Delete this order?" }
+  },
+  "aiBlocks": {},
+  "intents": { "save_order": ["save order", "order rakh do"] },
+  "meta": { "createdAt": 1763500000000, "source": "manual", "supportedLanguages": ["hi"] },
+  "permissions": [{ "kind": "notifications", "reason": "To remind you a day before each delivery" }],
+  "accessibility": { "summary": "Keeps customers, their orders and delivery reminders on this phone." },
+  "settings": { "currency": "INR", "timeFormat": "12h" },
+  "localization": {
+    "terminology": [
+      { "term": "Kurta", "keep": true },
+      { "term": "Advance", "translations": { "hi": "अग्रिम" } }
+    ]
+  }
+}

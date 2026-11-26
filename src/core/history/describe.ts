@@ -8,8 +8,8 @@ import type { KalamAction, KalamAIBlock, KalamComponent, KalamField, KalamSpec }
 import { colourName } from './colour';
 import { describeCondition, describeFormula, type FormulaNames } from './formula-text';
 import {
-  clip, COMPONENT_NOUN, deepEqual, humanize, joinWords, languageLabel, lowerFirst, movedIds, namesFor, plural,
-  type SpecNames,
+  clip, COMPONENT_NOUN, deepEqual, humanize, joinWords, languageLabel, lowerFirst, movedIds, namesFor, NOTE_CHOICES,
+  NOTE_COLLECTION_ENTRIES, NOTE_FIELD_VALUES, plural, type SpecNames,
 } from './names';
 import type { ChangeCategory, ChangeDetail, ChangeEntry, ChangeImpact, ChangeKind } from './types';
 import { IMPACT_RANK } from './types';
@@ -149,28 +149,49 @@ function propRule(c: KalamComponent, prop: string): PropRule {
   return COMPONENT_PROPS[prop] ?? R(humanize(prop).toLowerCase(), 'structure', 'behaviour');
 }
 
-function propValue(prop: string, v: unknown, n: SpecNames): string {
+const boxWords = (v: unknown): string => (v ? 'several lines' : 'one line');
+const directionWords = (d: unknown): string => (d === 'desc' ? 'high to low' : 'low to high');
+
+/**
+ * How one component setting reads in a Before or After row. `form` is the collection the component's screen saves
+ * into: a field id is read in that set of entries (a list reads it in its own source), never as a component id.
+ */
+function propValue(prop: string, v: unknown, n: SpecNames, c: KalamComponent, form?: string): string {
   if (v === undefined) return 'not set';
-  if (prop === 'action') return n.actionName(String(v));
-  if (prop === 'aiBlock') return n.blockName(String(v));
-  if (prop === 'field' || prop === 'toggleField') return n.fieldLabel(String(v));
-  if (prop === 'source') return n.collectionName(String(v));
-  if (prop === 'detailScreen') return n.screenTitle(String(v));
-  return show(v);
+  const entries = c.type === 'list' ? c.source : form;
+  switch (prop) {
+    case 'action': return n.actionName(String(v));
+    case 'aiBlock': return n.blockName(String(v));
+    case 'field': case 'toggleField': return n.fieldLabel(String(v), entries);
+    case 'source': return n.collectionName(String(v));
+    case 'detailScreen': return n.screenTitle(String(v));
+    case 'primary': return c.type === 'list' ? n.fieldLabel(String(v), entries) : show(v);
+    case 'secondary': return c.type === 'list' ? n.fieldLabel(String(v), entries) : show(v);
+    case 'multiline': return boxWords(v);
+    case 'sort': {
+      const o = v as { field?: unknown; direction?: unknown };
+      return typeof o === 'object' && o && typeof o.field === 'string' ? `${n.fieldLabel(o.field, entries)}, ${directionWords(o.direction)}` : show(v);
+    }
+    default: return show(v);
+  }
 }
 
+/** Formula and condition words. A field named in a formula is read in the collection the formula is about. */
 function formulaNames(n: SpecNames): FormulaNames {
-  return { collection: n.collectionName, name: n.anyName };
+  return { collection: n.collectionName, field: (collection, field) => n.fieldLabel(field, collection), name: n.anyName };
 }
 
-function diffComponent(cb: KalamComponent, ca: KalamComponent, nb: SpecNames, na: SpecNames, screenId: string, out: Draft[]): void {
+/** The set of entries each screen saves into, before and after. */
+interface Forms { before?: string; after?: string }
+
+function diffComponent(cb: KalamComponent, ca: KalamComponent, nb: SpecNames, na: SpecNames, screenId: string, forms: Forms, out: Draft[]): void {
   const ids = [screenId, ca.id];
   const refB = nb.componentRef(cb);
   const refA = na.componentRef(ca);
   if (cb.type !== ca.type) {
     out.push({
       kind: 'changed', category: 'structure', impact: 'behaviour', ids,
-      text: `Changed the ${refB} into a ${COMPONENT_NOUN[ca.type]}`,
+      text: `Changed the ${refB} into ${ca.type === 'text' ? 'plain text' : `a ${COMPONENT_NOUN[ca.type]}`}`,
       details: [{ name: 'Kind', before: COMPONENT_NOUN[cb.type], after: COMPONENT_NOUN[ca.type] }],
     });
     return;
@@ -204,7 +225,7 @@ function diffComponent(cb: KalamComponent, ca: KalamComponent, nb: SpecNames, na
     out.push({
       kind: 'changed', category: 'logic', impact: 'behaviour', ids,
       text: `The ${refA} now runs the ${na.actionName(String(ra.action))} action`,
-      details: [{ name: 'Action', before: propValue('action', rb.action, nb), after: propValue('action', ra.action, na) }],
+      details: [{ name: 'Action', before: propValue('action', rb.action, nb, cb), after: propValue('action', ra.action, na, ca) }],
     });
   }
   if (ca.type === 'stat' && changed.includes('expr')) {
@@ -220,8 +241,8 @@ function diffComponent(cb: KalamComponent, ca: KalamComponent, nb: SpecNames, na
   }
   if (ca.type === 'list' && changed.includes('filter')) {
     handled.add('filter');
-    const cond = ca.filter ? describeCondition(ca.filter, formulaNames(na)) : undefined;
-    const before = cb.type === 'list' && cb.filter ? describeCondition(cb.filter, formulaNames(nb)) : undefined;
+    const cond = ca.filter ? describeCondition(ca.filter, formulaNames(na), ca.source) : undefined;
+    const before = cb.type === 'list' && cb.filter ? describeCondition(cb.filter, formulaNames(nb), cb.source) : undefined;
     const text = !ca.filter
       ? `The ${refA} now shows all entries`
       : cond ? `The ${refA} now shows only entries ${cond}` : `Changed which entries the ${refA} shows`;
@@ -242,7 +263,11 @@ function diffComponent(cb: KalamComponent, ca: KalamComponent, nb: SpecNames, na
     const g = groups.get(rule.category) ?? { words: [], impact: 'cosmetic' as ChangeImpact, details: [] };
     if (!g.words.includes(rule.words)) g.words.push(rule.words);
     g.impact = stronger(g.impact, rule.impact);
-    g.details.push({ name: cap(rule.words), before: propValue(prop, rb[prop], nb), after: propValue(prop, ra[prop], na) });
+    g.details.push({
+      name: cap(rule.words),
+      before: propValue(prop, rb[prop], nb, cb, forms.before),
+      after: propValue(prop, ra[prop], na, ca, forms.after),
+    });
     groups.set(rule.category, g);
   }
   for (const [category, g] of groups) {
@@ -293,7 +318,7 @@ function diffComponents(b: KalamSpec, a: KalamSpec, out: Draft[]): void {
         text: `Moved the ${na.componentRef(now.c)} from the ${nb.screenTitle(was.screen)} screen to the ${na.screenTitle(now.screen)} screen`,
       });
     }
-    diffComponent(was.c, now.c, nb, na, now.screen, out);
+    diffComponent(was.c, now.c, nb, na, now.screen, { before: b.screens.find((s) => s.id === was.screen)?.form, after: a.screens.find((s) => s.id === now.screen)?.form }, out);
   }
   for (const s of a.screens) {
     const sb = inScreen(s.id, b);
@@ -316,7 +341,7 @@ function diffComponents(b: KalamSpec, a: KalamSpec, out: Draft[]): void {
 // ─── Collections and fields ───────────────────────────────────────────────────
 
 const TYPE_WORDS: Record<KalamField['type'], string> = {
-  text: 'text', number: 'a number', date: 'a date', boolean: 'a yes or no', enum: 'a choice',
+  text: 'text', number: 'a number', date: 'a date', boolean: 'a yes or no', enum: 'a choice', image: 'a photo',
 };
 
 const FIELD_ATTRS: Record<string, PropRule> = {
@@ -325,10 +350,16 @@ const FIELD_ATTRS: Record<string, PropRule> = {
   maxLength: R('length limit', 'data', 'behaviour'),
   defaultValue: R('starting value', 'data', 'behaviour'),
   unit: R('number display', 'data', 'cosmetic'),
-  decimals: R('number display', 'data', 'cosmetic'),
+  // Decimals is not only display: voice and AI steps round the numbers they write to this many places.
+  decimals: R('number display', 'data', 'behaviour'),
   placeholder: R('hint text', 'text', 'cosmetic'),
   multiline: R('box size', 'look', 'cosmetic'),
 };
+const FIELD_ROW_NAMES: Record<string, string> = {
+  min: 'Lowest allowed', max: 'Highest allowed', maxLength: 'Longest allowed', defaultValue: 'Starting value',
+  unit: 'Unit', decimals: 'Decimal places', placeholder: 'Hint text', multiline: 'Box size',
+};
+const fieldAttrValue = (key: string, v: unknown): string => (key === 'multiline' && v !== undefined ? boxWords(v) : show(v));
 
 function diffFields(coll: string, fb: Record<string, KalamField>, fa: Record<string, KalamField>, nb: SpecNames, na: SpecNames, out: Draft[]): void {
   const place = na.collectionName(coll);
@@ -340,7 +371,7 @@ function diffFields(coll: string, fb: Record<string, KalamField>, fa: Record<str
     if (fa[id]) continue;
     out.push({
       kind: 'removed', category: 'data', impact: 'data', ids: [coll, id],
-      text: `Removed the ${f.label} field from ${nb.collectionName(coll)}. Values you already saved stay on this device`,
+      text: `Removed the ${f.label} field from ${nb.collectionName(coll)}`, note: NOTE_FIELD_VALUES,
     });
   }
   for (const [id, now] of Object.entries(fa)) {
@@ -353,7 +384,6 @@ function diffFields(coll: string, fb: Record<string, KalamField>, fa: Record<str
         text: `Changed the ${now.label} field in ${place} from ${TYPE_WORDS[was.type]} to ${TYPE_WORDS[now.type]}`,
         details: [{ name: 'Kind', before: TYPE_WORDS[was.type], after: TYPE_WORDS[now.type] }],
       });
-      continue;
     }
     if (was.label !== now.label) {
       out.push({
@@ -371,7 +401,7 @@ function diffFields(coll: string, fb: Record<string, KalamField>, fa: Record<str
       if (minus.length) {
         out.push({
           kind: 'removed', category: 'data', impact: 'data', ids,
-          text: `Removed ${joinWords(minus)} from the ${now.label} choices. Entries already saved are not changed`,
+          text: `Removed ${joinWords(minus)} from the ${now.label} choices`, note: NOTE_CHOICES,
         });
       }
     }
@@ -382,19 +412,23 @@ function diffFields(coll: string, fb: Record<string, KalamField>, fa: Record<str
         details: [{ name: 'Required', before: was.required ? 'yes' : 'no', after: now.required ? 'yes' : 'no' }],
       });
     }
+    // The settings below belong to one type. After a type change they are all different by nature, and the line
+    // above already says so, so they are not listed again.
+    if (was.type !== now.type) continue;
     const rw = was as unknown as Val;
     const rn = now as unknown as Val;
-    const groups = new Map<string, { rule: PropRule; details: ChangeDetail[] }>();
+    const groups = new Map<string, { rule: PropRule; impact: ChangeImpact; details: ChangeDetail[] }>();
     for (const key of Object.keys(FIELD_ATTRS)) {
       if (deepEqual(rw[key], rn[key])) continue;
       const rule = FIELD_ATTRS[key];
-      const g = groups.get(rule.words) ?? { rule, details: [] };
-      g.details.push({ name: cap(humanize(key).toLowerCase()), before: show(rw[key]), after: show(rn[key]) });
+      const g = groups.get(rule.words) ?? { rule, impact: 'cosmetic' as ChangeImpact, details: [] };
+      g.impact = stronger(g.impact, rule.impact);
+      g.details.push({ name: FIELD_ROW_NAMES[key] ?? cap(humanize(key).toLowerCase()), before: fieldAttrValue(key, rw[key]), after: fieldAttrValue(key, rn[key]) });
       groups.set(rule.words, g);
     }
-    for (const { rule, details } of groups.values()) {
+    for (const { rule, impact, details } of groups.values()) {
       out.push({
-        kind: 'changed', category: rule.category, impact: rule.impact, ids,
+        kind: 'changed', category: rule.category, impact, ids,
         text: `Changed the ${rule.words} of the ${now.label} field in ${place}`,
         details,
       });
@@ -417,7 +451,7 @@ function diffCollections(b: KalamSpec, a: KalamSpec, out: Draft[]): void {
     if (a.collections[id]) continue;
     out.push({
       kind: 'removed', category: 'data', impact: 'data', ids: [id],
-      text: `Stopped keeping ${nb.collectionName(id)} in the design. Entries you already saved stay on this device`,
+      text: `Stopped keeping ${nb.collectionName(id)} in the design`, note: NOTE_COLLECTION_ENTRIES,
     });
   }
   for (const [id, now] of Object.entries(a.collections)) {
@@ -436,29 +470,38 @@ function diffCollections(b: KalamSpec, a: KalamSpec, out: Draft[]): void {
 
 // ─── Actions, voice phrases and AI steps ──────────────────────────────────────
 
+/** A message the person wrote, clipped so one line stays readable. */
+const quoted = (s: string): string => `“${clip(s, 60)}”`;
+
 export function describeActionText(a: KalamAction, spec: KalamSpec): string {
   const n = namesFor(spec);
   const then = (base: string): string => {
     if (!('then' in a) || !a.then) return base;
     const extra: string[] = [];
     if (a.then.navigate) extra.push(`goes to the ${n.screenTitle(a.then.navigate)} screen`);
-    if (a.then.speak) extra.push('says a message aloud');
-    else if (a.then.feedback) extra.push('shows a message');
+    if (a.then.speak) extra.push(`says ${quoted(a.then.speak)} aloud`);
+    if (a.then.feedback) extra.push(`shows the message ${quoted(a.then.feedback)}`);
     return extra.length ? joinWords([base, ...extra]) : base;
   };
   switch (a.type) {
     case 'navigate': return `opens the ${n.screenTitle(a.screen)} screen`;
     case 'insert': return then(`saves a new ${n.recordName(a.collection)}`);
     case 'update': return then(`updates the chosen ${n.recordName(a.collection)}`);
-    case 'delete': return then(`deletes the chosen ${n.recordName(a.collection)} after asking you to confirm`);
+    case 'delete': return then(`deletes the chosen ${n.recordName(a.collection)} after asking ${quoted(a.confirm)}`);
     case 'increment': return `adds ${a.by ?? 1} to ${lowerFirst(n.anyName(a.target))}`;
     case 'decrement': return `takes ${a.by ?? 1} away from ${lowerFirst(n.anyName(a.target))}`;
     case 'reset': return `resets ${lowerFirst(n.anyName(a.target))}`;
     case 'runAI': return then(`runs the ${n.blockName(a.aiBlock)} AI step`);
-    case 'speak': return 'reads a message aloud';
-    case 'feedback': return 'shows a message';
+    case 'speak': return `reads ${quoted(a.text)} aloud`;
+    case 'feedback': return `shows the ${a.tone ? `${a.tone} ` : ''}message ${quoted(a.message)}`;
     case 'clearForm': return 'clears the form';
+    case 'compute': return then(`works out a formula and puts the answer in ${lowerFirst(n.anyName(a.target))}`);
   }
+}
+
+/** Two rows that must never read the same when something changed, even if a long message was clipped. */
+function beforeAfter(before: string, after: string): { before: string; after: string } {
+  return { before, after: before === after ? `${after} (the exact wording changed)` : after };
 }
 
 function diffActions(b: KalamSpec, a: KalamSpec, out: Draft[]): void {
@@ -472,7 +515,7 @@ function diffActions(b: KalamSpec, a: KalamSpec, out: Draft[]): void {
       out.push({
         kind: 'changed', category: 'logic', impact: 'behaviour', ids: [id],
         text: `The ${na.actionName(id)} action now ${describeActionText(act, a)}`,
-        details: [{ name: 'Does', before: describeActionText(was, b), after: describeActionText(act, a) }],
+        details: [{ name: 'Does', ...beforeAfter(describeActionText(was, b), describeActionText(act, a)) }],
       });
     }
   }
@@ -508,9 +551,9 @@ function describeBlockText(blk: KalamAIBlock, spec: KalamSpec): string {
       const labels = fields.map((f) => lowerFirst(n.fieldLabel(f, blk.target)));
       return labels.length ? `reads a photo and fills in ${joinWords(labels)}` : 'reads a photo';
     }
-    case 'classify': return `sorts ${lowerFirst(n.anyName(blk.inputField))} into ${joinWords(blk.labels)}`;
-    case 'summarise': return `summarises ${lowerFirst(n.anyName(blk.inputField))} in up to ${blk.maxWords} words`;
-    case 'translate': return `translates ${lowerFirst(n.anyName(blk.inputField))} into ${languageLabel(blk.targetLang)}`;
+    case 'classify': return `sorts ${lowerFirst(n.fieldLabel(blk.inputField))} into ${joinWords(blk.labels)}`;
+    case 'summarise': return `summarises ${lowerFirst(n.fieldLabel(blk.inputField))} in up to ${blk.maxWords} words`;
+    case 'translate': return `translates ${lowerFirst(n.fieldLabel(blk.inputField))} into ${languageLabel(blk.targetLang)}`;
   }
 }
 
@@ -526,6 +569,31 @@ const BLOCK_PROPS: Record<string, PropRule> = {
   fallback: R('fallback setting', 'ai', 'behaviour'),
   onError: R('error setting', 'ai', 'behaviour'),
 };
+/** Row names for the Before and After view. Written out, never made by lower-casing an id. */
+const BLOCK_ROW_NAMES: Record<string, string> = {
+  prompt: 'Instructions', labels: 'Labels', inputField: 'Input field', outputField: 'Output field',
+  target: 'Target entries', fields: 'Fields', maxWords: 'Longest allowed', targetLang: 'Language',
+  fallback: 'If this device cannot do it', onError: 'If it fails',
+};
+const FALLBACK_WORDS: Record<string, string> = { cloud: 'try once online', none: 'this device only' };
+const ON_ERROR_WORDS: Record<string, string> = { keep_input: 'keep what was typed', manual_entry: 'keep what was typed and ask for the value' };
+
+/** How one AI step setting reads in a Before or After row: field ids become labels, codes become words. */
+function blockValue(key: string, blk: KalamAIBlock, n: SpecNames): string {
+  const v = (blk as unknown as Val)[key];
+  const target = blk.kind === 'extractFromPhoto' ? blk.target : undefined;
+  switch (key) {
+    case 'inputField': case 'outputField': return typeof v === 'string' ? n.fieldLabel(v) : show(v);
+    case 'target': return typeof v === 'string' ? n.collectionName(v) : show(v);
+    case 'fields':
+      return Array.isArray(v) ? joinWords(v.map((f) => n.fieldLabel(String(f), target))) : target ? 'every field' : show(v);
+    case 'targetLang': return typeof v === 'string' ? languageLabel(v) : show(v);
+    // Absent means the documented default: one online try, and the typed input is always kept.
+    case 'fallback': return FALLBACK_WORDS[typeof v === 'string' ? v : 'cloud'] ?? show(v);
+    case 'onError': return ON_ERROR_WORDS[typeof v === 'string' ? v : 'keep_input'] ?? show(v);
+    default: return show(v);
+  }
+}
 const VERIFIED_WORDS = { onDevice: 'works on this device', cloudPreferred: 'works best online', unverified: 'not checked yet' } as const;
 
 function diffAIBlocks(b: KalamSpec, a: KalamSpec, out: Draft[]): void {
@@ -553,12 +621,14 @@ function diffAIBlocks(b: KalamSpec, a: KalamSpec, out: Draft[]): void {
     const details: ChangeDetail[] = [];
     for (const key of Object.keys(BLOCK_PROPS)) {
       if (deepEqual(rw[key], rn[key])) continue;
+      const before = blockValue(key, was, nb);
+      const after = blockValue(key, blk, na);
+      // Setting a default explicitly ("fallback: cloud" where it was absent) changes nothing, so it is not a change.
+      if (key !== 'prompt' && before === after) continue;
       const w = BLOCK_PROPS[key].words;
       if (!words.includes(w)) words.push(w);
       // Never copy the instructions into history: they can be long and are not needed to understand the change.
-      details.push(key === 'prompt'
-        ? { name: cap(w) }
-        : { name: cap(humanize(key).toLowerCase()), before: show(rw[key]), after: show(rn[key]) });
+      details.push(key === 'prompt' ? { name: cap(w) } : { name: BLOCK_ROW_NAMES[key] ?? cap(humanize(key).toLowerCase()), before, after });
     }
     if (words.length) {
       out.push({
@@ -569,8 +639,11 @@ function diffAIBlocks(b: KalamSpec, a: KalamSpec, out: Draft[]): void {
     if (!deepEqual(was.verified, blk.verified) || !deepEqual(was.verification, blk.verification)) {
       const v = blk.verification;
       const score = v && v.testCount > 0 ? ` (${v.passCount} of ${v.testCount} checks passed)` : '';
+      // The status picks where the step runs (this device or online) and whether it works offline, so a new status
+      // changes behaviour. A re-run that only updates the counts changes nothing the person can see.
+      const routes = was.verified !== blk.verified;
       out.push({
-        kind: 'changed', category: 'ai', impact: 'cosmetic', ids: [id],
+        kind: 'changed', category: 'ai', impact: routes ? 'behaviour' : 'cosmetic', ids: [id],
         text: `The ${name} AI step is now marked as ${VERIFIED_WORDS[blk.verified]}${score}`,
         details: [{ name: 'Status', before: VERIFIED_WORDS[was.verified], after: VERIFIED_WORDS[blk.verified] }],
       });
@@ -690,7 +763,13 @@ function diffApp(b: KalamSpec, a: KalamSpec, out: Draft[]): void {
     push('changed', 'settings', 'behaviour', 'remixAllowed', ma.remixAllowed ? 'Allowed others to remix this app' : 'Stopped others from remixing this app');
   }
   if (!deepEqual(mb.supportedLanguages, ma.supportedLanguages)) {
-    push('changed', 'settings', 'cosmetic', 'supportedLanguages', 'Changed the languages this app has been checked in');
+    // docs/14 §11.2 "Translation updated": a language gaining or losing a reviewed translation view.
+    const plus = newItems(mb.supportedLanguages, ma.supportedLanguages).map(languageLabel);
+    const minus = newItems(ma.supportedLanguages, mb.supportedLanguages).map(languageLabel);
+    const line = !minus.length
+      ? `Added ${joinWords(plus)} to the translations`
+      : !plus.length ? `Removed ${joinWords(minus)} from the translations` : 'Changed the translations';
+    push(plus.length && !minus.length ? 'added' : minus.length && !plus.length ? 'removed' : 'changed', 'text', 'cosmetic', 'supportedLanguages', line);
   }
 }
 

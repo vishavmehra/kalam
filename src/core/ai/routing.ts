@@ -8,6 +8,7 @@ import type {
 } from '../contracts';
 import { isUsable, type Capability } from './capabilities';
 import { AI_COPY } from './copy';
+import type { LocalStatus } from './local-ready';
 
 export interface TaskPolicy {
   /** Default model role when the request does not name one. */
@@ -24,10 +25,15 @@ export interface TaskPolicy {
    * offline_only, configured); never for `only_on_device`; never more than one extra call.
    */
   cloudFallback: boolean;
+  /**
+   * docs/07 §4.2: a simple request without a template tries the device first, but only once the local gate says
+   * this platform is `ready` for it (§6.7, §4.5: Nano is not assumed able to build a whole app). Simple requests only.
+   */
+  localWhenReady?: boolean;
 }
 
 export const TASK_POLICIES: Readonly<Record<TaskType, TaskPolicy>> = {
-  create_app: { role: 'compiler', onDevice: false, specialist: true, userFacing: false, cloudFallback: false },
+  create_app: { role: 'compiler', onDevice: false, specialist: true, userFacing: false, cloudFallback: false, localWhenReady: true },
   plan_app: { role: 'compiler', onDevice: false, specialist: true, userFacing: false, cloudFallback: false },
   modify_app: { role: 'compiler', onDevice: false, specialist: true, userFacing: false, cloudFallback: false },
   interpret_sketch: { role: 'compiler', onDevice: false, specialist: true, userFacing: false, cloudFallback: false },
@@ -56,18 +62,35 @@ export interface RouteInput {
   onDevice: OnDeviceStatus['availability'];
   /** A capability the request needs that the on-device model lacks (see `deviceGap`). */
   deviceLacks?: Capability;
+  /** The local-ready gate for this task on this platform (local-ready.ts). Absent counts as unproven. */
+  localReady?: LocalStatus;
+}
+
+/**
+ * Whether the device model may take this task now (docs/07 §6.7). A task that prefers the device keeps it unless
+ * its benchmark FAILED; the simple-app local attempt needs a benchmark that PASSED. Unproven never blocks a task
+ * that already used the device, and never unlocks a new one.
+ */
+export function onDeviceEligible(taskType: TaskType, complexity: ComplexityLevel | undefined, localReady?: LocalStatus): boolean {
+  const policy = TASK_POLICIES[taskType];
+  if (policy.onDevice) return localReady !== 'failed';
+  return !!policy.localWhenReady && complexity === 'simple' && localReady === 'ready';
 }
 
 /**
  * First capability this request needs that the capability registry says the on-device model on this
  * platform cannot take (docs/07 §14.6: unsupported and not-assumed rows are never routed). Undefined
- * when the device may run it. The web uses the Prompt API rows. Android, and any other runtime (iOS
- * reports 'other' until the contract has 'ios'; its Apple model takes text only), use the text-only
- * native rows, so images are never sent to a device model that cannot read them.
+ * when the device may run it. The web uses the Prompt API rows, iOS the Apple Foundation Models rows
+ * and Android, and any other runtime, the Android rows. Both phone models take text only, so images
+ * and recordings are never sent to a device model that cannot read them.
  */
-export function deviceGap(platform: OnDeviceStatus['platform'], req: Pick<StructuredRequest<unknown>, 'images'>): Capability | undefined {
-  const provider = platform === 'web' ? 'nano_web' : 'nano_android';
-  const needs: Capability[] = ['text', 'structured_output', ...(req.images?.length ? ['image_input' as const] : [])];
+export function deviceGap(platform: OnDeviceStatus['platform'], req: Pick<StructuredRequest<unknown>, 'images' | 'audio'>): Capability | undefined {
+  const provider = platform === 'web' ? 'nano_web' : platform === 'ios' ? 'apple_fm' : 'nano_android';
+  const needs: Capability[] = [
+    'text', 'structured_output',
+    ...(req.images?.length ? ['image_input' as const] : []),
+    ...(req.audio?.length ? ['audio_input' as const] : []),
+  ];
   return needs.find((c) => !isUsable(provider, c));
 }
 
@@ -77,7 +100,7 @@ export type RouteDecision =
   | { kind: 'fail'; code: AIErrorCode; message: string; intended: 'on_device' | 'cloud' };
 
 /** Why Firebase cloud cannot be used right now, or undefined if it can. */
-function cloudBlock(i: RouteInput): { code: AIErrorCode; message: string } | undefined {
+export function cloudBlock(i: Pick<RouteInput, 'settings' | 'online' | 'firebaseConfigured'>): { code: AIErrorCode; message: string } | undefined {
   if (i.settings.aiMode === 'offline_only') return { code: 'consent_denied', message: AI_COPY.offlineOnlyMode };
   if (!i.settings.allowCloud) return { code: 'consent_denied', message: AI_COPY.cloudOff };
   if (!i.online) return { code: 'offline', message: AI_COPY.offline };
@@ -99,14 +122,18 @@ export function planRoute(i: RouteInput): RouteDecision {
   }
 
   const deviceReady = i.onDevice === 'available' && !i.deviceLacks;
-  if (!policy.onDevice) {
-    // Nano cannot do this task (docs/07 §4.5): cloud or a clear failure. A caller's only_on_device
-    // is a privacy constraint and is never widened to cloud.
+  if (!onDeviceEligible(i.taskType, i.complexity, i.localReady)) {
+    // Nano cannot do this task (docs/07 §4.5), or it failed its benchmark for it (§6.7): cloud or a clear
+    // failure. A caller's only_on_device is a privacy constraint and is never widened to cloud.
+    const benchFailed = policy.onDevice;
     if (i.requestedMode === 'only_on_device') {
-      return { kind: 'fail', code: 'model_unavailable', intended: 'on_device', message: AI_COPY.taskNeedsCloud };
+      return { kind: 'fail', code: 'model_unavailable', intended: 'on_device', message: benchFailed ? AI_COPY.localFailedGate : AI_COPY.taskNeedsCloud };
     }
     if (blocked) return { kind: 'fail', ...blocked, intended: 'cloud' };
-    return { kind: 'firebase', mode: 'only_in_cloud', note: i.requestedMode === 'only_in_cloud' ? undefined : 'task requires cloud reasoning' };
+    return {
+      kind: 'firebase', mode: 'only_in_cloud',
+      note: i.requestedMode === 'only_in_cloud' ? undefined : benchFailed ? 'on-device model failed its benchmark for this task' : 'task requires cloud reasoning',
+    };
   }
 
   // The capability registry says the device model cannot take this input (docs/07 §14.6).

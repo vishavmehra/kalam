@@ -1,33 +1,39 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { priceLabel, REPORT_REASONS, type BazaarListing, type ReportReason } from '@/core/bazaar';
+import { REPORT_REASONS, type BazaarListing, type ReportReason } from '@/core/bazaar';
 import type { BazaarUpdateCheck, KalamUser } from '@/core/contracts';
-import { Button, Chip, Sheet, Text, TextField } from '@/design';
+import { Button, Chip, Sheet, Text, TextField, useKalamTheme } from '@/design';
 import { SignInPanel } from '@/features/auth/SignInPanel';
+import type { TranslationKey } from '@/i18n/keys';
+import { useT } from '@/i18n/react';
 
-/** Asks for an account only at the moment one is needed (like, report). Guests are allowed. */
+import { priceText } from './parts';
+
+/** Sign-in for a stale guest session: like, report and buy need a Google or email account. */
 export function SignInSheet({ visible, reason, onClose, onDone }: {
   visible: boolean;
   reason: string;
   onClose: () => void;
   onDone: (user: KalamUser) => void;
 }) {
+  const theme = useKalamTheme();
+  const t = useT(theme.uiLanguage);
   return (
-    <Sheet visible={visible} title="Sign in to continue" description={reason} onClose={onClose}>
-      <SignInPanel allowGuest onDone={onDone} />
+    <Sheet visible={visible} title={t('bazaar.signIn.title')} description={reason} onClose={onClose}>
+      <SignInPanel initialMode="signup" onDone={onDone} />
     </Sheet>
   );
 }
 
-const REASON_LABELS: Record<ReportReason, string> = {
-  malicious: 'Harmful or unsafe',
-  misleading: 'Misleading description',
-  privacy: 'Asks for private information',
-  copyright: 'Copied without credit',
-  spam: 'Spam',
-  inappropriate: 'Inappropriate content',
-  broken: 'Does not work',
+const REASON: Record<ReportReason, TranslationKey> = {
+  malicious: 'bazaar.report.reason.malicious',
+  misleading: 'bazaar.report.reason.misleading',
+  privacy: 'bazaar.report.reason.privacy',
+  copyright: 'bazaar.report.reason.copyright',
+  spam: 'bazaar.report.reason.spam',
+  inappropriate: 'bazaar.report.reason.inappropriate',
+  broken: 'bazaar.report.reason.broken',
 };
 
 export function ReportSheet({ visible, title, onClose, onSend }: {
@@ -36,18 +42,20 @@ export function ReportSheet({ visible, title, onClose, onSend }: {
   onClose: () => void;
   onSend: (reason: ReportReason, note: string) => Promise<void>;
 }) {
+  const theme = useKalamTheme();
+  const t = useT(theme.uiLanguage);
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   return (
     <Sheet
       visible={visible}
-      title={`Report "${title}"`}
-      description="Tell us what is wrong. Your report is private. The maker does not see who sent it."
+      title={t('bazaar.report.title', { name: title })}
+      description={t('bazaar.report.description')}
       onClose={onClose}
       footer={
         <Button
-          label="Send report"
+          label={t('bazaar.report.send')}
           disabled={!reason || busy}
           loading={busy}
           onPress={async () => {
@@ -62,19 +70,19 @@ export function ReportSheet({ visible, title, onClose, onSend }: {
       }
     >
       <View style={{ gap: 16 }}>
-        <View role="radiogroup" accessibilityLabel="Reason" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <View role="radiogroup" accessibilityLabel={t('bazaar.report.reason.label')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {REPORT_REASONS.map((r) => (
-            <Chip key={r} label={REASON_LABELS[r]} role="radio" selected={reason === r} onPress={() => setReason(r)} />
+            <Chip key={r} label={t(REASON[r])} role="radio" selected={reason === r} onPress={() => setReason(r)} />
           ))}
         </View>
-        <TextField label="Details (optional)" value={note} onChangeText={setNote} multiline maxLength={500} numberOfLines={3} />
-        <Text variant="bodySmall" tone="muted">Reports are saved for the Kalam team to review. Sending one does not remove the app straight away.</Text>
+        <TextField label={t('bazaar.report.details')} value={note} onChangeText={setNote} multiline maxLength={500} numberOfLines={3} />
+        <Text variant="bodySmall" tone="muted">{t('bazaar.report.note')}</Text>
       </View>
     </Sheet>
   );
 }
 
-/** Purchase confirmation (docs/12 §12.3): name, maker, price, balance before and after. */
+/** Purchase confirmation (docs/12 §12.3): name, maker, price, balance before and after. Only when payments are on. */
 export function PurchaseSheet({ visible, listing, credits, onClose, onConfirm }: {
   visible: boolean;
   listing: BazaarListing;
@@ -83,18 +91,20 @@ export function PurchaseSheet({ visible, listing, credits, onClose, onConfirm }:
   onClose: () => void;
   onConfirm: () => Promise<void>;
 }) {
+  const theme = useKalamTheme();
+  const t = useT(theme.uiLanguage);
   const [busy, setBusy] = useState(false);
   const balance = credits ?? 100;
   const after = balance - listing.price;
   return (
     <Sheet
       visible={visible}
-      title={`Buy "${listing.title}"?`}
-      description="Credits are a test currency inside Kalam. No real money is charged."
+      title={t('bazaar.buy.title', { name: listing.title })}
+      description={t('bazaar.buy.description')}
       onClose={onClose}
       footer={
         <Button
-          label={`Pay ${priceLabel(listing.price)}`}
+          label={t('bazaar.buy.pay', { price: priceText(t, listing.price) })}
           disabled={busy || after < 0}
           loading={busy}
           onPress={async () => { setBusy(true); await onConfirm(); setBusy(false); }}
@@ -102,13 +112,13 @@ export function PurchaseSheet({ visible, listing, credits, onClose, onConfirm }:
       }
     >
       <View style={{ gap: 8 }}>
-        <Line label="App" value={listing.title} />
-        <Line label="Maker" value={listing.makerName} />
-        <Line label="Price" value={priceLabel(listing.price)} />
-        <Line label="Your credits" value={credits === undefined ? '100 (your starting credits)' : String(balance)} />
-        <Line label="After buying" value={String(after)} />
-        {after < 0 ? <Text tone="danger">You do not have enough credits for this app.</Text> : null}
-        <Text variant="bodySmall" tone="muted">Nothing is charged until the purchase is confirmed by Kalam Bazaar.</Text>
+        <Line label={t('bazaar.buy.app')} value={listing.title} />
+        <Line label={t('bazaar.buy.maker')} value={listing.makerName} />
+        <Line label={t('bazaar.buy.price')} value={priceText(t, listing.price)} mono />
+        <Line label={t('bazaar.buy.balance')} value={credits === undefined ? t('bazaar.buy.starting') : String(balance)} mono />
+        <Line label={t('bazaar.buy.after')} value={String(after)} mono />
+        {after < 0 ? <Text tone="danger">{t('bazaar.buy.notEnough')}</Text> : null}
+        <Text variant="bodySmall" tone="muted">{t('bazaar.buy.note')}</Text>
       </View>
     </Sheet>
   );
@@ -121,40 +131,40 @@ export function UpdateSheet({ visible, check, onClose, onApply }: {
   onClose: () => void;
   onApply: (mode: 'replace' | 'copy') => Promise<void>;
 }) {
+  const theme = useKalamTheme();
+  const t = useT(theme.uiLanguage);
   const [busy, setBusy] = useState(false);
   const run = async (mode: 'replace' | 'copy') => { setBusy(true); await onApply(mode); setBusy(false); };
   return (
     <Sheet
       visible={visible}
-      title={`Version ${check.listing?.specVersion ?? ''} is available`}
-      description={check.localEdits
-        ? 'You changed your copy. To keep your changes, install the update as a separate app.'
-        : 'Your entries stay. The old design stays in the app history, so you can go back.'}
+      title={t('bazaar.update.title', { version: check.listing?.specVersion ?? '' })}
+      description={t(check.localEdits ? 'bazaar.update.edited' : 'bazaar.update.safe')}
       onClose={onClose}
       footer={
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-          <Button label="Keep my version" variant="ghost" onPress={onClose} disabled={busy} />
-          {check.localEdits ? null : <Button label="Update my copy" onPress={() => run('replace')} loading={busy} />}
-          <Button label="Install as a separate app" variant={check.localEdits ? 'primary' : 'outline'} onPress={() => run('copy')} loading={busy} />
+          <Button label={t('bazaar.update.keep')} variant="ghost" onPress={onClose} disabled={busy} />
+          {check.localEdits ? null : <Button label={t('bazaar.update.replace')} onPress={() => run('replace')} loading={busy} />}
+          <Button label={t('bazaar.update.copy')} variant={check.localEdits ? 'primary' : 'outline'} onPress={() => run('copy')} loading={busy} />
         </View>
       }
     >
       <View style={{ gap: 6 }}>
-        {check.listing?.changeSummary ? <Text>From the maker: {check.listing.changeSummary}</Text> : null}
-        <Text weight="semibold">What is different</Text>
+        {check.listing?.changeSummary ? <Text>{t('bazaar.update.fromMaker', { summary: check.listing.changeSummary })}</Text> : null}
+        <Text weight="semibold">{t('bazaar.update.different')}</Text>
         {check.changes.length
           ? check.changes.slice(0, 12).map((c) => <Text key={c} tone="secondary">{c}</Text>)
-          : <Text tone="secondary">{check.message ?? 'Only small details changed.'}</Text>}
+          : <Text tone="secondary">{check.message ?? t('bazaar.update.small')}</Text>}
       </View>
     </Sheet>
   );
 }
 
-function Line({ label, value }: { label: string; value: string }) {
+function Line({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <View style={{ flexDirection: 'row', gap: 12 }}>
       <Text tone="secondary" style={{ width: 120 }}>{label}</Text>
-      <Text style={{ flex: 1 }}>{value}</Text>
+      <Text mono={mono} style={{ flex: 1 }}>{value}</Text>
     </View>
   );
 }

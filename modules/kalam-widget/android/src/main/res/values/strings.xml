@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Fallbacks used before Kalam has sent its own words (src/core/widgets/copy.ts, WIDGET_HOME_LABELS). -->
+  <string name="kalam_widget_label">Kalam</string>
+  <string name="kalam_widget_description">Shows a number or a short list from one of your Kalam apps. Everything stays on this phone.</string>
+  <string name="kalam_widget_unbound">Tap to choose what this widget shows</string>
+  <string name="kalam_widget_stale">Open Kalam to update</string>
+  <string name="kalam_widget_locked">Unlock to see this</string>
+  <string name="kalam_widget_picker_title">Show which widget?</string>
+  <string name="kalam_widget_picker_none">Open Kalam, pick an app and choose Add to home screen. Then come back here.</string>
+  <string name="kalam_widget_done">Done</string>
+  <string name="kalam_widget_not_done">Not done</string>
+  <string name="kalam_widget_ok">OK</string>
+</resources>

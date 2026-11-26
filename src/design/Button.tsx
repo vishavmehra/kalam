@@ -10,12 +10,12 @@ export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'des
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export interface ButtonProps {
-  /** Visible label; also the accessible name. Say what happens ("Save changes", not "Submit"). */
+  /** Visible label; also the accessible name. Say what happens ("Build app", not "Submit"). */
   label: string;
   onPress?: () => void;
-  /** Default `primary`. Use one primary per section (docs/02 §10.1). */
+  /** Default `primary`. One primary per section. */
   variant?: ButtonVariant;
-  /** `sm` 44px, `md` 48px (64 in Large mode), `lg` 56px. */
+  /** `sm` and `md` 48 px (sm has tighter padding), `lg` 54 px. Every size grows to 64 px in Large mode. */
   size?: ButtonSize;
   icon?: LucideIcon;
   iconPosition?: 'start' | 'end';
@@ -28,23 +28,28 @@ export interface ButtonProps {
   testID?: string;
 }
 
-interface VariantStyle { bg: string; fg: string; border: string; hover: string }
+interface VariantStyle { bg: string; fg: string; ring: string | null; ringWidth: number; hover: string }
 
+/**
+ * DIRECTION §7: primary is the action colour (royal on Paper, a paper slip on Ink night); quiet buttons are
+ * transparent with a 1.5 px ring; destructive is danger text on its wash, never a solid red fill.
+ */
 function variantStyle(theme: KalamTheme, variant: ButtonVariant): VariantStyle {
   const c = theme.colors;
+  const hc = theme.accessModes.highContrast;
   switch (variant) {
-    case 'primary': return { bg: c.primary, fg: c.onPrimary, border: c.primary, hover: 'primary' };
-    case 'secondary': return { bg: c.primarySoft, fg: c.primary, border: c.primarySoft, hover: 'border' };
-    case 'outline': return { bg: 'transparent', fg: c.text, border: c.borderStrong, hover: 'surface' };
-    case 'ghost': return { bg: 'transparent', fg: c.text, border: 'transparent', hover: 'surface' };
-    case 'destructive': return { bg: c.danger, fg: theme.scheme === 'dark' ? '#1A0F0F' : '#FFFFFF', border: c.danger, hover: 'danger' };
-    case 'link': return { bg: 'transparent', fg: c.primary, border: 'transparent', hover: 'link' };
+    case 'primary': return { bg: c.actionBg, fg: c.actionFg, ring: hc ? c.borderStrong : null, ringWidth: 2, hover: 'action' };
+    case 'secondary': return { bg: c.primarySoft, fg: c.primary, ring: hc ? c.primary : null, ringWidth: 1.5, hover: 'border' };
+    case 'outline': return { bg: 'transparent', fg: c.text, ring: c.borderStrong, ringWidth: 1.5, hover: 'surface' };
+    case 'ghost': return { bg: 'transparent', fg: c.text, ring: null, ringWidth: 0, hover: 'surface' };
+    case 'destructive': return { bg: c.dangerSoft, fg: c.danger, ring: hc ? c.danger : null, ringWidth: 1.5, hover: 'danger' };
+    case 'link': return { bg: 'transparent', fg: c.primary, ring: null, ringWidth: 0, hover: 'link' };
   }
 }
 
-const HEIGHT: Record<ButtonSize, number> = { sm: 44, md: 48, lg: 56 };
+const HEIGHT: Record<ButtonSize, number> = { sm: 48, md: 48, lg: 54 };
 
-/** Kalam button with primary/secondary/outline/ghost/destructive/link variants and loading state. */
+/** Kalam button: primary, secondary, outline (quiet), ghost, destructive and link, with a loading state. */
 export function Button({
   label, onPress, variant = 'primary', size = 'md', icon: Icon, iconPosition = 'start', loading, disabled,
   fullWidth, accessibilityHint, style, testID,
@@ -52,11 +57,12 @@ export function Button({
   const theme = useKalamTheme();
   const v = variantStyle(theme, variant);
   const inactive = disabled || loading;
-  const height = Math.max(HEIGHT[size], size === 'md' ? theme.touchTarget : 0);
-  const iconSize = size === 'lg' ? 20 : 18;
+  const height = Math.max(HEIGHT[size], theme.touchTarget);
+  const iconSize = size === 'lg' ? 19 : 18;
   const iconNode = loading
     ? <ActivityIndicator size="small" color={v.fg} />
     : Icon ? <Icon size={iconSize} color={v.fg} strokeWidth={2} /> : null;
+  const sinks = variant === 'primary' || variant === 'secondary' || variant === 'destructive';
 
   return (
     <Pressable
@@ -66,22 +72,24 @@ export function Button({
       aria-disabled={!!inactive}
       accessibilityHint={accessibilityHint}
       testID={testID}
-      {...webData({ kPress: '', kHover: inactive ? 'none' : v.hover })}
+      {...webData(inactive ? { kPress: '', kHover: 'none' } : sinks ? { kPress: '', kHover: v.hover, kSink: '' } : { kPress: '', kHover: v.hover })}
       style={({ pressed }) => [
         {
           minHeight: height,
-          paddingHorizontal: variant === 'link' ? 4 : size === 'sm' ? 14 : 20,
-          borderRadius: theme.radius.md,
-          backgroundColor: pressed && variant === 'primary' ? theme.colors.primaryPressed : v.bg,
-          borderWidth: variant === 'link' ? 0 : 1,
-          borderColor: v.border,
+          paddingHorizontal: variant === 'link' ? 4 : size === 'sm' ? 14 : size === 'lg' ? 24 : 20,
+          borderRadius: theme.radius.press,
+          backgroundColor: pressed && variant === 'primary' ? theme.colors.actionBgPressed : v.bg,
+          borderWidth: v.ring ? v.ringWidth : 0,
+          borderColor: v.ring ?? 'transparent',
           flexDirection: iconPosition === 'end' ? 'row-reverse' : 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 8,
+          gap: 10,
           opacity: disabled ? 0.48 : 1,
           alignSelf: fullWidth ? 'stretch' : 'flex-start',
+          transform: pressed && !theme.reducedMotion ? [{ translateY: 1 }] : undefined,
         },
+        variant === 'primary' && !inactive && theme.scheme === 'light' ? theme.elevation[1] : null,
         style,
       ]}
     >
@@ -90,7 +98,11 @@ export function Button({
         variant={size === 'lg' ? 'bodyLarge' : 'body'}
         weight="semibold"
         numberOfLines={2}
-        style={{ color: v.fg, textDecorationLine: variant === 'link' ? 'underline' : 'none' }}
+        style={{
+          color: v.fg,
+          textDecorationLine: variant === 'link' ? 'underline' : 'none',
+          ...(size === 'lg' ? { fontSize: Math.round(17 * theme.fontScale), lineHeight: Math.round(24 * theme.fontScale) } : null),
+        }}
       >
         {label}
       </Text>
@@ -100,15 +112,17 @@ export function Button({
 
 export interface IconButtonProps {
   icon: LucideIcon;
-  /** Accessible name — required because the button has no visible text. */
+  /** Accessible name, required because the button has no visible text. */
   label: string;
   onPress?: () => void;
   variant?: 'ghost' | 'outline' | 'secondary' | 'primary';
-  /** Visual diameter; the hit area is always ≥ the theme touch target. */
+  /** Visual size; the hit area is always at least the theme touch target. */
   size?: number;
   disabled?: boolean;
   /** Toggle buttons: exposes aria-pressed. */
   selected?: boolean;
+  /** Icon colour override (e.g. on the ink field). */
+  color?: string;
   children?: ReactNode;
   style?: StyleProp<ViewStyle>;
   testID?: string;
@@ -116,9 +130,9 @@ export interface IconButtonProps {
   onRef?: (v: ComponentRef<typeof Pressable> | null) => void;
 }
 
-/** Square icon-only button with an accessible label and 48px minimum hit area. */
+/** Square icon-only button with an accessible label and a 48 px minimum hit area (64 in Large mode). */
 export function IconButton({
-  icon: Icon, label, onPress, variant = 'ghost', size, disabled, selected, style, testID, onRef,
+  icon: Icon, label, onPress, variant = 'ghost', size, disabled, selected, color, style, testID, onRef,
 }: IconButtonProps) {
   const theme = useKalamTheme();
   const v = variantStyle(theme, variant);
@@ -134,23 +148,23 @@ export function IconButton({
       aria-pressed={selected}
       aria-disabled={!!disabled}
       testID={testID}
-      {...webData({ kPress: '', kHover: disabled ? 'none' : v.hover })}
+      {...webData({ kPress: 'scale', kHover: disabled ? 'none' : v.hover })}
       style={({ pressed }) => [
         {
           width: dim,
           height: dim,
-          borderRadius: theme.radius.md,
+          borderRadius: theme.radius.press,
           alignItems: 'center',
           justifyContent: 'center',
           backgroundColor: selected ? theme.colors.primarySoft : pressed && variant === 'ghost' ? theme.colors.surfaceAlt : v.bg,
-          borderWidth: variant === 'outline' ? 1 : 0,
-          borderColor: v.border,
+          borderWidth: v.ring ? v.ringWidth : 0,
+          borderColor: v.ring ?? 'transparent',
           opacity: disabled ? 0.48 : 1,
         },
         style,
       ]}
     >
-      <Icon size={20} color={selected ? theme.colors.primary : v.fg} strokeWidth={2} />
+      <Icon size={20} color={color ?? (selected ? theme.colors.primary : variant === 'ghost' ? theme.colors.textSecondary : v.fg)} strokeWidth={2} />
     </Pressable>
   );
 }

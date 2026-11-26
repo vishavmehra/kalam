@@ -91,6 +91,19 @@ describe('edit service', () => {
     expect(base).toEqual(before);
   });
 
+  it('sends a picture of the pointed-at part to the cloud step only, and not at all when none is given', async () => {
+    const image = { mimeType: 'image/png' as const, base64: 'AAAA' };
+    const text = 'Add a new screen to keep track of my cloth suppliers with their phone numbers';
+    const withImage = createFakeAI({ respond: () => ({ raw: supplierOps }) });
+    await createEditService({ ai: withImage }).applyInstruction(base, text, { image });
+    expect(withImage.calls[0].req.images).toEqual([image]);
+    expect(withImage.calls[0].req.prompt).toContain('The attached image shows the part of the app the person pointed at');
+    const without = createFakeAI({ respond: () => ({ raw: supplierOps }) });
+    await createEditService({ ai: without }).applyInstruction(base, text);
+    expect(without.calls[0].req.images).toBeUndefined();
+    expect(without.calls[0].req.prompt).not.toContain('attached image');
+  });
+
   it('fails structural edits offline in plain language and keeps the app', async () => {
     const ai = createFakeAI({ online: false });
     const out = await createEditService({ ai }).applyInstruction(base, 'Add a new screen to keep track of my cloth suppliers with their phone numbers');
@@ -116,5 +129,13 @@ describe('edit service', () => {
   it('converts wire ops with fresh, de-duplicated ids', () => {
     const ops = wireOpsToPatch(base, [{ op: 'addComponent', screen: 'home', componentDef: { id: 'Orders List', type: 'text', label: 'Hi' } }]);
     expect(ops[0]).toMatchObject({ op: 'addComponent', screen: 'home', component: { id: 'orders_list_2', type: 'text' } });
+  });
+
+  it('resolves the collection and display field of a relation set on an existing field', () => {
+    const ops = wireOpsToPatch(base, [{ op: 'setField', collection: 'orders', fieldDef: { id: 'customer', type: 'text', label: 'Customer', refCollection: 'customers', refDisplay: 'name', onDelete: 'restrict' } }]);
+    expect(ops[0]).toMatchObject({
+      op: 'updateCollectionField', collection: 'orders',
+      definition: { type: 'text', ref: { collection: 'customers', display: 'name', onDelete: 'restrict' } },
+    });
   });
 });

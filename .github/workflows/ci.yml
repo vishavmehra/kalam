@@ -129,9 +129,8 @@ jobs:
 
   e2e:
     name: Browser tests (Playwright)
-    needs: web-build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -139,16 +138,30 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: dist
+
+      # Two production builds, served by tests/e2e/serve.mjs with the real Firebase Hosting headers (firebase.json), so
+      # the Content Security Policy that production sends is the one the tests run under.
+      #   dist       no Firebase config: the sign-in gate stays open so the journeys can reach Create and the Shelf.
+      #   dist-csp   a placeholder Firebase and reCAPTCHA config: the sign-in screen, Firebase and App Check all load, and
+      #              tests/e2e/12-csp-production.spec.ts checks that nothing is blocked. Nothing here is a real key.
+      - name: Build for the browser tests
+        run: npm run build:web:e2e
+      - name: Build with a placeholder Firebase config (CSP check)
+        run: E2E_FIREBASE=placeholder E2E_DIST=dist-csp node scripts/build-web-e2e.mjs
+
       # Playwright's bundled Chromium has no Gemini Nano, so on-device tests are skipped here. They run against the
       # dedicated Chrome profile on a developer machine (see tests/e2e and docs/17 §12). This keeps the claim honest:
       # CI proves the deterministic, offline and cloud-unavailable paths, not on-device inference.
       - run: npx playwright install --with-deps chromium
-      - name: Run browser tests
-        run: npx playwright test
+
+      # Projects (playwright.config.ts): chromium (desktop, every spec), narrow (1024 px laptop), mobile (Pixel 7),
+      # no-nano (Chrome without on-device AI). The narrow and mobile projects run the specs tagged @core.
+      - name: Accessibility scans (axe), keyboard and focus, access modes and languages
+        run: npx playwright test --grep @a11y
+        env:
+          E2E_SKIP_ON_DEVICE: '1'
+      - name: Journeys, offline, layout and security headers
+        run: npx playwright test --grep-invert @a11y
         env:
           E2E_SKIP_ON_DEVICE: '1'
       - uses: actions/upload-artifact@v4
@@ -160,6 +173,40 @@ jobs:
             tests/e2e/.artifacts/test-results
           if-no-files-found: ignore
           retention-days: 14
+
+  emulators:
+    name: Auth, Functions and Bazaar tests (emulators)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm --prefix functions ci
+      # The Firestore emulator is a Java program (firebase-tools needs Java 21 or newer).
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Cache the emulator downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-15.36.0
+      # Real Kalam auth service, real Bazaar client and the real compiled functions, on the local emulators with a demo
+      # project id: nothing reaches a real Firebase project and no credential is needed (tests/emulator).
+      - name: Run the emulator tests
+        run: >
+          npm --prefix functions run build &&
+          npx --yes firebase-tools@15.36.0 emulators:exec
+          --only auth,firestore,functions
+          --project demo-kalam
+          "npx vitest run --config tests/emulator/vitest.config.ts"
+        env:
+          FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
 
   functions:
     name: Cloud Functions build and tests
@@ -217,7 +264,6 @@ jobs:
 
   perf:
     name: Lighthouse (report only)
-    needs: web-build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Lighthouse numbers on a shared runner vary too much to gate a merge. They are recorded so a trend is visible.
@@ -227,10 +273,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: dist
+          cache: npm
+      - run: npm ci
+      # The browser-test build has no sign-in gate, so Lighthouse measures the app and not a sign-in screen.
+      - run: npm run build:web:e2e
       - name: Serve the build and run Lighthouse
         run: |
           node tests/e2e/serve.mjs dist 4173 &
@@ -270,7 +316,7 @@ jobs:
   release-gate:
     name: Release gate
     if: always()
-    needs: [static, unit, web-build, e2e, functions, eval]
+    needs: [static, unit, web-build, e2e, emulators, functions, eval]
     runs-on: ubuntu-latest
     steps:
       - name: Every required job passed

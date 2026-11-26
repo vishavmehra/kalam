@@ -1,6 +1,7 @@
 /**
  * Runs `task` with its own abort signal and returns `undefined` once `ms` pass or `outer` aborts,
  * even if the task ignores its signal. The orchestrator does not retry a cancelled run.
+ * A task that throws before then rethrows, so a caller can tell a failure from a time-out.
  */
 export async function withDeadline<T>(
   task: (signal: AbortSignal) => Promise<T>, ms: number, outer?: AbortSignal,
@@ -15,11 +16,9 @@ export async function withDeadline<T>(
     else ctl.signal.addEventListener('abort', () => resolve(undefined), { once: true });
   });
   try {
-    const run = task(ctl.signal);
+    const run = Promise.resolve().then(() => task(ctl.signal));
     run.catch(() => {}); // a late rejection after the deadline is expected
     return await Promise.race([run, stop]);
-  } catch {
-    return undefined;
   } finally {
     clearTimeout(timer);
     outer?.removeEventListener('abort', relay);

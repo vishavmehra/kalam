@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { APP_C, APP_O, customers, orders, specWith } from '@/core/share/test-kit';
 import { SHARE_UI } from './copy';
 import {
-  checkDraft, chooseAllEntries, chosenFields, collectionsOf, emptyDraft, entriesToChange, formatWhen, historyLine, INTENT_ROLE, sidesOf,
+  checkDraft, chooseAllEntries, chosenFields, collectionsOf, emptyDraft, formatWhen, historyLine, INTENT_ROLE, sendPlan, sidesOf,
   SHARE_INTENTS, suggestedMapping, targetChoices, toCreateInput, toggleEntry, withCollection, withIntent, withOtherApp, withTarget,
   type Draft,
 } from './model';
@@ -83,6 +83,15 @@ describe('what blocks a link', () => {
     expect(checkDraft({ ...d, acknowledgeBazaar: true }, customerApp, bazaarOrders).blockers).toEqual([]);
     // Only the app that receives needs this: a Bazaar app that is the source does not.
     expect(checkDraft({ ...d, intent: 'let_view' }, bazaarOrders, customerApp).needsBazaarAck).toBe(false);
+  });
+
+  it('a remix and a copy of a Bazaar app also need the person to say they trust it', () => {
+    const d = sending();
+    const remix = specWith(APP_O, 'Remix Orders', { orders }, { source: 'remix', basedOn: 'bazaar:l0123456789abcdefghi' });
+    expect(checkDraft(d, customerApp, remix).needsBazaarAck).toBe(true);
+    const copy = specWith(APP_O, 'Copy Orders', { orders }, { source: 'remix', basedOn: 'app_bz' });
+    expect(checkDraft(d, customerApp, copy).needsBazaarAck).toBe(false);
+    expect(checkDraft(d, customerApp, copy, (id) => (id === 'app_bz' ? bazaarOrders : undefined)).needsBazaarAck).toBe(true);
   });
 
   it('explains the link in plain English once it is ready', () => {
@@ -177,11 +186,24 @@ describe('choosing entries to send', () => {
     expect([...chooseAllEntries(['a', 'b', 'c'], 2)]).toEqual(['a', 'b']);
   });
 
-  it('counts what an update would change, and only when the person asked for updates', () => {
+  it('says what a send will do: new, changed and left alone', () => {
     const items = [{ id: 'a', alreadySent: true }, { id: 'b', alreadySent: false }, { id: 'c', alreadySent: true }];
     const chosen = new Set(['a', 'b']);
-    expect(entriesToChange(items, chosen, true)).toBe(1);
-    expect(entriesToChange(items, chosen, false)).toBe(0);
+    expect(sendPlan(items, chosen, true)).toEqual({ create: 1, change: 1, leftOut: 0 });
+    expect(sendPlan(items, chosen, false)).toEqual({ create: 1, change: 0, leftOut: 1 });
+    expect(sendPlan(items, new Set(['a']), false)).toEqual({ create: 0, change: 0, leftOut: 1 });
+    expect(sendPlan(items, new Set(), true)).toEqual({ create: 0, change: 0, leftOut: 0 });
+  });
+
+  it('the question before a send counts only what will happen', () => {
+    const say = SHARE_UI.send.confirmMessage;
+    expect(say({ create: 2, change: 1, leftOut: 0 }, ['Name', 'Phone'], 'Order Book')).toBe(
+      '2 new entries are sent. 1 sent before is already there and will be changed. Only Name and Phone are sent. Order Book checks each entry before it keeps it.',
+    );
+    expect(say({ create: 1, change: 0, leftOut: 2 }, ['Name'], 'Order Book')).toBe(
+      '1 new entry is sent. 2 sent before are left as they are. Only Name is sent. Order Book checks each entry before it keeps it.',
+    );
+    expect(`${say({ create: 1, change: 1, leftOut: 1 }, ['Name'], 'B')}${SHARE_UI.send.nothingToDo}${SHARE_UI.card.turnedOffNote}`).not.toMatch(/[—–!]/);
   });
 
   it('writes a date and time without throwing', () => {

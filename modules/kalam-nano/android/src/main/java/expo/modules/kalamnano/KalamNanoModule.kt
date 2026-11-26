@@ -1,5 +1,6 @@
 package expo.modules.kalamnano
 
+import android.content.pm.PackageManager
 import com.google.firebase.Firebase
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
@@ -23,11 +24,13 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Gemini Nano on Android through Firebase AI Logic's on-device SDK, plus App Check tokens from Play
@@ -39,10 +42,16 @@ import kotlinx.coroutines.suspendCancellableCoroutine
  *  - https://firebase.google.com/docs/ai-logic/hybrid/android/generate-structured-output (on-device
  *    structured output needs compile-time @Generable classes, so Kalam puts the runtime JSON Schema in
  *    the prompt and validates the answer with Zod in JS)
+ * Why the model cannot run (the `reason` in status()), read 2026-11-25:
+ *  - https://developers.google.com/ml-kit/genai/prompt/android/get-started, "Common setup issues":
+ *    601-BINDING_FAILURE, 606-FEATURE_NOT_FOUND, 1-DOWNLOAD_ERROR ("Unable to resolve host")
+ *  - https://developers.google.com/android/reference/kotlin/com/google/mlkit/genai/common/GenAiException.ErrorCode
+ *  - firebase-android-sdk ai-logic/firebase-ai-ondevice GenerativeModelImpl.kt: checkStatus() returns ML Kit's
+ *    FeatureStatus with no error, so a failed AICore bind reads as UNAVAILABLE (seen on a Pixel 10 in Firebase
+ *    Test Lab, docs/evidence/android-nano-pixel10-2026-11-25), while getBaseModelName() lets the error through.
  *
  * Choosing between Nano and the cloud stays in the JS SDK (firebase/ai). This module only runs
  * ONLY_ON_DEVICE requests, so everything generate() returns was produced on the phone.
- * Not compiled or device-tested yet: see modules/kalam-nano/README.md.
  */
 @OptIn(PublicPreviewAPI::class)
 class KalamNanoModule : Module() {
@@ -61,16 +70,8 @@ class KalamNanoModule : Module() {
 
     AsyncFunction("availability") Coroutine { -> status() }
 
-    // Downloads only when asked (a user action in Settings), then loads the model into memory.
-    AsyncFunction("prepare") Coroutine { ->
-      val ext = extension()
-      if (ext != null) {
-        val before = ext.checkStatus()
-        if (before == OnDeviceModelStatus.DOWNLOADABLE || before == OnDeviceModelStatus.DOWNLOADING) download(ext)
-        if (ext.checkStatus() == OnDeviceModelStatus.AVAILABLE) ext.warmUp()
-      }
-      status()
-    }
+    // Downloads only when asked (a person's choice in Settings or the self-check), then loads the model.
+    AsyncFunction("prepare") Coroutine { -> prepareModel() }
 
     AsyncFunction("warmUp") Coroutine { ->
       val ext = extension()
@@ -93,6 +94,7 @@ class KalamNanoModule : Module() {
 
     Function("cancel") { requestId: String -> jobs.remove(requestId)?.cancel() != null }
 
+    // Called by the JS App Check provider on its first token request, which only a cloud request makes.
     Function("installPlayIntegrity") {
       FirebaseAppCheck.getInstance(app()).installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
     }
@@ -138,23 +140,101 @@ class KalamNanoModule : Module() {
 
   private fun extension(): OnDeviceExtension? = model().onDeviceExtension
 
-  /** availability (unavailable | downloadable | downloading | available), AICore model name, detail. */
+  /**
+   * availability (unavailable | downloadable | downloading | available), the AICore model name, and when the
+   * model cannot run now: `reason` (OnDeviceReason in src/core/contracts), the AICore or ML Kit error `code`,
+   * and the raw error text as `detail`.
+   */
   private suspend fun status(): Map<String, Any?> = try {
     val ext = extension()
-    val availability = when (ext?.checkStatus()) {
-      OnDeviceModelStatus.AVAILABLE -> "available"
-      OnDeviceModelStatus.DOWNLOADABLE -> "downloadable"
-      OnDeviceModelStatus.DOWNLOADING -> "downloading"
-      else -> "unavailable"
+    if (ext == null) {
+      mapOf("availability" to "unavailable", "reason" to "unknown", "detail" to "This build has no Firebase on-device AI SDK.")
+    } else {
+      when (ext.checkStatus()) {
+        OnDeviceModelStatus.AVAILABLE -> mapOf("availability" to "available", "model" to runCatching { ext.getModelName() }.getOrNull())
+        OnDeviceModelStatus.DOWNLOADABLE -> mapOf("availability" to "downloadable", "reason" to "model_downloadable")
+        OnDeviceModelStatus.DOWNLOADING -> mapOf("availability" to "downloading", "reason" to "model_downloading")
+        else -> unavailable(whyUnavailable(ext))
+      }
     }
-    mapOf(
-      "availability" to availability,
-      "model" to if (availability == "available") runCatching { ext?.getModelName() }.getOrNull() else null,
-      "detail" to if (ext == null) "This build has no Firebase on-device AI SDK." else null,
-    )
+  } catch (e: CancellationException) {
+    throw e
   } catch (e: Exception) {
     // No AICore (emulators), an unsupported phone, AICore still setting up, or an unlocked bootloader.
-    mapOf("availability" to "unavailable", "detail" to (e.message ?: e.javaClass.simpleName))
+    unavailable(if (aicoreInstalled()) failure(e) else mapOf("reason" to "aicore_missing"))
+  }
+
+  private fun unavailable(why: Map<String, Any?>): Map<String, Any?> = mapOf<String, Any?>("availability" to "unavailable") + why
+
+  /**
+   * Why checkStatus() said UNAVAILABLE. It folds AICore failures into that answer, so this checks that AICore is
+   * installed, then asks for the model name, which throws the underlying AICore or ML Kit error instead.
+   */
+  private suspend fun whyUnavailable(ext: OnDeviceExtension): Map<String, Any?> {
+    if (!aicoreInstalled()) return mapOf("reason" to "aicore_missing")
+    val error = try {
+      withTimeoutOrNull(PROBE_TIMEOUT_MS) { ext.getModelName() }
+      null
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      e
+    }
+    // No error to read: ML Kit's own words for UNAVAILABLE are "not supported on this device or device hasn't
+    // fetched the latest configuration to support it".
+    return if (error == null) mapOf("reason" to "device_not_supported") else failure(error)
+  }
+
+  /** False when Android AICore is not installed or is turned off. AndroidManifest.xml makes it visible (Android 11+). */
+  @Suppress("DEPRECATION")
+  private fun aicoreInstalled(): Boolean {
+    val packages = appContext.reactContext?.packageManager ?: return true
+    return try {
+      packages.getApplicationInfo(AICORE_PACKAGE, 0).enabled
+    } catch (e: PackageManager.NameNotFoundException) {
+      false
+    }
+  }
+
+  /** reason, error code and the raw text, read from an exception and its causes. */
+  private fun failure(error: Throwable): Map<String, Any?> {
+    val chain = generateSequence(error) { it.cause }.take(8).toList()
+    val text = chain.mapNotNull { it.message }.distinct().joinToString(" | ")
+    // AICore names its own code in the message: "error code 601-BINDING_FAILURE" (Pixel 10, Test Lab, 2026-11-25).
+    val named = Regex("""error code (-?\d+)-([A-Z_]+)""").find(text)
+    val code = named?.groupValues?.get(1)?.toIntOrNull()
+      ?: chain.firstNotNullOfOrNull { mlKitCode(it) }
+      ?: Regex("""\[ErrorCode (-?\d+)]""").find(text)?.groupValues?.get(1)?.toIntOrNull()
+    val name = named?.groupValues?.get(2) ?: code?.let { ML_KIT_CODES[it] }
+    val reason = when (name) {
+      "BINDING_FAILURE", "BINDING_DIED", "NULL_BINDING", "SERVICE_DISCONNECTED" -> "binding_failure"
+      "FEATURE_NOT_FOUND" -> "aicore_not_ready"
+      "NEEDS_SYSTEM_UPDATE" -> "needs_system_update"
+      "AICORE_INCOMPATIBLE" -> "aicore_missing"
+      "NOT_ENOUGH_DISK_SPACE" -> "low_storage"
+      "BUSY", "PER_APP_BATTERY_USE_QUOTA_EXCEEDED", "DOWNLOAD_ERROR" -> "battery_or_network_conditions"
+      "NOT_AVAILABLE" -> "device_not_supported"
+      else -> if (text.contains("Unable to resolve host", ignoreCase = true)) "battery_or_network_conditions" else "unknown"
+    }
+    return mapOf("reason" to reason, "code" to code, "detail" to text.ifEmpty { error.javaClass.simpleName })
+  }
+
+  /** GenAiException.getErrorCode(), looked up by name: ML Kit comes with firebase-ai-ondevice, Kalam does not import it. */
+  private fun mlKitCode(t: Throwable): Int? = runCatching { t.javaClass.getMethod("getErrorCode").invoke(t) as? Int }.getOrNull()
+
+  /** Downloads the model if it is downloadable or already downloading, then loads it. Failures become the reason. */
+  private suspend fun prepareModel(): Map<String, Any?> {
+    val ext = extension() ?: return status()
+    try {
+      val before = ext.checkStatus()
+      if (before == OnDeviceModelStatus.DOWNLOADABLE || before == OnDeviceModelStatus.DOWNLOADING) download(ext)
+      if (ext.checkStatus() == OnDeviceModelStatus.AVAILABLE) ext.warmUp()
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      return status() + failure(e)
+    }
+    return status()
   }
 
   private suspend fun download(ext: OnDeviceExtension) {
@@ -190,6 +270,23 @@ class KalamNanoModule : Module() {
 
     /** generativeModel() requires a cloud model name; ONLY_ON_DEVICE never calls the cloud. */
     private const val UNUSED_CLOUD_MODEL = "gemini-2.5-flash-lite"
+
+    private const val AICORE_PACKAGE = "com.google.android.aicore"
+
+    /** The model-name probe in whyUnavailable() normally fails within milliseconds; never hold a status check longer. */
+    private const val PROBE_TIMEOUT_MS = 3_000L
+
+    /** GenAiException.ErrorCode values that map to a reason; AICore's own codes come with their names. */
+    private val ML_KIT_CODES = mapOf(
+      -101 to "AICORE_INCOMPATIBLE",
+      8 to "NOT_AVAILABLE",
+      9 to "BUSY",
+      27 to "PER_APP_BATTERY_USE_QUOTA_EXCEEDED",
+      501 to "NOT_ENOUGH_DISK_SPACE",
+      601 to "BINDING_FAILURE",
+      604 to "NEEDS_SYSTEM_UPDATE",
+      606 to "FEATURE_NOT_FOUND",
+    )
   }
 }
 

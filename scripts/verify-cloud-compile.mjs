@@ -148,6 +148,9 @@ async function main() {
     const events = [];
     let settings = { ...DEFAULT_SETTINGS, onboarded: true };
     const ai = createOrchestrator({
+      // A live check must reach the model every time: no client token bucket, no reused answers.
+      rateLimit: false,
+      cacheResults: false,
       firebase: logged,
       specialist: {
         name: 'claude', isConfigured: () => false,

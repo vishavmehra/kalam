@@ -15,7 +15,7 @@ Pod::Spec.new do |s|
   # FoundationModels exists from iOS 26. Weak linking lets the app start on older iOS, where the Swift code
   # reports 'osTooOld' instead of calling it.
   s.weak_frameworks = 'FoundationModels'
-  s.frameworks = 'DeviceCheck'
+  s.frameworks = 'DeviceCheck', 'Speech'
 
   # Firebase stopped publishing to CocoaPods in October 2026 (firebase.google.com/docs/ios/cocoapods-deprecation),
   # so FirebaseAppCheck comes from Swift Package Manager through React Native's spm_dependency helper

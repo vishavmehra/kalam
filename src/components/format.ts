@@ -1,24 +1,22 @@
 /** Locale-light time formatting (Hermes lacks Intl.RelativeTimeFormat on some Android builds). */
+import { getActiveLanguage, t } from '@/i18n/active';
+import { createFormatter } from '@/i18n/format';
 
-const MIN = 60_000;
-const HOUR = 60 * MIN;
-const DAY = 24 * HOUR;
-
-/** "Just now", "5 min ago", "3 h ago", "Yesterday", "4 days ago", else a short date. */
+/**
+ * "Just now", "5 min ago", "Yesterday", "4 days ago", else a short date, in Kalam's language (the `time.*`
+ * keys when the runtime has no relative-time formatter). React screens can use `useFormat().relativeTime`.
+ */
 export function relativeTime(ts: number, now = Date.now()): string {
-  const d = Math.max(0, now - ts);
-  if (d < MIN) return 'Just now';
-  if (d < HOUR) return `${Math.floor(d / MIN)} min ago`;
-  if (d < DAY) return `${Math.floor(d / HOUR)} h ago`;
-  if (d < 2 * DAY) return 'Yesterday';
-  if (d < 7 * DAY) return `${Math.floor(d / DAY)} days ago`;
-  return new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: d > 300 * DAY ? 'numeric' : undefined });
+  return createFormatter(getActiveLanguage(), { translate: t }).relativeTime(ts, now);
 }
 
-/** "412 ms" / "2.4 s". */
+/** "412 ms" / "2.4 s" in Kalam's language (`time.ms`, `time.seconds`), or "Not timed" when there is no value. */
 export function formatLatency(ms: number | null | undefined): string {
-  if (ms == null || !Number.isFinite(ms)) return '-';
-  return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`;
+  if (ms == null || !Number.isFinite(ms)) return t('time.notTimed');
+  const f = createFormatter(getActiveLanguage());
+  if (ms < 1000) return t('time.ms', { value: f.integer(ms) });
+  const digits = ms < 10_000 ? 1 : 0;
+  return t('time.seconds', { value: f.number(ms / 1000, { minimumFractionDigits: digits, maximumFractionDigits: digits }) });
 }
 
 /** "14:05" today, otherwise "12 Nov, 14:05". */

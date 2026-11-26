@@ -11,13 +11,15 @@ import { z } from 'zod';
 import { sanitizeJsonSchema } from '../ai/json-schema';
 import { wrapUntrusted } from '../compiler/prompt';
 import type { AIErrorCode, AIExecutionResult, SpecIssue, StructuredRequest } from '../contracts';
+import { PERMISSION_LABEL, PERMISSION_REASON } from '../spec/copy';
 import { describeSpec } from '../spec/describe';
 import { LIMITS, SCHEMA_VERSION, type KalamSpec } from '../spec/schema';
 import { validateSpec } from '../spec/validate';
+import { requiredPermissions } from '../spec/v11';
 import { gzipToBase64 } from './codec';
 import { sanitizeSvg } from './media';
 import {
-  BASED_ON_PREFIX, BAZAAR_LIMITS, listingIdFromBasedOn, remixAllowedFor, validatePrice, type BazaarCategory,
+  BASED_ON_PREFIX, BAZAAR_LIMITS, listingIdFromBasedOn, PERMISSION_LINE_LENGTH, remixAllowedFor, validatePrice, type BazaarCategory,
   type BazaarListing, type ListingDisclosure, type ListingLicense, type ListingStatus, type SafetyResult,
 } from './model';
 
@@ -107,6 +109,9 @@ export function deriveDisclosure(spec: KalamSpec): { capabilities: string[]; dis
     .slice(0, BAZAAR_LIMITS.capabilities)
     .map((a) => clipWords(a, BAZAAR_LIMITS.capabilityLength));
   const usesPhotos = spec.screens.some((s) => s.children.some((c) => c.type === 'photo'));
+  // Read from the components, never from a claim: the same rule the validator uses for `permissions`.
+  const permissions = requiredPermissions(spec).map((kind) =>
+    clip(`${PERMISSION_LABEL[kind]}: ${spec.permissions?.find((p) => p.kind === kind)?.reason ?? PERMISSION_REASON[kind]}`, PERMISSION_LINE_LENGTH));
   return {
     capabilities,
     disclosure: {
@@ -115,6 +120,7 @@ export function deriveDisclosure(spec: KalamSpec): { capabilities: string[]; dis
       aiFeatures: summary.aiFeatures.map((f) => clipWords(f.description, BAZAAR_LIMITS.capabilityLength)).slice(0, LIMITS.aiBlocks),
       // Every AI block may fall back to Firebase cloud (prefer_on_device), so any AI means "may go online".
       cloudPossible: summary.aiFeatures.length > 0,
+      ...(permissions.length ? { permissions } : {}),
     },
   };
 }

@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { checkTranslation, describeRejection, languageLabel, type TranslatableLabel } from '@/core/i18n-labels';
 import { Button, Sheet, Text, TextField, useBreakpoint } from '@/design';
+import { useT } from '@/i18n/react';
 
 export interface CorrectionSheetProps {
   visible: boolean;
@@ -20,6 +21,7 @@ export interface CorrectionSheetProps {
 
 export function CorrectionSheet({ visible, label, lang, current, onSave, onClose }: CorrectionSheetProps) {
   const { isDesktop } = useBreakpoint();
+  const t = useT();
   const [text, setText] = useState(current ?? '');
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | undefined>(undefined);
@@ -45,7 +47,7 @@ export function CorrectionSheet({ visible, label, lang, current, onSave, onClose
       await onSave(checked.text);
       onClose();
     } catch (e) {
-      setFailure(e instanceof Error ? e.message : 'This could not be saved. Try again.');
+      setFailure(e instanceof Error ? e.message : t('runtime.translate.saveFailed'));
     } finally {
       setBusy(false);
     }
@@ -55,14 +57,14 @@ export function CorrectionSheet({ visible, label, lang, current, onSave, onClose
     <Sheet
       visible={visible && !!label}
       onClose={onClose}
-      title="Change this label"
-      description={label ? `Write the label in ${name}. People will see it exactly as you write it.` : undefined}
+      title={t('runtime.translate.correctTitle')}
+      description={label ? t('runtime.translate.correctDescription', { name }) : undefined}
       dismissible={!busy}
       footer={
         <>
-          <Button label="Cancel" variant="ghost" onPress={onClose} disabled={busy} fullWidth={!isDesktop} />
+          <Button label={t('common.cancel')} variant="ghost" onPress={onClose} disabled={busy} fullWidth={!isDesktop} />
           <Button
-            label="Save wording"
+            label={t('runtime.translate.saveWording')}
             onPress={save}
             loading={busy}
             disabled={!checked?.ok || unchanged}
@@ -75,11 +77,11 @@ export function CorrectionSheet({ visible, label, lang, current, onSave, onClose
       {label ? (
         <View style={{ gap: 14 }}>
           <View style={{ gap: 2 }}>
-            <Text variant="caption" tone="secondary">{`Original, ${label.where.toLowerCase()}`}</Text>
+            <Text variant="caption" tone="secondary">{t('runtime.translate.original', { where: label.where.toLowerCase() })}</Text>
             <Text selectable>{label.text}</Text>
           </View>
           <TextField
-            label={`Wording in ${name}`}
+            label={t('runtime.translate.wordingIn', { name })}
             value={text}
             onChangeText={setText}
             error={problem ?? failure}

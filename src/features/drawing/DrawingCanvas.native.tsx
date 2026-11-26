@@ -17,6 +17,7 @@ import { images } from './image-cache.native';
 import { PAGE_HEIGHT, PAGE_WIDTH, type Primitive } from './model';
 import { drawPrimitivesSkia } from './render-skia';
 import { canvasLabel, selectBase, selectChrome, selectLive, toDocPoint, type StudioState } from './studio-store';
+import { subscribeTextFonts, textFontsVersion } from './text-fonts';
 import { TextEditOverlay } from './TextEditOverlay';
 
 /** Room around the page for selection handles, which may sit outside it. */
@@ -59,12 +60,15 @@ export function DrawingCanvas({ store }: { store: StoreApi<StudioState> }) {
     let lastBase: readonly Primitive[] | undefined;
     let basePicture: SkPicture | undefined;
     let imageVersion = images.version();
+    let fontVersion = textFontsVersion();
     const render = () => {
       frame = 0;
       const s = store.getState();
       const base = selectBase(s);
-      if (!basePicture || base !== lastBase || imageVersion !== images.version()) {
+      // Photos and Indic fonts arrive later; the page is drawn again when they do.
+      if (!basePicture || base !== lastBase || imageVersion !== images.version() || fontVersion !== textFontsVersion()) {
         imageVersion = images.version();
+        fontVersion = textFontsVersion();
         lastBase = base;
         basePicture = recordBase(base);
       }
@@ -73,8 +77,9 @@ export function DrawingCanvas({ store }: { store: StoreApi<StudioState> }) {
     const schedule = () => { if (!frame) frame = requestAnimationFrame(render); };
     const unsub = store.subscribe(schedule);
     const unsubImages = images.subscribe(schedule);
+    const unsubFonts = subscribeTextFonts(schedule);
     render();
-    return () => { unsub(); unsubImages(); if (frame) cancelAnimationFrame(frame); };
+    return () => { unsub(); unsubImages(); unsubFonts(); if (frame) cancelAnimationFrame(frame); };
   }, [store, border]);
 
   const point = (x: number, y: number, pressure?: number) =>
@@ -88,15 +93,19 @@ export function DrawingCanvas({ store }: { store: StoreApi<StudioState> }) {
     onUpdate: (e) => store.getState().pointerMove(point(e.x, e.y, e.stylusData?.pressure)),
     onFinalize: (e) => (e.canceled ? store.getState().cancelPointer() : store.getState().pointerUp()),
   });
+  // Pan and pinch are gestures of the store (docs/08 §8.2). Starting one cancels a stroke in progress.
   const pinch = usePinchGesture({
     runOnJS: true,
-    onActivate: () => store.getState().cancelPointer(),
-    onUpdate: (e) => store.getState().zoomBy(e.scaleChange, e.focalX, e.focalY),
+    onActivate: () => store.getState().beginPinch(0, 0),
+    onUpdate: (e) => store.getState().zoomPinch(e.scaleChange, e.focalX, e.focalY),
+    onFinalize: () => store.getState().endView(),
   });
   const twoFingerPan = usePanGesture({
     minPointers: 2,
     runOnJS: true,
+    onActivate: () => { if (!store.getState().gesture) store.getState().beginPan(0, 0); },
     onUpdate: (e) => store.getState().panBy(e.changeX, e.changeY),
+    onFinalize: () => store.getState().endView(),
   });
   const viewGestures = useSimultaneousGestures(pinch, twoFingerPan);
   const gesture = useCompetingGestures(viewGestures, draw);

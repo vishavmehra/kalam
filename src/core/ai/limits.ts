@@ -37,16 +37,18 @@ export const MIN_ATTEMPT_MS = 2_000;
  * whole spec (at most 100 KB), so 300 000 characters leaves room; images are re-encoded to at most
  * 1280 px before they get here, and Firebase refuses inline requests over 20 MB.
  */
-export const INPUT_LIMITS = { textChars: 300_000, images: 8, inlineBytes: 18 * 1024 * 1024 } as const;
+export const INPUT_LIMITS = { textChars: 300_000, images: 8, audio: 1, inlineBytes: 18 * 1024 * 1024 } as const;
 
 /** Why a request is too large to send, or undefined. Technical detail for logs, never content. */
-export function inputTooLarge(req: Pick<StructuredRequest<unknown>, 'prompt' | 'system' | 'images'>): string | undefined {
+export function inputTooLarge(req: Pick<StructuredRequest<unknown>, 'prompt' | 'system' | 'images' | 'audio'>): string | undefined {
   const chars = req.prompt.length + (req.system?.length ?? 0);
   if (chars > INPUT_LIMITS.textChars) return `prompt has ${chars} characters, the limit is ${INPUT_LIMITS.textChars}`;
   const images = req.images ?? [];
   if (images.length > INPUT_LIMITS.images) return `${images.length} images, the limit is ${INPUT_LIMITS.images}`;
-  const bytes = images.reduce((n, i) => n + Math.floor((i.base64.length * 3) / 4), 0);
-  if (bytes > INPUT_LIMITS.inlineBytes) return `images total ${bytes} bytes, the limit is ${INPUT_LIMITS.inlineBytes}`;
+  const recordings = req.audio ?? [];
+  if (recordings.length > INPUT_LIMITS.audio) return `${recordings.length} recordings, the limit is ${INPUT_LIMITS.audio}`;
+  const bytes = [...images, ...recordings].reduce((n, i) => n + Math.floor((i.base64.length * 3) / 4), 0);
+  if (bytes > INPUT_LIMITS.inlineBytes) return `images and recordings total ${bytes} bytes, the limit is ${INPUT_LIMITS.inlineBytes}`;
   return undefined;
 }
 

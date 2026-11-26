@@ -5,12 +5,14 @@
  */
 import type { AppVersion, KalamRecord, KalamSettings, StoredApp, StoredBlob } from '@/core/contracts';
 import type { BackupData, BackupStore, BackupWriteOptions, BackupWriteResult } from '@/core/backup/types';
-import { stateRowSchema } from '@/core/backup/schemas';
+import { isLocalOnlyStateKey, stateRowSchema } from '@/core/backup/schemas';
 import type { KalamCollection, KalamSpec } from '@/core/spec/schema';
 import { cloneSpec } from '@/core/versioning';
 import type { StorageDriver, StorageTables } from './driver';
 import { validateRecordValues } from './record-validation';
-import { removeOwnedBlobs } from './repositories';
+import { removeAiCacheOfApp, removeOwnedBlobs } from './repositories';
+import { removePendingOpsOfApp } from './pending-ops';
+import { claimNewIds, followMoved } from './record-links';
 import { removeLinksOfApp } from './share-links';
 
 const has = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
@@ -30,7 +32,9 @@ export async function removeAppCascade(t: StorageTables, appId: string): Promise
   await t.state.deleteWhere('appId', appId);
   await t.translations.deleteWhere('appId', appId);
   await removeLinksOfApp(t, appId); // links with another app go too (docs/14 §16)
+  await removePendingOpsOfApp(t, appId); // queued work for this app and the files it kept (docs/09 §18)
   await removeOwnedBlobs(t, appId);
+  await removeAiCacheOfApp(t, appId); // answers cached for this app (docs/11 data deletion)
 }
 
 /** Per-collection record counts for one transaction, so bulk writes respect the cap. */
@@ -67,7 +71,7 @@ export function createBackupStore(driver: StorageDriver, deps: LocalStoreDeps): 
           apps,
           versions: await t.versions.all(),
           records: await t.records.all(),
-          state: (await t.state.all()).map(({ appId, key, value }) => ({ appId, key, value })),
+          state: (await t.state.all()).filter((row) => !isLocalOnlyStateKey(row.key)).map(({ appId, key, value }) => ({ appId, key, value })),
           drawings,
           blobs,
           ...(settingsRow ? { settings: settingsRow.settings } : {}),
@@ -97,24 +101,27 @@ export function createBackupStore(driver: StorageDriver, deps: LocalStoreDeps): 
         }
 
         const allow = recordCapTracker(t, deps.recordCap);
+        const moved = await claimNewIds(t, data.records, deps.newId);
         for (const record of data.records) {
           const spec = specs.get(record.appId);
           const collection: KalamCollection | undefined =
             spec && has(spec.collections, record.collectionId) ? spec.collections[record.collectionId] : undefined;
-          const values = collection ? validateRecordValues(collection, record.values) : undefined;
+          // Stored rows may hold values of fields that left the design; they are carried, not dropped (record-validation.ts).
+          const values = collection ? validateRecordValues(collection, record.values, { keepStale: true }) : undefined;
           if (!values?.ok || !(await allow(record.appId, record.collectionId))) {
             result.skippedRecords++;
             continue;
           }
           const clash = await t.records.get(record.id);
           const foreign = clash && (clash.appId !== record.appId || clash.collectionId !== record.collectionId);
-          const row: KalamRecord = { ...record, values: values.values, ...(foreign ? { id: deps.newId() } : {}) };
-          await t.records.put(row);
+          const row: KalamRecord = { ...record, values: values.values, ...(foreign ? { id: moved.get(record.id) ?? deps.newId() } : {}) };
+          await t.records.put(followMoved(spec, row, moved));
           result.records++;
         }
 
         for (const raw of data.state) {
           const row = stateRowSchema.safeParse(raw);
+          if (row.success && isLocalOnlyStateKey(row.data.key)) continue; // an old backup may hold a draft: stays unrestored
           if (row.success && specs.has(row.data.appId)) await t.state.put(row.data);
           else result.skippedState++;
         }

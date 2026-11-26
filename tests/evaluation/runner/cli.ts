@@ -22,6 +22,11 @@ export interface EvalArgs {
   check: boolean;
   json: boolean;
   help: boolean;
+  /** Run the sketch cases that have a real photo in the photos folder, instead of the stamp layouts. */
+  photos: boolean;
+  photosDir?: string;
+  /** Run the video cases from stills of the golden sketch photos standing in for video frames (docs/13 section 15). */
+  videoFrames: boolean;
   thresholds: GateThresholds;
 }
 
@@ -56,6 +61,12 @@ drawing summary). No model is called and nothing is spent.
   --min-template-validity N, --min-text-complexity N, --min-text-route N,
   --min-sketch-route N, --min-sketch-extraction N, --min-modality-route N,
   --min-offline-graceful N, --min-runtime N           Override a floor (0 to 1).
+  --photos               Run the sketch cases that have a real photo, sending the photo (not the layout).
+                         Photos live in tests/evaluation/golden/sketch-photos/, named <case id>.jpg or .png.
+                         Only the sketch cases that have a photo are run.
+  --photos-dir DIR       Use another folder for the photos (implies --photos).
+  --video-frames         Run the five video cases live, sending stills of the golden sketch photos as the video frames with
+                         their times (Node has no video decoder). Only the video cases are run.
   --json                 Print the full report JSON instead of the summary.
   --help                 Show this text.
 `;
@@ -76,6 +87,8 @@ export function parseArgs(argv: readonly string[]): EvalArgs {
     check: false,
     json: false,
     help: false,
+    photos: false,
+    videoFrames: false,
     thresholds: { ...DEFAULT_THRESHOLDS },
   };
   let budgetGiven = false;
@@ -125,6 +138,17 @@ export function parseArgs(argv: readonly string[]): EvalArgs {
         break;
       case '--json':
         args.json = true;
+        break;
+      case '--photos':
+        args.photos = true;
+        break;
+      case '--video-frames':
+        args.videoFrames = true;
+        break;
+      case '--photos-dir':
+        args.photosDir = take(a, i, f);
+        args.photos = true;
+        i += 1;
         break;
       case '--help':
       case '-h':

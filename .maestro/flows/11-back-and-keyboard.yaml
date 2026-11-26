@@ -1,0 +1,60 @@
+# Back navigation, the keyboard and the screen edges (docs/03 §18, checklist D01-048, X01-007): the Android back button and
+# the iOS back swipe must return to the screen the person came from, the keyboard must not hide the Build button, and the
+# screens are photographed at the edges so safe areas can be checked by eye in the CI artifact.
+appId: com.kalam.app
+name: Back, keyboard and safe areas
+---
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Your shelf.*"
+    timeout: 120000
+- takeScreenshot: 23-edges-shelf
+- tapOn: "(Create|Make)"
+- extendedWaitUntil:
+    visible: "Describe the app you want to create.*"
+    timeout: 30000
+- takeScreenshot: 24-edges-create
+
+# The keyboard opens over the text field and the Build button can still be reached by scrolling.
+- tapOn: "Describe the app you want to create.*"
+- inputText: "A list of things to buy"
+- takeScreenshot: 25-keyboard-open
+- scrollUntilVisible:
+    element:
+      id: create-app
+    direction: DOWN
+    timeout: 20000
+- assertVisible:
+    id: create-app
+- hideKeyboard
+
+# Opening Settings and going back: the Android back button, the iOS edge swipe.
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "(AI and privacy|Access modes).*"
+    timeout: 30000
+- takeScreenshot: 26-edges-settings
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: 1%, 50%
+          end: 80%, 50%
+          duration: 400
+# A tab bar has no history on some stacks: if Settings is still showing, go to Create by its tab.
+- runFlow:
+    when:
+      visible: "(AI and privacy|Access modes).*"
+    commands:
+      - tapOn: "(Create|Make)"
+- extendedWaitUntil:
+    visible: "Describe the app you want to create.*"
+    timeout: 30000
+- runFlow: ../common/pause.yaml

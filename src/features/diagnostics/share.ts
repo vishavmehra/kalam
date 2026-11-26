@@ -9,10 +9,14 @@ function depsFor(title: string): ShareDeps {
     async share(text) {
       try {
         const result = await Share.share({ message: text, title }, { dialogTitle: title });
+        // Browsers resolve with nothing once the share is done (react-native-web returns navigator.share()).
+        // Android always reports "shared", so a closed sheet cannot be told apart there; iOS reports both.
+        if (!result) return 'shared';
         return result.action === Share.dismissedAction ? 'dismissed' : 'shared';
       } catch (error) {
         // Browsers reject with AbortError when the person closes the share sheet.
         if ((error as { name?: string } | undefined)?.name === 'AbortError') return 'dismissed';
+        // Anything else (NotAllowedError, "Share is not supported in this browser") means no share sheet.
         throw error;
       }
     },

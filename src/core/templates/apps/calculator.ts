@@ -9,7 +9,8 @@ type Operation = (typeof OPERATIONS)[number];
 const paramsSchema = z
   .object({
     ...baseParamsShape,
-    mode: z.enum(['basic', 'gst']),
+    /** split: a bill shared between people, with an optional tip (eval t01: a bill splitter is not a+b). */
+    mode: z.enum(['basic', 'gst', 'split']),
     operations: z.array(z.enum(OPERATIONS)).min(1).max(4),
     gstRates: z.array(z.number().min(0).max(100)).min(1).max(6),
     currency: z.enum(['INR', 'USD', 'EUR', 'GBP', 'AED']),
@@ -31,6 +32,9 @@ const STAT: Record<Operation, { label: string; expr: string }> = {
   divide: { label: 'Quotient (a ÷ b)', expr: "if(form.b == 0, 'Not defined', round(form.a / form.b, 6))" },
 };
 
+/** "split the bill", "bill splitter", "per person", "share between friends", "tip", Hinglish "baant", "hissa". */
+const SPLIT = /\bsplit(?:s|ting|ter)?\b|\bper (?:person|head)\b|\bshare (?:the )?(?:bill|cost)\b|\bbetween (?:\w+ )?(?:friends|people|us)\b|\btip\b|\bbaant(?:o|na)?\b|\bhissa\b|बाँट/i;
+
 /** Maps the chosen rate label ("18%") to its number without relying on string coercion. */
 function rateExpr(rates: readonly number[]): string {
   return rates.reduceRight<string>((acc, r) => `if(form.rate == '${r}%', ${r}, ${acc})`, '0');
@@ -39,17 +43,20 @@ function rateExpr(rates: readonly number[]): string {
 export const calculatorTemplate: KalamTemplate<CalculatorParams> = {
   id: 'calculator',
   title: 'Calculator',
-  description: 'Adds, subtracts, multiplies or divides two numbers, or works out GST and the total.',
-  strongKeywords: ['calculator', 'calculate', 'calculation', 'gst', 'hisaab lagao', 'jod ghata', 'कैलकुलेटर'],
+  description: 'Adds, subtracts, multiplies or divides two numbers, works out GST and the total, or splits a bill.',
+  strongKeywords: [
+    'calculator', 'calculate', 'calculation', 'gst', 'hisaab lagao', 'jod ghata', 'कैलकुलेटर', 'bill splitter', 'split the bill',
+  ],
   keywords: [
     'calculator', 'calculate', 'calculation', 'gst', 'vat', 'tax', 'addition', 'subtraction', 'multiplication',
     'division', 'add', 'subtract', 'multiply', 'divide', 'arithmetic', 'math', 'sum', 'percentage', 'jod',
-    'ghata', 'guna', 'bhag', 'hisaab lagao', 'jod ghata', 'कैलकुलेटर',
+    'ghata', 'guna', 'bhag', 'hisaab lagao', 'jod ghata', 'कैलकुलेटर', 'split', 'tip', 'per person',
   ],
   examples: [
     'Make a calculator with addition, subtraction, multiplication and division',
     'GST calculator with 5, 12, 18 and 28 percent',
     'jod ghata guna bhag wala calculator banao',
+    'Split a restaurant bill between friends with a tip',
   ],
   paramsSchema,
   defaults: {
@@ -70,6 +77,10 @@ export const calculatorTemplate: KalamTemplate<CalculatorParams> = {
     }
     const ops = OPERATIONS.filter((op) => OP_WORDS[op].test(text));
     if (!gst && ops.length) out.operations = ops;
+    if (!gst && SPLIT.test(text)) {
+      out.mode = 'split';
+      out.name ??= 'Bill Splitter';
+    }
     const currency = extractCurrency(text);
     if (currency) out.currency = currency;
     return out;
@@ -94,6 +105,19 @@ export const calculatorTemplate: KalamTemplate<CalculatorParams> = {
         id: 'total_amount', type: 'stat', label: 'Total with GST',
         expr: `round(form.amount + form.amount * ${rate} / 100, 2)`, format: 'currency', currency: p.currency,
       });
+    } else if (p.mode === 'split') {
+      const total = 'form.bill + form.bill * form.tip / 100';
+      children.push(
+        { id: 'bill_input', type: 'number', label: `Bill amount (${symbol})`, field: 'bill', placeholder: '0' },
+        { id: 'people_input', type: 'number', label: 'Number of people', field: 'people', placeholder: '2' },
+        { id: 'tip_input', type: 'number', label: 'Tip (%)', field: 'tip', placeholder: '0' },
+        { id: 'tip_amount', type: 'stat', label: 'Tip', expr: 'round(form.bill * form.tip / 100, 2)', format: 'currency', currency: p.currency },
+        { id: 'total_amount', type: 'stat', label: 'Total with tip', expr: `round(${total}, 2)`, format: 'currency', currency: p.currency },
+        {
+          id: 'per_person', type: 'stat', label: 'Each person pays',
+          expr: `if(form.people > 0, round((${total}) / form.people, 2), 'Enter the number of people')`, format: 'currency', currency: p.currency,
+        },
+      );
     } else {
       children.push(
         { id: 'first_number', type: 'number', label: 'First number (a)', field: 'a', placeholder: '0' },
@@ -108,19 +132,21 @@ export const calculatorTemplate: KalamTemplate<CalculatorParams> = {
         name: p.name,
         description: p.mode === 'gst'
           ? `Works out GST at ${p.gstRates.join('%, ')}% and the total. Works offline.`
-          : `Type two numbers to see the ${p.operations.length === 4 ? 'four results' : 'results'}. Works offline.`,
+          : p.mode === 'split'
+            ? 'Splits a bill between people, with an optional tip, and shows what each person pays. Works offline.'
+            : `Type two numbers to see the ${p.operations.length === 4 ? 'four results' : 'results'}. Works offline.`,
         glyph: 'calculator',
         theme: p.theme,
         collections: {},
         screens: [{
           id: 'calculator',
           title: p.name.slice(0, 60),
-          description: p.mode === 'gst' ? 'Enter an amount and pick a rate.' : 'Results update as you type.',
+          description: p.mode === 'gst' ? 'Enter an amount and pick a rate.' : p.mode === 'split' ? 'Enter the bill, the people and a tip.' : 'Results update as you type.',
           children,
         }],
         actions: { clear: { type: 'clearForm' } },
         intents: { clear: [...PHRASES.clear] },
-        tags: ['calculator', p.mode === 'gst' ? 'gst' : 'arithmetic'],
+        tags: ['calculator', p.mode === 'gst' ? 'gst' : p.mode === 'split' ? 'bill-split' : 'arithmetic'],
       },
       opts,
     );

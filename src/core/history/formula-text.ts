@@ -1,6 +1,6 @@
 /**
  * Plain-English reading of a KalamSpec formula, for history lines such as
- * "adds up Amount for this month". Uses the project's own formula parser (compileFormula), never evaluates anything.
+ * "adds up Amount where Date is in this month". Uses the project's own formula parser (compileFormula), never evaluates anything.
  * Anything it does not recognise falls back to "works out a new calculation using ...", so it never invents meaning.
  */
 import { compileFormula } from '../formula';
@@ -9,16 +9,14 @@ import { joinWords } from './names';
 
 export interface FormulaNames {
   collection(id: string): string;
-  /** Label for a field or component id. */
+  /** Label for a field of one collection. Always looks in that collection first, never at screen components. */
+  field(collectionId: string, fieldId: string): string;
+  /** Label for a component, counter or field id when no collection is known (`state.water`, `form.amount`). */
   name(id: string): string;
 }
 
-interface Clause {
-  /** "today", "this month" */
-  when?: string;
-  /** "Kind is Credit" */
-  where?: string;
-}
+/** Reads a field name in the collection a condition is about. */
+type Label = (fieldId: string) => string;
 
 const isMember = (n: Node): n is Member => n.type === 'MemberExpression';
 const isLit = (n: Node): n is Lit => n.type === 'Literal';
@@ -35,7 +33,7 @@ const COMPARE_WORDS: Record<string, string> = {
 };
 const FLIPPED: Record<string, string> = { '>': '<', '>=': '<=', '<': '>', '<=': '>=' };
 const TODAY_WORDS: Record<string, string> = {
-  '!=': 'is not today', '!==': 'is not today', '>': 'is after today', '>=': 'is today or later',
+  '==': 'is today', '===': 'is today', '!=': 'is not today', '!==': 'is not today', '>': 'is after today', '>=': 'is today or later',
   '<': 'is before today', '<=': 'is today or earlier',
 };
 
@@ -44,28 +42,30 @@ function literalWords(n: Lit): string {
   return String(n.value);
 }
 
-/** Splits a condition into readable clauses. Undefined when any part is not understood. */
-function clausesOf(cond: Node, names: FormulaNames): Clause[] | undefined {
+/**
+ * Splits a condition into readable clauses such as "Kind is Credit". Undefined when any part is not understood.
+ * Every clause names its field, so switching from one date field to another always reads differently.
+ */
+function clausesOf(cond: Node, label: Label): string[] | undefined {
   if (isBin(cond) && cond.operator === '&&') {
-    const l = clausesOf(cond.left, names);
-    const r = clausesOf(cond.right, names);
+    const l = clausesOf(cond.left, label);
+    const r = clausesOf(cond.right, label);
     return l && r ? [...l, ...r] : undefined;
   }
   const field = identName(cond);
-  if (field) return [{ where: `${names.name(field)} is ticked` }];
+  if (field) return [`${label(field)} is ticked`];
   if (isUn(cond) && cond.operator === '!') {
     const f = identName(cond.argument);
-    return f ? [{ where: `${names.name(f)} is not ticked` }] : undefined;
+    return f ? [`${label(f)} is not ticked`] : undefined;
   }
   if (!isBin(cond) || !(cond.operator in COMPARE_WORDS)) return undefined;
   let { left, right, operator } = cond;
   // month(date) == month(today)
   if (isMonthCall(left) && isMonthCall(right) && (operator === '==' || operator === '===')) {
-    const arg = (c: Call): Node | undefined => c.arguments[0];
-    const l = arg(left);
-    const r = arg(right);
-    if ((l && isToday(l)) || (r && isToday(r))) return [{ when: 'this month' }];
-    return undefined;
+    const l = left.arguments[0];
+    const r = right.arguments[0];
+    const f = l && r ? (isToday(r) ? identName(l) : isToday(l) ? identName(r) : undefined) : undefined;
+    return f ? [`${label(f)} is in this month`] : undefined;
   }
   // today on the left: flip so the field is on the left
   if (isToday(left) && !isToday(right)) {
@@ -73,29 +73,25 @@ function clausesOf(cond: Node, names: FormulaNames): Clause[] | undefined {
     operator = FLIPPED[operator] ?? operator;
   }
   const f = identName(left);
-  if (!f) return undefined;
+  if (!f || f === 'today') return undefined;
   if (isToday(right)) {
-    if (operator === '==' || operator === '===') return [{ when: 'today' }];
     const word = TODAY_WORDS[operator];
-    return word ? [{ where: `${names.name(f)} ${word}` }] : undefined;
+    return word ? [`${label(f)} ${word}`] : undefined;
   }
-  if (isLit(right)) return [{ where: `${names.name(f)} ${COMPARE_WORDS[operator]} ${literalWords(right)}` }];
+  if (isLit(right)) return [`${label(f)} ${COMPARE_WORDS[operator]} ${literalWords(right)}`];
   return undefined;
 }
 
-function clauseText(clauses: Clause[]): string {
-  const whens = clauses.flatMap((c) => (c.when ? [c.when] : []));
-  const wheres = clauses.flatMap((c) => (c.where ? [c.where] : []));
-  return [whens.length ? `for ${joinWords(whens)}` : '', wheres.length ? `where ${joinWords(wheres)}` : '']
-    .filter(Boolean)
-    .join(' ');
-}
+const clauseText = (clauses: string[]): string => `where ${joinWords(clauses)}`;
 
-/** The words for a filter condition, such as "for today where Present is ticked". */
-export function describeCondition(src: string, names: FormulaNames): string | undefined {
+/**
+ * The words for a filter condition, such as "where Date is today and Present is ticked".
+ * `collection` is the set of entries the condition filters, so field names come from that set.
+ */
+export function describeCondition(src: string, names: FormulaNames, collection?: string): string | undefined {
   const c = compileFormula(src);
   if (!c.ok) return undefined;
-  const clauses = clausesOf(c.ast, names);
+  const clauses = clausesOf(c.ast, collection ? (f) => names.field(collection, f) : names.name);
   return clauses?.length ? clauseText(clauses) : undefined;
 }
 
@@ -130,7 +126,7 @@ function aggregate(n: Call, names: FormulaNames): Phrase | undefined {
   if (!src) return undefined;
   let tail = '';
   if (src.filter) {
-    const clauses = clausesOf(src.filter, names);
+    const clauses = clausesOf(src.filter, (f) => names.field(src.collection, f));
     if (!clauses) return undefined;
     tail = ` ${clauseText(clauses)}`;
   }
@@ -139,7 +135,7 @@ function aggregate(n: Call, names: FormulaNames): Phrase | undefined {
     return { verb: `counts the entries in ${where}${tail}`, noun: `the number of entries in ${where}${tail}` };
   }
   if (!src.field) return undefined;
-  const f = names.name(src.field);
+  const f = names.field(src.collection, src.field);
   switch (fn) {
     case 'sum': return { verb: `adds up ${f}${tail}`, noun: `the total of ${f}${tail}` };
     case 'avg': return { verb: `averages ${f}${tail}`, noun: `the average of ${f}${tail}` };
@@ -149,15 +145,29 @@ function aggregate(n: Call, names: FormulaNames): Phrase | undefined {
 }
 
 const OPERATOR_WORDS: Record<string, string> = { '+': 'plus', '-': 'minus', '*': 'times', '/': 'divided by' };
+const PRECEDENCE: Record<string, number> = { '+': 1, '-': 1, '*': 2, '/': 2 };
+
+/**
+ * True when reading `child` out loud as part of `parent` would change the sum: `a - (b - c)` and `(a + b) * 2` have
+ * no spoken form that keeps the brackets, so they are left to the generic sentence instead of being misread.
+ */
+function needsBrackets(parent: Bin, child: Node, side: 'left' | 'right'): boolean {
+  if (!isBin(child) || !(child.operator in PRECEDENCE)) return false;
+  const inner = PRECEDENCE[child.operator];
+  const outer = PRECEDENCE[parent.operator];
+  return inner < outer || (side === 'right' && inner === outer);
+}
 
 function phraseOf(n: Node, names: FormulaNames): Phrase | undefined {
   if (isCall(n)) {
     const name = callName(n);
-    if ((name === 'round' || name === 'abs') && n.arguments[0]) return phraseOf(n.arguments[0], names);
+    // abs is not read through: it changes what the number means.
+    if (name === 'round' && n.arguments[0]) return phraseOf(n.arguments[0], names);
     return aggregate(n, names);
   }
   if (isLit(n) && typeof n.value === 'number') return { verb: `shows ${n.value}`, noun: String(n.value) };
   if (isBin(n) && n.operator in OPERATOR_WORDS) {
+    if (needsBrackets(n, n.left, 'left') || needsBrackets(n, n.right, 'right')) return undefined;
     const l = phraseOf(n.left, names);
     const r = phraseOf(n.right, names);
     if (!l || !r) return undefined;
@@ -171,6 +181,11 @@ function phraseOf(n: Node, names: FormulaNames): Phrase | undefined {
 function mentions(n: Node, names: FormulaNames, out: string[] = []): string[] {
   if (isMember(n) && !n.computed && isIdent(n.property) && ['form', 'state'].includes(identName(n.object) ?? '')) {
     out.push(names.name(n.property.name));
+    return out;
+  }
+  if (isCall(n)) {
+    // The function name is not something the person typed a name for: only look inside its arguments.
+    for (const arg of n.arguments) mentions(arg, names, out);
     return out;
   }
   if (isIdent(n)) {
@@ -187,7 +202,7 @@ function mentions(n: Node, names: FormulaNames, out: string[] = []): string[] {
 }
 
 /**
- * A verb phrase that follows "now": "adds up Amount for this month". Undefined when the formula cannot be read.
+ * A verb phrase that follows "now": "adds up Amount where Date is in this month". Undefined when the formula cannot be read.
  * Calculations it does not recognise get "works out a new calculation using Amount and Rate".
  */
 export function describeFormula(src: string, names: FormulaNames): string | undefined {

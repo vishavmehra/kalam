@@ -46,7 +46,8 @@ export function NewLinkForm({ spec, others, onCreate, onDone, onBack }: NewLinkF
   const other = others.find((o) => o.id === draft.otherAppId);
   const sides = sidesOf(draft, spec, other?.spec);
   const { from, to } = collectionsOf(draft, sides);
-  const check = checkDraft(draft, spec, other?.spec);
+  const parentOf = (id: string) => (id === spec.id ? spec : others.find((o) => o.id === id)?.spec);
+  const check = checkDraft(draft, spec, other?.spec, parentOf);
   const edit = (next: Draft) => {
     setError(undefined);
     setDraft(next);

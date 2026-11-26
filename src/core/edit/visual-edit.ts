@@ -118,6 +118,7 @@ const labelOf = (c: KalamComponent): string => ('label' in c && typeof c.label =
 const NOUNS: Record<KalamComponent['type'], string> = {
   bigButton: 'button', number: 'field', textInput: 'field', date: 'field', choice: 'choice', toggle: 'switch',
   counter: 'counter', list: 'list', stat: 'number', photo: 'photo', heading: 'heading', text: 'text',
+  chart: 'chart', timer: 'timer', reminder: 'reminder', signature: 'signature box',
 };
 const wordsFirst = (c: KalamComponent) => c.type === 'heading' || c.type === 'text';
 
@@ -447,7 +448,7 @@ export function moveOps(spec: KalamSpec, id: string, before: string | null): Spe
   return Array.from({ length: Math.abs(steps) }, (): SpecPatchOp => ({ op: 'moveComponent', component: id, direction: steps > 0 ? 'down' : 'up' }));
 }
 
-function freshId(spec: KalamSpec, base: string): string {
+export function freshId(spec: KalamSpec, base: string): string {
   const used = new Set<string>([
     ...spec.screens.flatMap((s) => [s.id, ...s.children.map((c) => c.id)]),
     ...Object.keys(spec.collections), ...Object.keys(spec.actions), ...Object.keys(spec.aiBlocks),

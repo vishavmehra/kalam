@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import type { InferenceEvent } from '@/core/contracts';
+import { getTranslator } from '@/i18n/active';
+import { loadCatalogue } from '@/i18n/catalogue';
 
-import { humanizeTask, median, percent, percentile, summarize } from './stats';
+import { describeReason, median, percent, percentile, platformName, summarize, taskName } from './stats';
 
 const ev = (p: Partial<InferenceEvent>): InferenceEvent => ({
   id: Math.random().toString(36), at: 0, taskId: 't', taskType: 'create_app', route: 'cloud', provider: 'firebase',
@@ -38,10 +40,37 @@ describe('activity stats', () => {
   });
 
   it('formats tasks and percentages', () => {
-    expect(humanizeTask('extract_template_params')).toBe('Extract template params');
+    const { t } = getTranslator('en');
+    expect(taskName('extract_template_params', t)).toBe('Fill a template');
+    expect(taskName('brand_new_task', t)).toBe('Brand new task');
     expect(percent(1, 3)).toBe('33%');
     expect(percent(1, 500)).toBe('<1%');
     expect(percent(0, 0)).toBe('0%');
+  });
+});
+
+describe('naming in the UI language', () => {
+  it('translates the notes the orchestrator and pipelines write, and keeps unknown notes as written', () => {
+    const { t } = getTranslator('en');
+    expect(describeReason('complex request; external provider consented', t)).toBe('Complex request; You allowed an outside AI provider');
+    expect(describeReason('on-device failed (timeout); one Firebase cloud fallback', t)).toBe('The on-device model failed; One cloud fallback through Firebase');
+    expect(describeReason('cloud unavailable (offline)', t)).toBe('Cloud AI was not available');
+    expect(describeReason('retried once after timeout', t)).toBe('Retried 1 time');
+    expect(describeReason('retried 2 times after quota, timeout', t)).toBe('Retried 2 times');
+    expect(describeReason('build-time check not done for 3 AI step(s): summarize', t)).toBe('Build-time check not done for 3 AI steps');
+    expect(describeReason('assistant: rule-based calculation', t)).toBe('Assistant: calculated by rules');
+    expect(describeReason('reports: something new', t)).toBe('Reports: something new');
+    expect(describeReason('hybrid fallback to cloud', t)).toBe('Moved to the cloud');
+    expect(describeReason('a note from a newer build', t)).toBe('a note from a newer build');
+  });
+
+  it('uses the active catalogue, so Activity is not half English', async () => {
+    await loadCatalogue('hi');
+    const { t } = getTranslator('hi');
+    expect(taskName('create_app', t)).toBe('ऐप बनाना');
+    expect(platformName('android', t)).toBe('एंड्रॉइड');
+    expect(platformName('unknown', t)).toBe('अज्ञात डिवाइस');
+    expect(describeReason('task requires cloud reasoning', t)).toBe('इस काम के लिए क्लाउड की समझ चाहिए');
   });
 });
 

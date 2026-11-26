@@ -8,8 +8,9 @@
  * attempt gets exactly one cloud attempt when the person is online and cloud use is allowed. No cascades.
  * Offline, only saved translations are used, and the message says so.
  */
+import { AI_COPY, needsCloudOk } from '../ai/copy';
 import { sanitizeJsonSchema } from '../ai/json-schema';
-import { wrapUntrusted } from '../compiler/prompt';
+import { terminologyBlock, wrapUntrusted } from '../compiler/prompt';
 import type {
   AIErrorCode, AIExecutionResult, AIOrchestrator, InferenceMode, InferenceSource, SettingsRepository,
   StructuredRequest, TranslateAppResult, TranslateService, TranslationCacheEntry, TranslationCacheRepository,
@@ -19,6 +20,7 @@ import {
   MAX_TRANSLATION_CHARS, sourceHash, usesNativeScript, type LanguageProbe, type TranslatableLabel,
 } from '../i18n-labels';
 import type { KalamSpec } from '../spec/schema';
+import { brokenTerms, terminologyFor } from '../spec/v11';
 
 export interface TranslateServiceDeps {
   ai: AIOrchestrator;
@@ -134,6 +136,7 @@ function buildRequest(
   const byKey = new Map(chunk.map((l) => [l.key, l.text] as const));
   const input = Object.fromEntries(chunk.map((l) => [l.key, l.text]));
   const chars = chunk.reduce((n, l) => n + l.text.length, 0);
+  const rules = terminologyFor(spec, lang);
 
   return {
     taskType: 'translate',
@@ -156,10 +159,11 @@ function buildRequest(
     ].join(' '),
     prompt: [
       `App name:\n${wrapUntrusted('app_name', spec.name, 80)}`,
+      terminologyBlock(rules),
       'The key of each text says where it appears: bigButton is a button, heading is a title, option is a choice in a list.',
       `Texts to translate:\n${wrapUntrusted('labels', JSON.stringify(input), 30_000)}`,
       `Translate every value into ${target}.`,
-    ].join('\n\n'),
+    ].filter(Boolean).join('\n\n'),
     jsonSchema: sanitizeJsonSchema({
       type: 'object',
       properties: Object.fromEntries(keys.map((k) => [k, { type: 'string' }])),
@@ -178,7 +182,8 @@ function buildRequest(
       const rejected: string[] = [];
       for (const key of keys) {
         const checked = checkTranslation(byKey.get(key) ?? '', (raw as Record<string, unknown>)[key], lang);
-        if (checked.ok) strings[key] = checked.text;
+        // A translation that breaks one of the app's word rules is dropped; the source text stays on screen.
+        if (checked.ok && !brokenTerms(rules, byKey.get(key) ?? '', checked.text).length) strings[key] = checked.text;
         else rejected.push(key);
       }
       if (!Object.keys(strings).length) return { success: false, error: 'No translation passed the checks.' };
@@ -264,7 +269,8 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
         try {
           res = await ai.run(buildRequest(spec, chunk, lang, mode, opts?.signal, deviceCapable ? [sourceLang, lang] : undefined), ctx);
           // One fallback only: a failed on-device attempt may go to cloud once, when cloud is allowed now.
-          if (!res.success && mode === 'prefer_on_device' && res.source === 'on_device' && res.errorCode !== 'cancelled' && !block) {
+          // Not when the person has just said no to the cloud notice: do not ask again for the same label set.
+          if (!res.success && mode === 'prefer_on_device' && res.source === 'on_device' && res.errorCode !== 'cancelled' && !block && !needsCloudOk(res)) {
             res = await ai.run(buildRequest(spec, chunk, lang, 'only_in_cloud', opts?.signal), {
               ...ctx, escalationReason: 'on-device translation failed',
             });
@@ -279,7 +285,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
           // Consent or connectivity clamped the call to the built-in model, which is asked in English only.
           failure = { source: 'on_device', message: `${name} needs the online model, and it isn't allowed or available right now. The original labels stay on screen.` };
         } else if (!res.success || !res.output) {
-          failure = { source: res.source, message: blockedMessage(res.errorCode, name) };
+          failure = { source: res.source, message: blockedMessage(res.errorCode, name, needsCloudOk(res) ? `${AI_COPY.needsCloudOk} The original labels stay on screen.` : undefined) };
         } else {
           Object.assign(merged, res.output.strings);
           sources.add(res.source);
@@ -308,7 +314,6 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
 
     async correct(appId, rawLang, key, text) {
       const lang = baseLang(rawLang);
-      // eslint-disable-next-line no-control-regex
       const clean = text.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
       if (!lang) throw new Error('Pick a language first.');
       if (!clean) throw new Error('A translation cannot be empty.');

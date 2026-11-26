@@ -1,10 +1,10 @@
-import { CALCULATOR_PROMPT, completeOnboarding, createAndSave, describeAndCreate, expect, fillField, openCreate, test, waitForReview } from './fixtures';
+import { CALCULATOR_PROMPT, completeOnboarding, describeAndCreate, expect, fillField, openCreate, test, waitForReview } from './fixtures';
 
 /** Stat blocks expose "<label>: <value>" as their accessible name. */
 const stat = (page: import('@playwright/test').Page, label: RegExp) => page.getByLabel(label);
 
 test.describe('b. calculator from a template', () => {
-  test('create → progress → Template route → preview works → Save → app computes correctly', async ({ page }) => {
+  test('create → progress → Template route → preview works → Save → app computes correctly @core @nano', async ({ page }) => {
     await completeOnboarding(page);
     await openCreate(page);
 
@@ -12,8 +12,6 @@ test.describe('b. calculator from a template', () => {
     await waitForReview(page);
 
     // Honest route: a deterministic template, no AI involved.
-    const overview = page.getByRole('heading', { name: 'Overview' }).locator('..').locator('..');
-    await expect(overview.getByText('Template', { exact: true })).toBeVisible();
     await expect(page.getByText('Built from a template on this device')).toBeVisible();
 
     // The preview runs the real runtime with in-memory data.

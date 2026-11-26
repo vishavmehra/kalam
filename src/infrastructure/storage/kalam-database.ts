@@ -8,21 +8,24 @@
 import {
   DEFAULT_SETTINGS,
   type AppVersion, type ImportSummary, type KalamBackup, type KalamDatabase, type KalamRecord, type KalamSettings,
-  type SpecIssue, type StoredApp,
+  type RecordValue, type SpecIssue, type StoredApp,
 } from '@/core/contracts';
 import { validateImportedSpec } from '@/core/backup/sanitize';
-import { recordShape, stateRowSchema, storedAppShape } from '@/core/backup/schemas';
+import { isLocalOnlyStateKey, recordShape, stateRowSchema, storedAppShape } from '@/core/backup/schemas';
+import { timings } from '@/core/observability';
 import { LIMITS, type KalamCollection, type KalamSpec } from '@/core/spec/schema';
 import { validateSpec } from '@/core/spec/validate';
 import { applyRetention, cloneSpec, createVersion, materialize, sameDesign, type VersionChange } from '@/core/versioning';
 import { z } from 'zod';
 import { createBackupStore, recordCapTracker, removeAppCascade, type LocalBackupStore } from './backup-store';
 import type { StateRow, StorageDriver, StorageTables } from './driver';
+import { claimNewIds, followMoved } from './record-links';
 import { RecordValidationError, validateRecordValues } from './record-validation';
 import {
   createAICacheRepository, createBlobRepository, createSessionRepository, createTranslationRepository, removeOwnedBlobs,
   type SessionRepository,
 } from './repositories';
+import { createPendingOpRepository, type PendingOpRepository } from './pending-ops';
 import { createShareLinkRepository, type ShareLinkRepository } from './share-links';
 import { AI_CACHE_CAP, AI_CACHE_TTL_MS, EVENT_CAP, RECORD_CAP, RecordLimitError } from './storage-limits';
 import { computeStorageUsage, type StorageUsage } from './storage-usage';
@@ -41,6 +44,8 @@ export interface KalamLocalDatabase
   sessions: SessionRepository;
   /** App-to-app sharing links (docs/14 §16). Deleting an app deletes its links. */
   shareLinks: ShareLinkRepository;
+  /** Queued-until-online operations (docs/09 §18). Deleting an app deletes its queued work. */
+  pendingOps: PendingOpRepository;
   /** Numbers for the Storage screen. File sizes come from an index, never by loading files. */
   usage(): Promise<StorageUsage>;
   /** Removes every cached translation. Apps keep their own language. */
@@ -50,6 +55,7 @@ export interface KalamLocalDatabase
 }
 
 export class InvalidSpecError extends Error {
+  readonly code = 'invalid_spec';
   constructor(readonly issues: SpecIssue[]) {
     super(`App design failed validation: ${issues.slice(0, 5).map((i) => `${i.path} ${i.message}`).join('; ')}`);
     this.name = 'InvalidSpecError';
@@ -179,7 +185,37 @@ export function createKalamDatabase(driver: StorageDriver, options: DatabaseOpti
     return record;
   }
 
+  // One place for the record rules; the single writes and `records.batch` both go through these.
+  async function insertIn(t: StorageTables, appId: string, collectionId: string, values: Record<string, RecordValue>): Promise<KalamRecord> {
+    const collection = await requireCollection(t, appId, collectionId);
+    if ((await t.records.countWhere('[appId+collectionId]', [appId, collectionId])) >= recordCap) {
+      throw new RecordLimitError(collectionId, recordCap);
+    }
+    const time = now();
+    const row: KalamRecord = {
+      id: newId(), appId, collectionId, createdAt: time, updatedAt: time, values: checkedValues(collection, values),
+    };
+    await t.records.put(row);
+    return row;
+  }
+  async function updateIn(t: StorageTables, appId: string, collectionId: string, id: string, values: Record<string, RecordValue>): Promise<KalamRecord> {
+    const existing = await requireOwnRecord(t, appId, collectionId, id);
+    const collection = await requireCollection(t, appId, collectionId);
+    // Fields removed from the design since this record was written are not checked again, but their
+    // saved values stay, so restoring an older design brings them back (docs/14 §11.6).
+    const kept = Object.fromEntries(Object.entries(existing.values).filter(([k]) => has(collection.fields, k)));
+    const dropped = Object.fromEntries(Object.entries(existing.values).filter(([k]) => !has(collection.fields, k)));
+    const row: KalamRecord = { ...existing, updatedAt: now(), values: { ...dropped, ...checkedValues(collection, { ...kept, ...values }) } };
+    await t.records.put(row);
+    return row;
+  }
+  async function removeIn(t: StorageTables, appId: string, collectionId: string, id: string): Promise<void> {
+    await requireOwnRecord(t, appId, collectionId, id);
+    await t.records.delete(id);
+  }
+
   const shareLinks = createShareLinkRepository(driver);
+  const pendingOps = createPendingOpRepository(driver);
 
   const backupStore = createBackupStore(driver, {
     newId,
@@ -201,6 +237,7 @@ export function createKalamDatabase(driver: StorageDriver, options: DatabaseOpti
         emit(recordListeners, id);
         emit(stateListeners, id);
         shareLinks.notifyChanged();
+        pendingOps.notifyChanged();
       },
       async touch(id) {
         await driver.transaction(async (t) => {
@@ -233,39 +270,30 @@ export function createKalamDatabase(driver: StorageDriver, options: DatabaseOpti
         return out;
       },
       async insert(appId, collectionId, values) {
-        const record = await driver.transaction(async (t) => {
-          const collection = await requireCollection(t, appId, collectionId);
-          if ((await t.records.countWhere('[appId+collectionId]', [appId, collectionId])) >= recordCap) {
-            throw new RecordLimitError(collectionId, recordCap);
-          }
-          const time = now();
-          const row: KalamRecord = {
-            id: newId(), appId, collectionId, createdAt: time, updatedAt: time, values: checkedValues(collection, values),
-          };
-          await t.records.put(row);
-          return row;
-        });
+        // Timed as 'record_write' (docs/09 §22). A failed write, such as the record cap, is timed as failed and rethrown.
+        const record = await timings.time('record_write', () => driver.transaction((t) => insertIn(t, appId, collectionId, values)));
         emit(recordListeners, appId);
         return record;
       },
       async update(appId, collectionId, id, values) {
-        const record = await driver.transaction(async (t) => {
-          const existing = await requireOwnRecord(t, appId, collectionId, id);
-          const collection = await requireCollection(t, appId, collectionId);
-          // Fields removed from the design since this record was written are dropped, not rejected.
-          const kept = Object.fromEntries(Object.entries(existing.values).filter(([k]) => has(collection.fields, k)));
-          const row: KalamRecord = { ...existing, updatedAt: now(), values: checkedValues(collection, { ...kept, ...values }) };
-          await t.records.put(row);
-          return row;
-        });
+        const record = await timings.time('record_write', () => driver.transaction((t) => updateIn(t, appId, collectionId, id, values)));
         emit(recordListeners, appId);
         return record;
       },
       async remove(appId, collectionId, id) {
-        await driver.transaction(async (t) => {
-          await requireOwnRecord(t, appId, collectionId, id);
-          await t.records.delete(id);
-        });
+        await driver.transaction((t) => removeIn(t, appId, collectionId, id));
+        emit(recordListeners, appId);
+      },
+      /** Several writes as one transaction (docs/09 §7.3): the driver rolls everything back if any write throws. */
+      async batch(appId, ops) {
+        if (!ops.length) return;
+        await timings.time('record_write', () => driver.transaction(async (t) => {
+          for (const op of ops) {
+            if (op.op === 'insert') await insertIn(t, appId, op.collection, op.values);
+            else if (op.op === 'update') await updateIn(t, appId, op.collection, op.id, op.values);
+            else await removeIn(t, appId, op.collection, op.id);
+          }
+        }));
         emit(recordListeners, appId);
       },
       subscribe: (appId, listener) => subscribe(recordListeners, appId, listener),
@@ -336,6 +364,7 @@ export function createKalamDatabase(driver: StorageDriver, options: DatabaseOpti
     aiCache: createAICacheRepository(repoContext),
     sessions: createSessionRepository(repoContext),
     shareLinks,
+    pendingOps,
 
     exportAll: () =>
       driver.transaction(
@@ -345,7 +374,7 @@ export function createKalamDatabase(driver: StorageDriver, options: DatabaseOpti
           exportedAt: now(),
           apps: await t.apps.all(),
           records: await t.records.all(),
-          state: (await t.state.all()).map(({ appId, key, value }) => ({ appId, key, value })),
+          state: (await t.state.all()).filter((row) => !isLocalOnlyStateKey(row.key)).map(({ appId, key, value }) => ({ appId, key, value })),
         }),
       ),
 
@@ -381,7 +410,7 @@ export function createKalamDatabase(driver: StorageDriver, options: DatabaseOpti
       for (const raw of backup.records) {
         const shape = recordShape.safeParse(raw);
         const collection = shape.success ? collectionOf(specs.get(shape.data.appId), shape.data.collectionId) : undefined;
-        const values = shape.success && collection ? validateRecordValues(collection, shape.data.values) : undefined;
+        const values = shape.success && collection ? validateRecordValues(collection, shape.data.values, { keepStale: true }) : undefined;
         if (!shape.success || !values?.ok) {
           summary.skippedRecords++;
           continue;
@@ -392,6 +421,7 @@ export function createKalamDatabase(driver: StorageDriver, options: DatabaseOpti
       const state: StateRow[] = [];
       for (const raw of backup.state) {
         const shape = stateRowSchema.safeParse(raw);
+        if (shape.success && isLocalOnlyStateKey(shape.data.key)) continue; // an old file may hold a draft: stays unrestored
         if (shape.success && specs.has(shape.data.appId)) state.push(shape.data);
         else summary.skippedState++;
       }
@@ -402,6 +432,7 @@ export function createKalamDatabase(driver: StorageDriver, options: DatabaseOpti
           summary.apps++;
         }
         const allow = recordCapTracker(t, recordCap);
+        const moved = await claimNewIds(t, records, newId);
         for (const record of records) {
           // Never let an imported row overwrite a record that belongs to another app/collection.
           const clash = await t.records.get(record.id);
@@ -410,7 +441,8 @@ export function createKalamDatabase(driver: StorageDriver, options: DatabaseOpti
             summary.skippedRecords++;
             continue;
           }
-          await t.records.put(foreign ? { ...record, id: newId() } : record);
+          const row = foreign ? { ...record, id: moved.get(record.id) ?? newId() } : record;
+          await t.records.put(followMoved(specs.get(record.appId), row, moved));
           summary.records++;
         }
         for (const row of state) await t.state.put(row);
@@ -457,6 +489,7 @@ export function createKalamDatabase(driver: StorageDriver, options: DatabaseOpti
         emit(stateListeners, appId);
       }
       shareLinks.notifyChanged();
+      pendingOps.notifyChanged();
       return result;
     },
     usage: () => computeStorageUsage(driver),
@@ -467,7 +500,7 @@ export function createKalamDatabase(driver: StorageDriver, options: DatabaseOpti
       return driver.transaction(async (t) => {
         let removed = 0;
         for (const owner of unusedFiles.owners) {
-          if ((await t.apps.get(owner)) || (await t.drawings.get(owner)) || (await t.sessions.get(owner))) continue;
+          if ((await t.apps.get(owner)) || (await t.drawings.get(owner)) || (await t.sessions.get(owner)) || (await t.pendingOps.get(owner))) continue;
           removed += await t.blobs.countWhere('ownerId', owner);
           await removeOwnedBlobs(t, owner);
         }
