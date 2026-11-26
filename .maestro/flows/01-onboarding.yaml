@@ -88,7 +88,22 @@ name: Onboarding
 - extendedWaitUntil:
     visible: "Kalam, go to your shelf"
     timeout: 30000
-- tapOn: "Kalam, go to your shelf"
+# iOS drops a tap that lands while the sheet is still closing (2026-11-26): let it settle, tap again if nothing
+# changed, and tap it once more if the shelf still did not open.
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    text: "Kalam, go to your shelf"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "Your shelf.*"
+    timeout: 10000
+    optional: true
+- runFlow:
+    when:
+      notVisible: "Your shelf.*"
+    commands:
+      - tapOn: "Kalam, go to your shelf"
 
 - extendedWaitUntil:
     visible: "Your shelf.*"
