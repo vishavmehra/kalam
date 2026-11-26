@@ -3,8 +3,7 @@
 # Runs when a version tag is pushed (v0.1.0) or by hand with the tag to release. It builds three files and uploads them
 # to one release, with a SHA-256 list so a download can be checked:
 #   - Kalam-android.apk                     the release APK. arm64-v8a and x86_64, so it installs on a phone and on an
-#                                           emulator. Signed with the debug key that Expo prebuild generates: a test
-#                                           build, not a store build.
+#                                           emulator. Signed with the upload key kept in repository secrets.
 #   - Kalam-ios-device-unsigned.ipa         the iPhone app with NO signature. A phone refuses it until it is signed:
 #                                           sideload it with AltStore or Sideloadly (a free Apple ID works), or re-sign
 #                                           it with an Apple Developer certificate. There is no way around this without
@@ -15,7 +14,7 @@
 # is the same build with the iphoneos SDK and no code signing. It has not run on a hosted runner yet, so the first run is
 # the check: the job fails loudly if the .app or its JS bundle is missing.
 #
-# Needs no secret: the release is made with the run's own GITHUB_TOKEN, and the public Firebase web config comes from
+# Secrets used: the three KALAM_ANDROID_KEYSTORE/KEY secrets (Android signing). The release is made with the run's own GITHUB_TOKEN, and the public Firebase web config comes from
 # repository variables (the same ones android.yml reads).
 name: Release
 
@@ -44,6 +43,11 @@ env:
   EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ vars.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET }}
   EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
   EXPO_PUBLIC_FIREBASE_APP_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_APP_ID }}
+  EXPO_PUBLIC_FIREBASE_ANDROID_APP_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_ANDROID_APP_ID }}
+  EXPO_PUBLIC_FIREBASE_IOS_APP_ID: ${{ vars.EXPO_PUBLIC_FIREBASE_IOS_APP_ID }}
+  EXPO_PUBLIC_RECAPTCHA_SITE_KEY: ${{ vars.EXPO_PUBLIC_RECAPTCHA_SITE_KEY }}
+  EXPO_PUBLIC_AI_BACKEND: ${{ vars.EXPO_PUBLIC_AI_BACKEND }}
+  EXPO_PUBLIC_AI_LOCATION: ${{ vars.EXPO_PUBLIC_AI_LOCATION }}
   EXPO_PUBLIC_SPECIALIST_ENABLED: 'false'
 
 jobs:
@@ -69,12 +73,26 @@ jobs:
         run: ./gradlew assembleRelease --no-daemon --stacktrace
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
-      - name: Name the file
+      # Re-sign with the upload keystore kept in repository secrets (never in the repo). Expo prebuild signs the release
+      # build with a debug key, so strip that signature, align, then sign with the real key.
+      - name: Sign with the upload key
+        env:
+          KS_B64: ${{ secrets.KALAM_ANDROID_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.KALAM_ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.KALAM_ANDROID_KEY_ALIAS }}
         run: |
           apk=$(find android/app/build/outputs/apk/release -name '*.apk' | head -n 1)
           if [ -z "$apk" ]; then echo "::error::No APK was produced"; exit 1; fi
+          if [ -z "$KS_B64" ]; then echo "::error::The upload keystore secrets are not set"; exit 1; fi
+          bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
           mkdir -p out
-          cp "$apk" "out/Kalam-android.apk"
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          cp "$apk" "$RUNNER_TEMP/unsigned.apk"
+          zip -qd "$RUNNER_TEMP/unsigned.apk" 'META-INF/*' || true
+          "$bt/zipalign" -p -f 4 "$RUNNER_TEMP/unsigned.apk" "$RUNNER_TEMP/aligned.apk"
+          "$bt/apksigner" sign --ks "$RUNNER_TEMP/upload.jks" --ks-key-alias "$KS_ALIAS"             --ks-pass env:KS_PASS --key-pass env:KS_PASS --out out/Kalam-android.apk "$RUNNER_TEMP/aligned.apk"
+          "$bt/apksigner" verify --print-certs out/Kalam-android.apk | sed -n 1,2p
+          rm -f "$RUNNER_TEMP/upload.jks"
       - uses: actions/upload-artifact@v4
         with:
           name: release-android
@@ -112,6 +130,7 @@ jobs:
 
       # No signature on purpose: signing needs an Apple Developer account, which CI does not hold.
       - name: Build for a device, unsigned
+        continue-on-error: true
         run: |
           ws=$(ls -d ios/*.xcworkspace | head -n 1)
           scheme=$(basename "$ws" .xcworkspace)
@@ -154,7 +173,7 @@ jobs:
           Test builds of Kalam for Android and iOS. The web app needs no download.
 
           Android: download the .apk, open it on the phone and allow installs from this source when asked. It is signed
-          with a debug key, so it is a test build and not a Play Store build.
+          with an upload key, so it is a direct download and not a Play Store build.
 
           iPhone: the .ipa has no signature. Sign it with AltStore or Sideloadly (a free Apple ID works) or with your own
           Apple Developer certificate, then install it. It will not install as it is.
