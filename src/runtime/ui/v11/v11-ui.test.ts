@@ -12,7 +12,7 @@ import type { AccessModes, KalamRecord } from '@/core/contracts';
 import { validateSpec } from '@/core/spec';
 import type { ComponentOf, KalamComponent, KalamSpec } from '@/core/spec/schema';
 import { resolveAppTheme } from '../../engine/theme';
-import { arrangeScreen } from '../../engine/v11';
+import { arrangeScreen, componentTheme } from '../../engine/v11';
 import { clearKeptTimers, LayoutView, RelationPicker, ReminderBlock, SignaturePad, SuggestedModesNotice, TimerBlock } from './index';
 
 vi.mock('react-native', () => vi.importActual('react-native-web'));
@@ -206,6 +206,26 @@ describe('LayoutView', () => {
     // 328 px wide: one column, each cell the full width, never a squeezed quarter.
     expect(cell('advance_chart').style.width).toBe('328px');
     expect(cell('garment_chart').style.width).toBe('328px');
+  });
+});
+
+describe('component style in the layout', () => {
+  const part = (id: string, type: string, style?: KalamComponent['style']) => ({ id, type, label: id, ...(style ? { style } : {}) }) as unknown as KalamComponent;
+
+  it('stretches a part with fullWidth (stats too) and leaves a plain part bare', () => {
+    const wide = part('wide', 'text', { fullWidth: true });
+    const stat = part('wide_stat', 'stat', { fullWidth: true });
+    const plain = part('plain', 'text');
+    const items = [wide, stat, plain].map((component) => ({ kind: 'component', component })) as never;
+    render(h(LayoutView, { items, t, render: (c: KalamComponent) => h('span', { 'data-testid': c.id }, c.id) }));
+    expect((screen.getByTestId('wide').parentElement as HTMLElement).style.width).toBe('100%');
+    expect((screen.getByTestId('wide_stat').parentElement as HTMLElement).style.width).toBe('100%');
+    expect((screen.getByTestId('plain').parentElement as HTMLElement).style.width).not.toBe('100%');
+  });
+
+  it('scales a part with size small and large', () => {
+    expect(componentTheme(t, { size: 'large' }).fontScale).toBeGreaterThan(t.fontScale);
+    expect(componentTheme(t, { size: 'small' }).fontScale).toBeLessThan(t.fontScale);
   });
 });
 

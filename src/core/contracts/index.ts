@@ -632,7 +632,7 @@ export interface NormalizedInput {
   video?: { frames: NormalizedImage[]; durationSec: number; summary?: string };
   drawing?: DrawingSummary;
   language?: string;
-  preferences?: { themePreset?: ThemePreset; currency?: string };
+  preferences?: { themePreset?: ThemePreset; currency?: string; /** Who will use the app, in the person's words. */ targetUser?: string; /** Limits the person asked for, in their words. */ constraints?: string };
   /** Present when editing an existing app. */
   existingSpec?: KalamSpec;
 }

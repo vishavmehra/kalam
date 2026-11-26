@@ -36,7 +36,7 @@ function Group({ item, t, render }: { item: Extract<LayoutItem, { kind: 'group' 
     const stat = child.kind === 'component' && child.component.type === 'stat';
     const inner = child.kind === 'group'
       ? <Group item={child} t={t} render={render} />
-      : stat ? render(child.component) : <StyleFrame c={child.component}>{render(child.component)}</StyleFrame>;
+      : <StyleFrame c={child.component}>{render(child.component)}</StyleFrame>;
     if (node.type === 'card') return stat ? <View key={key} style={styles.statBox}>{inner}</View> : <Fragment key={key}>{inner}</Fragment>;
     // Rows share the width and wrap when the text is large. Grid cells keep one width, so a short
     // last row never stretches across the screen.

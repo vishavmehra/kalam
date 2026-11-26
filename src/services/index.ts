@@ -9,6 +9,7 @@ import { createOrchestrator } from '@/core/ai/orchestrator';
 import { classifyWithTieBreak } from '@/core/classifier/tie-break';
 import { createApplicationPipeline } from '@/core/pipeline/create-application';
 import { createAIBlockService } from '@/core/tasks/ai-block-service';
+import { createTranscribeService } from '@/core/tasks/transcribe-service';
 import { createEditService } from '@/core/tasks/edit-service';
 import { createTranslateService } from '@/core/tasks/translate-service';
 import { createVoiceService } from '@/core/tasks/voice-service';
@@ -61,6 +62,8 @@ export function getServices(): KalamServices {
     }),
     edit: createEditService({ ai }),
     aiBlocks: createAIBlockService({ ai }),
+    // Cloud transcription of an uploaded audio file; the cloud notice is asked by the orchestrator.
+    transcribe: createTranscribeService({ ai }),
     voice: createVoiceService({ ai }),
     // App label translation (docs/17 §7.6). Translations live on the device in db.translations.
     translate: createTranslateService({ ai, cache: db.translations, settings: db.settings }),

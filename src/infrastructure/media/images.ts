@@ -1,6 +1,6 @@
 /**
  * Picture variants (docs/06 §7.3-7.4): the compiler-ready copy (≤1280 px JPEG, EXIF and location
- * removed, made by platform/image.normalizeImageUri), a 256 px display thumbnail, and a rotated copy
+ * removed, made by platform/image.normalizeImageUri), a 512 px display thumbnail, and a rotated copy
  * made from the original so the original itself is never overwritten. Shared by web, Android and iOS.
  */
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
@@ -9,7 +9,7 @@ import { MediaError } from '@/core/media/errors';
 import { timings } from '@/core/observability';
 import { normalizeImageUri } from '@/infrastructure/platform/image';
 
-export const THUMB_SIDE = 256;
+export const THUMB_SIDE = 512;
 
 export class CancelledError extends Error {
   constructor() {
@@ -40,7 +40,7 @@ export async function prepareImage(uri: string, source: NormalizedImage['source'
   return { image, thumbnail: await timings.time('thumbnail', () => makeThumbnail(`data:image/jpeg;base64,${image.base64}`, uri)) };
 }
 
-/** 256 px JPEG; tries the data copy first, then the original uri (native loaders differ). */
+/** 512 px JPEG; tries the data copy first, then the original uri (native loaders differ). */
 export async function makeThumbnail(...uris: string[]): Promise<PreparedImage['thumbnail']> {
   for (const uri of uris) {
     try {

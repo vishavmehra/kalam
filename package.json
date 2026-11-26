@@ -110,6 +110,7 @@
     "build:web": "expo export --platform web && node scripts/build-pwa.mjs",
     "build:web:e2e": "node scripts/build-web-e2e.mjs",
     "e2e": "playwright test",
+    "notices": "node scripts/gen-oss-notices.mjs",
     "functions:serve": "firebase emulators:start --only functions",
     "test:rules": "firebase emulators:exec --only firestore --project demo-kalam \"vitest run --config tests/rules/vitest.config.ts\"",
     "test:emulators": "npm --prefix functions run build && firebase emulators:exec --only auth,firestore,functions --project demo-kalam \"vitest run --config tests/emulator/vitest.config.ts\"",

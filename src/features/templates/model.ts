@@ -9,6 +9,7 @@ import type { KalamComponent, KalamSpec } from '@/core/spec/schema';
 import { resolveSample, type CatalogEntry } from '@/core/templates/catalog';
 import { collectionValues, evaluate, formatFieldValue, formatStat, formulaContext, queryList } from '@/runtime/engine/data';
 import { collectionFieldDefs } from '@/runtime/engine/fields';
+import { importanceOf } from '@/core/spec';
 import { statCurrency, v11FieldText } from '@/runtime/engine/v11';
 
 export const PREVIEW_ROWS = 4;
@@ -54,7 +55,7 @@ function blocksOf(
     if (INPUTS.has(c.type)) { push({ kind: 'fields', id: c.id, labels: ['label' in c && c.label ? c.label : c.id] }); continue; }
     switch (c.type) {
       case 'stat':
-        out.push({ kind: 'stat', id: c.id, label: c.label, value: formatStat(c, evaluate(c.expr, ctx, lang), lang, statCurrency(spec, c)), secondary: c.secondary === true });
+        out.push({ kind: 'stat', id: c.id, label: c.label, value: formatStat(c, evaluate(c.expr, ctx, lang), lang, statCurrency(spec, c)), secondary: importanceOf(c) === 'secondary' });
         break;
       case 'list': {
         const defs = collectionFieldDefs(spec, c.source) ?? {};
