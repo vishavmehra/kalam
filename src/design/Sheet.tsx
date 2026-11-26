@@ -9,6 +9,7 @@ import { useT } from '@/i18n/react';
 import { Button, IconButton } from './Button';
 import { Perforation } from './Slip';
 import { usePresence } from './presence';
+import { sheetPanelStyle } from './sheet-motion';
 import { Text } from './Text';
 import { useBreakpoint, useKalamTheme } from './theme';
 
@@ -45,11 +46,7 @@ export function Sheet({ visible, onClose, title, description, children, footer, 
   const sheetH = useSharedValue(480);
 
   const scrimStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
-  const panelStyle = useAnimatedStyle(() => {
-    if (reduced) return { opacity: progress.value };
-    if (isDesktop) return { opacity: progress.value, transform: [{ scale: 0.96 + 0.04 * progress.value }] };
-    return { transform: [{ translateY: (1 - progress.value) * sheetH.value }] };
-  });
+  const panelStyle = useAnimatedStyle(() => sheetPanelStyle(progress.value, sheetH.value, reduced, isDesktop));
 
   const close = () => { if (dismissible) onClose(); };
 
