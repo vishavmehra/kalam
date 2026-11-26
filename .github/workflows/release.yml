@@ -122,7 +122,7 @@ jobs:
           ws=$(ls -d ios/*.xcworkspace | head -n 1)
           scheme=$(basename "$ws" .xcworkspace)
           xcodebuild -workspace "$ws" -scheme "$scheme" -configuration Release -sdk iphonesimulator \
-            -derivedDataPath ios/build-sim ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build
+            -derivedDataPath ios/build-sim ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO SWIFT_ENABLE_EXPLICIT_MODULES=NO CLANG_ENABLE_EXPLICIT_MODULES=NO build
           app=$(ls -d ios/build-sim/Build/Products/Release-iphonesimulator/*.app | head -n 1)
           if [ ! -f "$app/main.jsbundle" ]; then echo "::error::$app has no embedded JS bundle"; exit 1; fi
           mkdir -p out
@@ -135,7 +135,7 @@ jobs:
           ws=$(ls -d ios/*.xcworkspace | head -n 1)
           scheme=$(basename "$ws" .xcworkspace)
           xcodebuild -workspace "$ws" -scheme "$scheme" -configuration Release -sdk iphoneos \
-            -derivedDataPath ios/build-device CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+            -derivedDataPath ios/build-device CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" SWIFT_ENABLE_EXPLICIT_MODULES=NO CLANG_ENABLE_EXPLICIT_MODULES=NO build
           app=$(ls -d ios/build-device/Build/Products/Release-iphoneos/*.app | head -n 1)
           if [ ! -f "$app/main.jsbundle" ]; then echo "::error::$app has no embedded JS bundle"; exit 1; fi
           rm -rf Payload && mkdir Payload && cp -R "$app" Payload/

@@ -33,6 +33,21 @@ name: Onboarding
 - hideKeyboard
 - tapOn: "Sign in with email"
 
+# After the first sign-in the app opens on Make and asks once about account sync. Say "Not now", then go to the shelf.
+- extendedWaitUntil:
+    visible: "Not now"
+    timeout: 45000
+    optional: true
+- runFlow:
+    when:
+      visible: "Not now"
+    commands:
+      - tapOn: "Not now"
+- extendedWaitUntil:
+    visible: "Shelf"
+    timeout: 30000
+- tapOn: "Shelf"
+
 - extendedWaitUntil:
     visible: "Your shelf.*"
     timeout: 30000
