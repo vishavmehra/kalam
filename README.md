@@ -723,7 +723,8 @@ KalamSpec limits keep generated apps small: at most 8 screens, 10 collections, 1
 
 | File on the release | For | Notes |
 |---|---|---|
-| `Kalam-android.apk` | Android phones and emulators | A direct download, not from the Play Store, signed with the project's upload key. Open the file on the phone and allow installs from that source |
+| `Kalam-android.apk` | Android phones (arm64-v8a, nearly every phone) | A direct download, not from the Play Store, signed with the project's upload key. Open the file on the phone and allow installs from that source |
+| `Kalam-android-x86_64.apk` | Android emulators on an Intel or AMD computer | The same app built for x86_64, same key. Drag it onto a running emulator or `adb install` it. An emulator on an Apple silicon Mac is arm64 and takes `Kalam-android.apk` |
 | `Kalam-ios-device-unsigned.ipa` | iPhones | **Unsigned, so it will not install as it is.** Sign it with AltStore or Sideloadly (a free Apple ID works) or with your own Apple Developer certificate, then install it. Apple allows nothing else without an Apple account, and this project does not hold one |
 | `Kalam-ios-simulator.zip` | The iOS Simulator on a Mac | Unzip it and drag the app onto an open Simulator window |
 

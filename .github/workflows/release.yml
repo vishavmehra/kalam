@@ -1,9 +1,10 @@
 # Release builds: the Android APK and the iOS builds, attached to a GitHub Release (README, "Download").
 #
-# Runs when a version tag is pushed (v0.1.0) or by hand with the tag to release. It builds three files and uploads them
+# Runs when a version tag is pushed (v0.1.0) or by hand with the tag to release. It builds these files and uploads them
 # to one release, with a SHA-256 list so a download can be checked:
-#   - Kalam-android.apk                     the release APK. arm64-v8a and x86_64, so it installs on a phone and on an
-#                                           emulator. Signed with the upload key kept as repository secrets
+#   - Kalam-android.apk                     the release APK for phones: arm64-v8a only. Signed with the upload key kept
+#                                           as repository secrets
+#   - Kalam-android-x86_64.apk              the same app for x86_64 Android emulators, same key
 #   - Kalam-ios-device-unsigned.ipa         the iPhone app with NO signature. A phone refuses it until it is signed:
 #                                           sideload it with AltStore or Sideloadly (a free Apple ID works), or re-sign
 #                                           it with an Apple Developer certificate. There is no way around this without
@@ -54,7 +55,7 @@ jobs:
   android:
     name: Android APK
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 80
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -68,30 +69,47 @@ jobs:
       - run: npm ci
       - name: Generate the native project
         run: npx expo prebuild --platform android --no-install --clean
-      - name: Build the release APK
+      # One CPU type per APK keeps the download small (v1.0.0 carried all four: 194 MB). arm64-v8a is nearly every
+      # phone and Apple silicon emulators; the second build, x86_64, is for emulators on Intel or AMD machines. R8 minify is already on (the prebuild template sets
+      # android.enableMinifyInReleaseBuilds=true, and Mobile smoke runs that build). Resource shrinking stays off:
+      # React Native loads bundled images by name at run time, which the shrinker cannot see, and an arm64 build
+      # cannot be checked on the CI emulator.
+      - name: Build the release APKs (arm64-v8a, then x86_64)
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        run: |
+          mkdir -p "$RUNNER_TEMP/apk"
+          for abi in arm64-v8a x86_64; do
+            ./gradlew assembleRelease --no-daemon --stacktrace -PreactNativeArchitectures=$abi
+            cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/apk/$abi.apk"
+          done
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
       # Re-sign with the upload keystore kept in repository secrets (never in the repo). Expo prebuild signs the release
       # build with a debug key, so strip that signature, align, then sign with the real key.
-      - name: Sign with the upload key
+      - name: Sign with the upload key and check the CPU types
         env:
           KS_B64: ${{ secrets.KALAM_ANDROID_KEYSTORE_B64 }}
           KS_PASS: ${{ secrets.KALAM_ANDROID_KEYSTORE_PASSWORD }}
           KS_ALIAS: ${{ secrets.KALAM_ANDROID_KEY_ALIAS }}
         run: |
-          apk=$(find android/app/build/outputs/apk/release -name '*.apk' | head -n 1)
-          if [ -z "$apk" ]; then echo "::error::No APK was produced"; exit 1; fi
           if [ -z "$KS_B64" ]; then echo "::error::The upload keystore secrets are not set"; exit 1; fi
           bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
           mkdir -p out
           echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
-          cp "$apk" "$RUNNER_TEMP/unsigned.apk"
-          zip -qd "$RUNNER_TEMP/unsigned.apk" 'META-INF/*' || true
-          "$bt/zipalign" -p -f 4 "$RUNNER_TEMP/unsigned.apk" "$RUNNER_TEMP/aligned.apk"
-          "$bt/apksigner" sign --ks "$RUNNER_TEMP/upload.jks" --ks-key-alias "$KS_ALIAS"             --ks-pass env:KS_PASS --key-pass env:KS_PASS --out out/Kalam-android.apk "$RUNNER_TEMP/aligned.apk"
-          "$bt/apksigner" verify --print-certs out/Kalam-android.apk | sed -n 1,2p
+          sign() { # <abi> <output name>
+            in="$RUNNER_TEMP/apk/$1.apk"
+            if [ ! -f "$in" ]; then echo "::error::No $1 APK was produced"; exit 1; fi
+            abis=$(unzip -Z1 "$in" 'lib/*' | cut -d/ -f2 | sort -u | tr '\n' ' ')
+            if [ "$abis" != "$1 " ]; then echo "::error::$2 should hold only $1 code, found: $abis"; exit 1; fi
+            zip -qd "$in" 'META-INF/*' || true
+            "$bt/zipalign" -p -f 4 "$in" "$RUNNER_TEMP/aligned.apk"
+            "$bt/apksigner" sign --ks "$RUNNER_TEMP/upload.jks" --ks-key-alias "$KS_ALIAS" \
+              --ks-pass env:KS_PASS --key-pass env:KS_PASS --out "out/$2" "$RUNNER_TEMP/aligned.apk"
+            "$bt/apksigner" verify --print-certs "out/$2" | sed -n 1,2p
+            echo "$2 ($1): $(stat -c %s "out/$2" | awk '{printf "%.1f", $1/1048576}') MB" | tee -a "$GITHUB_STEP_SUMMARY"
+          }
+          sign arm64-v8a Kalam-android.apk
+          sign x86_64 Kalam-android-x86_64.apk
           rm -f "$RUNNER_TEMP/upload.jks"
       - uses: actions/upload-artifact@v4
         with:
@@ -186,8 +204,10 @@ jobs:
 
           Live web app (nothing to install): https://kalam-hybrid.web.app
 
-          Android: download Kalam-android.apk, open it on the phone and allow installs from unknown sources when asked.
-          It is signed with an upload key, so it is a direct download and not a Play Store build.
+          Android phone: download Kalam-android.apk (arm64-v8a, the CPU type of nearly every phone), open it on the
+          phone and allow installs from unknown sources when asked. It is signed with an upload key, so it is a direct
+          download and not a Play Store build. Android emulator on an Intel or AMD computer: use
+          Kalam-android-x86_64.apk instead (an emulator on an Apple silicon Mac is arm64 and takes Kalam-android.apk).
 
           iOS Simulator (Mac with Xcode): unzip Kalam-ios-simulator.zip, boot a simulator, then run
           `xcrun simctl install booted Kalam.app` and `xcrun simctl launch booted com.kalam.app`.
@@ -198,6 +218,8 @@ jobs:
 
           Sign-in is required in the app (Google or email). Check a download against SHA256SUMS.txt.
           NOTES
+          { echo; echo 'File sizes:'; ls -l Kalam-* | awk '{printf "- %s: %.1f MB\n", $9, $5/1048576}'; } >> ../notes.md
+          cat ../notes.md
       - name: Create or update the release
         env:
           GH_TOKEN: ${{ github.token }}
