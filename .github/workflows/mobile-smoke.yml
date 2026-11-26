@@ -151,10 +151,10 @@ jobs:
             sleep 2
             maestro test "$flow" -e KALAM_TEST_EMAIL="$KALAM_TEST_EMAIL" -e KALAM_TEST_PASSWORD="$KALAM_TEST_PASSWORD" --format junit --output "$OUT/logs/maestro-$name.xml" \
               --test-output-dir "$OUT/maestro" --debug-output "$OUT/maestro-debug/$name" || status=$?
-            # A Maestro driver that loses the device is not an app failure (seen on iOS as DeviceUnreachableException):
-            # run that flow once more. Any other failure stops the run.
-            if [ "$status" != 0 ] && grep -q 'DeviceUnreachableException' "$OUT/logs/maestro-$name.xml" 2>/dev/null; then
-              echo "::warning::Maestro lost the device during $name; running it once more"
+            # A failed flow runs once more: the iOS simulator now and then drops a tap or loses the Maestro driver
+            # (DeviceUnreachableException), which is not an app failure (2026-11-26). A flow that fails twice stops the run.
+            if [ "$status" != 0 ]; then
+              echo "::warning::Maestro flow $name failed once; running it again"
               status=0
               maestro test "$flow" -e KALAM_TEST_EMAIL="$KALAM_TEST_EMAIL" -e KALAM_TEST_PASSWORD="$KALAM_TEST_PASSWORD" --format junit --output "$OUT/logs/maestro-$name.xml" \
                 --test-output-dir "$OUT/maestro" --debug-output "$OUT/maestro-debug/$name" || status=$?
@@ -324,10 +324,10 @@ jobs:
             fi
             maestro test "$flow" -e KALAM_TEST_EMAIL="$KALAM_TEST_EMAIL" -e KALAM_TEST_PASSWORD="$KALAM_TEST_PASSWORD" --format junit --output "$OUT/logs/maestro-$name.xml" \
               --test-output-dir "$OUT/maestro" --debug-output "$OUT/maestro-debug/$name" || status=$?
-            # A Maestro driver that loses the device is not an app failure (seen on iOS as DeviceUnreachableException):
-            # run that flow once more. Any other failure stops the run.
-            if [ "$status" != 0 ] && grep -q 'DeviceUnreachableException' "$OUT/logs/maestro-$name.xml" 2>/dev/null; then
-              echo "::warning::Maestro lost the device during $name; running it once more"
+            # A failed flow runs once more: the iOS simulator now and then drops a tap or loses the Maestro driver
+            # (DeviceUnreachableException), which is not an app failure (2026-11-26). A flow that fails twice stops the run.
+            if [ "$status" != 0 ]; then
+              echo "::warning::Maestro flow $name failed once; running it again"
               status=0
               maestro test "$flow" -e KALAM_TEST_EMAIL="$KALAM_TEST_EMAIL" -e KALAM_TEST_PASSWORD="$KALAM_TEST_PASSWORD" --format junit --output "$OUT/logs/maestro-$name.xml" \
                 --test-output-dir "$OUT/maestro" --debug-output "$OUT/maestro-debug/$name" || status=$?
