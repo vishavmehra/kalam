@@ -8,7 +8,7 @@ const base = { uri, lang: 'en', head: wav, policy: { aiMode: 'hybrid' as const, 
 
 describe('web audio file transcription', () => {
   it('sends the file to the cloud service and returns its text', async () => {
-    const transcribe = vi.fn(async () => ({ ok: true as const, text: 'two chai', source: 'cloud' as never }));
+    const transcribe = vi.fn(async (_a: { mimeType: string }) => ({ ok: true as const, text: 'two chai', source: 'cloud' as never }));
     const out = await transcribeFile(base, { transcribe } as TranscribeService);
     expect(out).toMatchObject({ ok: true, text: 'two chai', location: 'cloud_service', partial: false });
     expect(transcribe.mock.calls[0]![0].mimeType).toBe('audio/wav');
