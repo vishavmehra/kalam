@@ -719,7 +719,7 @@ KalamSpec limits keep generated apps small: at most 8 screens, 10 collections, 1
 | | |
 |---|---|
 | **Web app, no install** | <https://kalam-hybrid.web.app>. Sign in with Google or email. |
-| **Android and iOS builds** | [**Release v1.0.0**](https://github.com/vishavmehra/kalam/releases/tag/v1.0.0), or [the latest release](https://github.com/vishavmehra/kalam/releases/latest) |
+| **Android and iOS builds** | [**github.com/vishavmehra/kalam/releases/latest**](https://github.com/vishavmehra/kalam/releases/latest) (the newest release; older ones stay under [all releases](https://github.com/vishavmehra/kalam/releases)) |
 
 | File on the release | For | Notes |
 |---|---|---|
