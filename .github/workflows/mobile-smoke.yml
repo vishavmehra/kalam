@@ -201,6 +201,7 @@ jobs:
           path: |
             smoke-out/logs/
             smoke-out/maestro-debug/
+            smoke-out/maestro/
           if-no-files-found: warn
           retention-days: 14
       - uses: actions/upload-artifact@v7
@@ -384,5 +385,6 @@ jobs:
           path: |
             smoke-out/logs/
             smoke-out/maestro-debug/
+            smoke-out/maestro/
           if-no-files-found: warn
           retention-days: 14

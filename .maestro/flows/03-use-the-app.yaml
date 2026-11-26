@@ -5,9 +5,22 @@ name: Use the built app
 - extendedWaitUntil:
     visible: "Entries: 0"
     timeout: 15000
+# The app has just opened from the save screen: let it settle, then open the form. On iOS a tap that lands while
+# the screen transition finishes is dropped (2026-11-26), so tap once more if the form did not open.
+- waitForAnimationToEnd:
+    timeout: 5000
 - tapOn: "Add expense.*"
 - extendedWaitUntil:
-    visible: "Save expense.*"
+    visible: "Amount.*"
+    timeout: 10000
+    optional: true
+- runFlow:
+    when:
+      notVisible: "Amount.*"
+    commands:
+      - tapOn: "Add expense.*"
+- extendedWaitUntil:
+    visible: "Amount.*"
     timeout: 15000
 - runFlow: ../common/pause.yaml
 # The number field's accessibility label is "Amount (₹)"; its visible label reads "Amount (₹) (required)".
