@@ -5,6 +5,13 @@ name: Onboarding
 - launchApp:
     clearState: true
 
+# A busy CI emulator can put a system "isn't responding" box over the app. Choose Wait if one shows.
+- runFlow:
+    when:
+      visible: ".*isn't responding.*"
+    commands:
+      - tapOn: "Wait"
+
 # A cold Release start on a CI machine can take a while (fonts and settings hold the splash).
 - extendedWaitUntil:
     visible: "Draw the app.*"
