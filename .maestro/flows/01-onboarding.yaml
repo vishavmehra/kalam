@@ -53,10 +53,12 @@ name: Onboarding
       visible: "Not now"
     commands:
       - tapOn: "Not now"
+# Go to the shelf through the header seal at the top of the screen, not the Shelf tab: on iOS a field on Make can take
+# focus as the sheet closes, the keyboard then covers the tab bar, and the Shelf tap hit the keyboard (2026-11-26).
 - extendedWaitUntil:
-    visible: "Shelf"
+    visible: "Kalam, go to your shelf"
     timeout: 30000
-- tapOn: "Shelf"
+- tapOn: "Kalam, go to your shelf"
 
 - extendedWaitUntil:
     visible: "Your shelf.*"
