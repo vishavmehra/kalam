@@ -36,12 +36,42 @@ name: Onboarding
 - tapOn:
     id: auth-email
 - inputText: ${KALAM_TEST_EMAIL}
+# The iOS simulator can drop characters while Maestro types ("k.qa..." for "kalam.qa...", 2026-11-26): type the
+# email again if it did not land whole.
+- runFlow:
+    when:
+      notVisible: ${KALAM_TEST_EMAIL}
+    commands:
+      - tapOn:
+          id: auth-email
+      - eraseText: 80
+      - inputText: ${KALAM_TEST_EMAIL}
 - hideKeyboard
 - tapOn:
     id: auth-password
 - inputText: ${KALAM_TEST_PASSWORD}
 - hideKeyboard
 - tapOn: "Sign in with email"
+# The password is hidden, so a dropped character there only shows as "do not match": type both again, once.
+- extendedWaitUntil:
+    visible: "(Not now|That email and password do not match.*)"
+    timeout: 45000
+    optional: true
+- runFlow:
+    when:
+      visible: "That email and password do not match.*"
+    commands:
+      - tapOn:
+          id: auth-email
+      - eraseText: 80
+      - inputText: ${KALAM_TEST_EMAIL}
+      - hideKeyboard
+      - tapOn:
+          id: auth-password
+      - eraseText: 80
+      - inputText: ${KALAM_TEST_PASSWORD}
+      - hideKeyboard
+      - tapOn: "Sign in with email"
 
 # After the first sign-in the app opens on Make and asks once about account sync. Say "Not now", then go to the shelf.
 - extendedWaitUntil:
