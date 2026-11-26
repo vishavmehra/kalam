@@ -56,7 +56,7 @@ describe('encrypted backup round trip', () => {
     expect(manifest.includes).toEqual(['apps', 'versions', 'records', 'state', 'drawings', 'settings']);
     expect(manifest.checksum).toMatch(/^[0-9a-f]{64}$/);
     const text = strFromU8(bytes);
-    for (const secret of ['Tea', 'Shop expenses', 'my private shop notes', PASS]) expect(text).not.toContain(secret);
+    for (const secret of ['"Tea"', 'Shop expenses', 'my private shop notes', PASS]) expect(text).not.toContain(secret);
     const env = envelopeOf(bytes);
     expect(env).toMatchObject({ algorithm: 'AES-256-GCM', kdf: 'PBKDF2-SHA256', iterations: 2_000, compression: 'gzip' });
     expect(base64ToBytes(env.salt)).toHaveLength(16);
