@@ -10,7 +10,7 @@ Kalam is an app that makes apps. Type a few lines, photograph a paper sketch, sa
 
 [![#BuildHybridAI 2026](https://img.shields.io/badge/%23BuildHybridAI-2026-E2583E)](#hybrid-ai) [![Firebase AI Logic](https://img.shields.io/badge/Firebase-AI%20Logic-1C1917?logo=firebase&logoColor=FFCA28)](#where-the-firebase-ai-logic-code-lives) [![Gemini Nano](https://img.shields.io/badge/Gemini%20Nano-on%20device-F2A541?logo=googlegemini&logoColor=1C1917)](#where-the-on-device-model-runs) [![Expo SDK 58](https://img.shields.io/badge/Expo-SDK%2058-1C1917?logo=expo&logoColor=white)](#set-it-up) [![Platforms: Web, Android, iOS](https://img.shields.io/badge/platforms-Web%20%7C%20Android%20%7C%20iOS-B8432C)](#platforms) [![MCP server](https://img.shields.io/badge/MCP-server-1C1917?logo=modelcontextprotocol&logoColor=white)](#mcp-server) [![License: MIT](https://img.shields.io/badge/license-MIT-2ea44f.svg)](LICENSE)
 
-[**Live demo**](https://kalam-hybrid.web.app) · [**Download**](#download) · [How it works](#how-kalam-works) · [Hybrid AI](#hybrid-ai) · [Screenshots](#screenshots) · [Architecture](#architecture) · [Set it up](#set-it-up) · [Privacy and security](#privacy-and-security)
+[**Live demo**](https://kalam-hybrid.web.app) · [**Try it now**](#try-it-now) · [**How Kalam uses Firebase AI Logic**](#how-kalam-uses-firebase-ai-logic) · [**Download**](#download) · [How it works](#how-kalam-works) · [Hybrid AI](#hybrid-ai) · [Screenshots](#screenshots) · [Architecture](#architecture) · [Set it up](#set-it-up) · [Privacy and security](#privacy-and-security)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/hero-dark.webp">
@@ -18,6 +18,27 @@ Kalam is an app that makes apps. Type a few lines, photograph a paper sketch, sa
 </picture>
 
 </div>
+
+## Try it now
+
+**Live app:** <https://kalam-hybrid.web.app>
+
+**Judges account.** It is a normal user account that holds nothing private, and the password is public on purpose:
+
+| Email | Password |
+|---|---|
+| `judges.kalam@example.com` | `KalamJudges2026` |
+
+1. Open the live app and press **Make your first app**. Kalam asks you to sign in.
+2. Stay on **Sign in**, type the email and password, and press **Sign in with email**.
+3. A sheet asks **Keep your apps in your account?** Choose **Apps and their records**, type the passphrase `KalamJudges2026` in both boxes, and press **Keep my apps**. The passphrase is what locks the records on the device before they are uploaded.
+4. Open **Shelf**. **Home Expenses**, an expense tracker in rupees with 6 entries (₹5,208 in total), is there. Open it, add an expense, or press **Reports**.
+
+If you choose **Apps only** in step 3, the app arrives without its entries, because that choice never uploads records. This was checked on 2026-11-26 in a fresh browser profile with no local data, both ways.
+
+You can also make your own account: on the sign-in screen choose **Create account** (name, email, password), or use **Continue with Google**. Everyone who signs in as the judges account sees the same app, so please do not type anything personal into it, and please leave **Remove my apps from my account** in Settings alone.
+
+To watch the hybrid AI work, make an app from the **Make** tab and open **Activity**: every result is labelled **Template**, **On device** or **Cloud**. Gemini Nano needs desktop Chrome with the model downloaded ([setup](#gemini-nano-in-chrome)). The cloud path needs an ordinary browser session, because App Check on the live site uses reCAPTCHA Enterprise, which scores an automated browser as a bot. How it all fits together is in [How Kalam uses Firebase AI Logic](#how-kalam-uses-firebase-ai-logic).
 
 > **Sign in once, then it is yours offline.** Kalam needs a Google or email sign-in to use. After the first sign-in, your apps open, run and save with no network. Building a new app may need the cloud. Using an app never does.
 
@@ -125,6 +146,541 @@ Claude (planning and repair) and Nebius (sketch reading) exist as server-side ad
 | Specialist callable | `functions/src/index.ts`, `functions/src/providers.ts` |
 | Real-call check scripts | `scripts/verify-firebase-ai.mjs`, `scripts/verify-cloud-compile.mjs`, `functions/scripts/verify-providers.mjs` |
 | Recorded real runs | `docs/evidence/`, written by `scripts/record-evidence.mjs` |
+
+## How Kalam uses Firebase AI Logic
+
+> For the #BuildHybridAI 2026 judges. Every statement here was checked against the code in this repository, and the file is named next to it. Where something has not been verified, it says so. The recorded real runs are in [Evidence](#9-evidence-what-was-run-and-what-passed).
+
+Kalam has one door to AI. A screen or a feature builds a request and calls `orchestrator.run()`. The orchestrator decides whether the request may run at all, and then hands it to one Firebase AI Logic provider, `createFirebaseProvider()` in `src/infrastructure/firebase/firebase-provider.ts`. That provider makes a **hybrid `GenerativeModel`** with both an on-device and a cloud configuration, and the Firebase AI Logic SDK chooses Gemini Nano on the device or a Gemini model in the cloud. Kalam labels each result with the SDK's own `inferenceSource`, never with the mode it asked for.
+
+### The short version
+
+| | |
+|---|---|
+| **SDK** | `firebase` 13.4.0, with `@firebase/ai` 3.1.0, imported from `firebase/ai`. Only `firebase-provider.ts` calls `getAI` and `getGenerativeModel`. The on-device adapters supply the model it drives |
+| **Entry points used** | `getAI`, `getGenerativeModel`, `GoogleAIBackend`, `AgentPlatformBackend`, `InferenceMode`, `ThinkingLevel`, `HybridParams`, `response.inferenceSource`, `response.usageMetadata`, plus `firebase/app-check` and `firebase/remote-config` around it |
+| **Hybrid modes** | All four SDK modes are mapped and used: `prefer_on_device`, `only_on_device`, `only_in_cloud`, `prefer_in_cloud`. Which one a task gets is decided by [policy code](#4-how-each-task-is-routed-and-why), not by the screen |
+| **Cloud models** | `gemini-3.8-flash` for compiling, repair and judging. `gemini-3.5-flash-lite` for the small roles. Ids live only in `src/core/ai/model-config.ts` |
+| **Cloud backend** | `AgentPlatformBackend`, location `global`, when `EXPO_PUBLIC_AI_BACKEND=agent_platform`. Otherwise `GoogleAIBackend`. The recorded runs and the development configuration use Agent Platform with `global` |
+| **On-device model** | Gemini Nano through the Chrome Prompt API on the web. On Android the `kalam-nano` module, on iOS Apple Foundation Models through `kalam-apple`, both presented to the SDK as a Prompt API shaped `LanguageModel` |
+| **App Check** | Set up with the Firebase app, and the provider waits for a token before every cloud request |
+| **Output** | A JSON Schema goes to the model. Zod `parse` is the final authority. A failed parse is rejected, and an app build gets one repair call |
+| **Fallback** | At most one cloud attempt after a failed device attempt, never a cascade |
+| **Offline** | Templates, saved apps and device-eligible tasks keep working. Cloud-only tasks are refused before any request is sent |
+
+### 1. Where Firebase AI Logic sits in the request path
+
+[![Hybrid AI routing: deterministic first, device next, cloud when justified](docs/diagrams/03-hybrid-ai-routing.svg)](docs/diagrams/03-hybrid-ai-routing.svg)
+
+In that diagram the **On device** box and the **Firebase AI Logic** box are served by the same provider, and nothing reaches either of them except through the steps above. For one request:
+
+1. **The feature builds a `StructuredRequest`** (`src/core/contracts/index.ts`): task type, prompt, a `jsonSchema`, a Zod-backed `parse`, and the mode it would like (`mode`). A feature never names a provider or a model.
+2. **`orchestrator.run()`** (`src/core/ai/orchestrator.ts`) refuses oversized input (300,000 characters, 8 images, 1 recording, 18 MB inline), reuses a stored answer for safe-to-repeat tasks, and lets identical requests in flight share one call.
+3. **`planRoute()`** (`src/core/ai/routing.ts`) applies the person's settings (**Hybrid** or **Offline only**, **Use cloud AI when needed**), connectivity, whether Firebase is configured, the per-task device benchmark gate and the capability registry. Its answer is one SDK mode, or a plain refusal.
+4. **Before a cloud-bound call**, the one-time cloud notice is shown if it has not been accepted, and a per-task token bucket may hold the call back.
+5. **`generateStructured()`** in `firebase-provider.ts` waits for an App Check token, builds the hybrid model and calls `generateContent`.
+6. **The SDK picks the leg.** The provider reads `response.inferenceSource` and reports where the answer really came from.
+7. **The answer is parsed.** `JSON.parse`, then the caller's Zod `parse`. Anything that does not validate is `invalid_output`.
+8. **The orchestrator records an `InferenceEvent`** (route, source, model, latency, token counts, retries, fallback, prompt and schema versions) in the local database, and the **Activity** page reads it. Content is never recorded.
+
+### 2. The hybrid setup, from the real code
+
+#### 2.1 One lazy Firebase app, with App Check registered first
+
+`src/infrastructure/firebase/app.ts`
+
+```ts
+export function getFirebaseApp(): FirebaseApp | undefined {
+  if (app) return app;
+  if (!isFirebaseConfigured()) return undefined;
+  const existing = getApps()[0]; // fast refresh keeps the default app alive
+  app = existing ?? initializeApp(config);
+  if (!existing) setupAppCheck(app); // App Check before the first AI request picks up its token
+  return app;
+}
+```
+
+Nothing touches Firebase until an AI feature asks, so using a saved app never waits on it. Only public `EXPO_PUBLIC_*` identifiers are read here. `setupAppCheck` runs right after `initializeApp`, because the AI instance reads the App Check instance when it is made.
+
+#### 2.2 App Check on the web
+
+`src/infrastructure/firebase/app-check.web.ts`
+
+```ts
+const provider = process.env.EXPO_PUBLIC_APPCHECK_PROVIDER === 'v3'
+  ? new ReCaptchaV3Provider(siteKey)
+  : new ReCaptchaEnterpriseProvider(siteKey);
+instance = initializeAppCheck(app, { provider, isTokenAutoRefreshEnabled: true });
+```
+
+```ts
+export async function appCheckReady(timeoutMs: number): Promise<boolean> {
+  if (!instance) return true; // App Check not set up: the SDK has no token to wait for
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const settled = getToken(instance).then(() => true, () => true);
+  const late = new Promise<boolean>((resolve) => { timer = setTimeout(() => resolve(false), timeoutMs); });
+  try {
+    return await Promise.race([settled, late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+```
+
+`reCAPTCHA Enterprise` is the default and `EXPO_PUBLIC_APPCHECK_PROVIDER=v3` selects reCAPTCHA v3. `firebase/ai` awaits the same App Check token before every cloud request and has no timeout of its own, so `appCheckReady` puts a ceiling on that wait. The Android and iOS versions are in `app-check.native.ts` and `app-check.ios.ts` (see [section 7](#7-app-check-and-security-around-every-cloud-call)).
+
+#### 2.3 `getAI` and `getGenerativeModel`: the hybrid model
+
+`src/infrastructure/firebase/firebase-provider.ts`
+
+**The backend.** One `AI` instance is created lazily, on the first request.
+
+```ts
+function createBackend() {
+  const backend = process.env.EXPO_PUBLIC_AI_BACKEND;
+  if (backend === 'agent_platform') {
+    const location = process.env.EXPO_PUBLIC_AI_LOCATION;
+    return location ? new AgentPlatformBackend(location) : new AgentPlatformBackend();
+  }
+  return new GoogleAIBackend();
+}
+```
+
+**The four modes.** Kalam's mode names map one to one onto the SDK's `InferenceMode`.
+
+```ts
+const SDK_MODE: Readonly<Record<InferenceMode, HybridParams['mode']>> = {
+  only_on_device: SdkInferenceMode.ONLY_ON_DEVICE,
+  prefer_on_device: SdkInferenceMode.PREFER_ON_DEVICE,
+  only_in_cloud: SdkInferenceMode.ONLY_IN_CLOUD,
+  prefer_in_cloud: SdkInferenceMode.PREFER_IN_CLOUD,
+};
+```
+
+**The model itself.** This is the core of the integration: one `getGenerativeModel` call with a `mode`, an `inCloudParams` block for Gemini in the cloud and an `onDeviceParams` block for Gemini Nano.
+
+```ts
+const generativeModel = (placement: SchemaPlacement) => {
+  ai ??= getAI(app, { backend: createBackend() });
+  const promptOptions: LanguageModelPromptOptions & { signal: AbortSignal } = {
+    responseConstraint: req.jsonSchema, signal: controller.signal,
+  };
+  const schemaNote = `Reply with one JSON value that matches this JSON Schema:\n${JSON.stringify(cloudSchema)}`;
+  return getGenerativeModel(ai, {
+    // The device models are not assumed to hear audio: a recording always goes to the cloud leg.
+    mode: audio.length && req.mode === 'prefer_on_device' ? SDK_MODE.only_in_cloud : SDK_MODE[req.mode],
+    inCloudParams: {
+      model,
+      systemInstruction: placement === 'config' ? req.system : [req.system, schemaNote].filter(Boolean).join('\n\n'),
+      generationConfig: {
+        responseMimeType: 'application/json',
+        ...(placement === 'config' ? { responseJsonSchema: cloudSchema } : {}),
+        // Gemini 3.x thinking tokens count against maxOutputTokens; a small cap truncates the JSON.
+        // The cap is a ceiling, not a charge: billing counts tokens actually produced.
+        maxOutputTokens:
+          req.maxOutputTokens === undefined ? undefined : Math.max(req.maxOutputTokens, CLOUD_MIN_OUTPUT_TOKENS),
+        thinkingConfig: { thinkingLevel: thinkingLevelFor(req.role) },
+        ...(req.temperature === undefined ? {} : { temperature: req.temperature }),
+      },
+    },
+    onDeviceParams: {
+      createOptions: {
+        expectedInputs: images.length ? [...(io.expectedInputs ?? []), { type: 'image' }] : io.expectedInputs,
+        expectedOutputs: io.expectedOutputs,
+        // The SDK drops systemInstruction on-device; a system initial prompt keeps instructions
+        // separate from user content there too (docs/07 §17.4).
+        initialPrompts: req.system ? [{ role: 'system', content: [{ type: 'text', value: req.system }] }] : undefined,
+        signal: controller.signal,
+      },
+      promptOptions,
+    },
+  });
+};
+```
+
+What each part does:
+
+| Part | What it does |
+|---|---|
+| `getAI(app, { backend })` | Creates the Firebase AI Logic instance on the Agent Platform or Gemini Developer API backend. Created once, reused |
+| `mode` | The routing decision from `planRoute`, translated by `SDK_MODE`. A recording in a `prefer_on_device` request is sent as `only_in_cloud`, because the device models are not assumed to hear audio |
+| `inCloudParams.model` | `modelForRole(req.role)`: the model id for the request's role, from Remote Config, an `EXPO_PUBLIC_AI_MODEL_<ROLE>` override or the defaults in `model-config.ts` |
+| `systemInstruction` | The task's instructions, kept apart from user content. In the `prompt` placement it also carries the schema (see [section 5](#5-structured-output-validation-and-repair)) |
+| `generationConfig.responseMimeType` and `responseJsonSchema` | Constrained JSON output, so the cloud model is asked for the exact shape Kalam validates |
+| `maxOutputTokens` | At least 2,048, because Gemini 3 thinking tokens count against it. It is a ceiling, not a charge |
+| `thinkingConfig` | `ThinkingLevel.LOW` for every role, which keeps latency and cost down. `MINIMAL` was rejected by `gemini-3.8-flash` on Agent Platform with a 400 on 2026-11-18, as the code comment records |
+| `onDeviceParams.createOptions` | The Prompt API session: expected text languages (English always, plus Spanish and Japanese when the request names them, the only other languages Chrome documents), an `image` input when images are sent, and the system prompt as an `initialPrompts` system turn, because the SDK drops `systemInstruction` on the device |
+| `onDeviceParams.promptOptions.responseConstraint` | The same JSON Schema, given to Chrome for constrained decoding on the device |
+| `signal` | One `AbortController` for timeout and cancel. The device leg may ignore signals, so the call is also raced against it |
+
+Two details worth knowing. Hermes on Android has no `AbortSignal.any`, which `firebase/ai` calls on every cloud request, so `firebase-provider.ts` installs a small polyfill. And when a request is `prefer_on_device`, the provider checks the device status itself (1.5 s budget) so a failure is reported against the right leg, which the single cloud fallback depends on.
+
+#### 2.4 Reading the result
+
+```ts
+let response: Awaited<ReturnType<typeof generate>>;
+try {
+  response = await generate('config');
+} catch (e) {
+  // A 400 means the service refused the request shape (not billed, never transient). Retrying
+  // once without constrained decoding is a deterministic degrade, not a provider cascade.
+  if (timedOut || req.mode === 'only_on_device' || !isSchemaRejection(e)) throw e;
+  response = await generate('prompt');
+}
+
+const source = response.inferenceSource === 'on_device' ? 'on_device' : 'cloud';
+const usedModel = source === 'on_device' ? ON_DEVICE_MODEL_NAME : model;
+reportUsage(req, response.usageMetadata);
+let raw: unknown;
+try {
+  raw = JSON.parse(stripFences(response.text()));
+} catch {
+  return fail('invalid_output', 'The model returned text that is not valid JSON.', source, usedModel);
+}
+const parsed = req.parse(raw);
+if (!parsed.success) return fail('invalid_output', `Model output failed validation: ${parsed.error}`, source, usedModel);
+return {
+  success: true, output: parsed.data, provider: 'firebase', source, model: usedModel,
+  latencyMs: Date.now() - started, fallbackUsed: isFallback(req.mode, source),
+};
+```
+
+- The source is `response.inferenceSource` (`on_device` or cloud). The model name is the cloud model id, or `gemini-nano` when the device answered.
+- `fallbackUsed` is true when the answer came from the other leg than the mode preferred (`isFallback` in `routing.ts`).
+- A schema the service refuses (HTTP 400) is retried **once** without constrained decoding, with the schema in the system instruction. That is a deterministic degrade of the request shape, not a retry across providers.
+- Token counts come from `response.usageMetadata`. Thinking tokens are billed as output, so they are counted there, and the on-device leg reports none.
+
+#### 2.5 Models and configuration
+
+`src/core/ai/model-config.ts` is the only place model ids live.
+
+```ts
+export const DEFAULT_MODELS: Readonly<Record<ModelRole, string>> = {
+  compiler: 'gemini-3.8-flash',
+  repair: 'gemini-3.8-flash',
+  judge: 'gemini-3.8-flash',
+  safety: 'gemini-3.5-flash-lite',
+  local_assistant: 'gemini-3.5-flash-lite',
+  edit: 'gemini-3.5-flash-lite',
+  voice: 'gemini-3.5-flash-lite',
+  ai_block: 'gemini-3.5-flash-lite',
+  translation: 'gemini-3.5-flash-lite',
+};
+```
+
+| Setting | Value or rule | File |
+|---|---|---|
+| Precedence for a model id | Remote Config `model_*` key, then `EXPO_PUBLIC_AI_MODEL_<ROLE>`, then the table above | `model-config.ts`, `remote-config.ts` |
+| Remote Config | Loaded once per session, never awaited, and only when cloud use is allowed. Every value is checked with Zod, and an invalid one keeps the default. Whether the Firebase project has a Remote Config template published is not verified here, so the in-code defaults are what the recorded runs used | `remote-config.web.ts`, `src/core/ai/remote-config.ts` |
+| Output token ceiling per role | compiler and repair 16,384, translation 8,192, edit and judge 4,096, ai_block 2,048, safety, voice and local_assistant 1,024 | `model-config.ts` |
+| Thinking level | `LOW` | `firebase-provider.ts` |
+| Timeouts | 90 s default. A compile or repair call waits 150 s | `limits.ts`, `compile.ts` |
+| Prompt versions | One label per role (`compile-v2`, `repair-v2`, `judge-v1` and so on) recorded on every event | `model-config.ts` |
+
+#### 2.6 The on-device leg per platform
+
+On the web the SDK drives Chrome's `LanguageModel` directly, and `on-device.web.ts` only answers "can Nano run here?", starts the download from a user gesture and keeps the model warm. On Android and iOS, `on-device.native.ts` and `on-device.ios.ts` install an adapter as `globalThis.LanguageModel`, so the same hybrid router picks the phone or the cloud. The table in [Where the on-device model runs](#where-the-on-device-model-runs) lists each platform.
+
+### 3. Every use of Firebase AI Logic
+
+One row per use. "Hybrid" means the SDK chooses between Gemini Nano and the cloud model at the moment of the call. "On device" and "Cloud" mean the request is pinned to one leg.
+
+| Feature | What Firebase AI Logic does there | Runs | API and mode | Source |
+|---|---|---|---|---|
+| Hybrid model setup | One `AI` instance, and one hybrid `GenerativeModel` per request with `inCloudParams` and `onDeviceParams` | Hybrid | `getAI`, `getGenerativeModel`, `HybridParams` | `src/infrastructure/firebase/firebase-provider.ts` |
+| App Check on every cloud call | A token is attached to each cloud request. Kalam waits for it first, for up to 8 s | Cloud | `initializeAppCheck`, `ReCaptchaEnterpriseProvider`, `getToken`. Native: Play Integrity, App Attest | `app-check.web.ts`, `app-check.native.ts`, `app-check.ios.ts`, `app.ts` |
+| Template app, parameters | Gemini Nano fills template parameters the rules did not capture. Template defaults are the fallback, so this never waits on the cloud | On device | `only_on_device`, task `extract_template_params`, 6 s budget | `src/core/pipeline/create-application.ts` |
+| Build a medium or complex app | Gemini compiles the request into a schema-constrained intermediate form that Kalam turns into a KalamSpec | Cloud | `only_in_cloud` (a medium text request asks for `prefer_in_cloud` and `planRoute` makes it `only_in_cloud`), `gemini-3.8-flash` | `src/core/compiler/compile.ts` |
+| Build a simple app with no template | The device is tried first, only where its benchmark for the job has passed and the model is loaded. No platform has a passed benchmark yet, so today this is cloud | Hybrid (gated) | `prefer_on_device`, task `create_app`, gate `create_simple_app` | `create-application.ts`, `src/core/ai/local-ready.ts` |
+| Read a sketch, photo or drawing | The same compile call with the pictures attached as `inlineData` image parts | Cloud | `only_in_cloud`, task `interpret_sketch`, `gemini-3.8-flash` | `compile.ts`, `src/core/compiler/prompt.ts` |
+| Understand a video | Up to 6 keyframes become the ordered steps of a task, which then feed the compiler | Cloud | `only_in_cloud`, task `interpret_sketch` | `src/core/media/workflow.ts` |
+| Repair a failed build | One repair call that is told the exact validator problems | Cloud | task `repair_spec`, role `repair`, `gemini-3.8-flash`, the mode of the first pass | `compile.ts` |
+| Edit an app in words | Plain rules handle the clear cases first. Otherwise Gemini Nano proposes a small patch. If nothing usable comes back, Gemini proposes a structural patch, optionally with a picture of the part pointed at | On device, then cloud (two separate calls) | `only_on_device` task `generate_patch`, then `only_in_cloud` task `modify_app`, role `edit` | `src/core/tasks/edit-service.ts` |
+| Voice command in a running app | Maps the transcript to one of the app's own action ids | Hybrid | `prefer_on_device`, task `voice_action` | `src/core/tasks/voice-service.ts` |
+| Turn a recording into text | Gemini hears the audio as an `inlineData` part and returns a transcript. Implemented and exercised by a script. The app screens do not call it yet (the web build asks the person to type the words) | Cloud | `only_in_cloud`, task `voice_action`, `gemini-3.5-flash-lite` | `src/core/tasks/transcribe-service.ts` |
+| Translate an app's labels | Translates the labels in chunks | On device for a pair Chrome supports and 60 labels or fewer, otherwise cloud | `prefer_on_device` or `only_in_cloud`, task `translate` | `src/core/tasks/translate-service.ts` |
+| Explain a report | One short sentence about the numbers on screen. A sentence with a number not in the report is rejected | Hybrid | `prefer_on_device`, or `only_on_device` when the person keeps it on the device, task `summarize` | `src/core/reports/explain.ts` |
+| Ask your app a question, formula help | Turns a question into a formula that Kalam validates and then calculates itself | Hybrid | `prefer_on_device`, task `classify`, role `local_assistant` | `src/core/assistant/assistant.ts`, `src/core/formula-assist/suggest.ts` |
+| AI steps inside a generated app | Reads a photo into fields, classifies, summarises or translates, as the author configured the step | Per step | `only_on_device` (fallback none), `prefer_on_device` (default) or `prefer_in_cloud` (a step the check showed is better in the cloud) | `src/core/tasks/ai-block-service.ts` |
+| Check an AI step when it is built | Gemini writes 5 test cases, Gemini Nano runs every one, and Gemini grades summaries and translations for meaning. Passing is 4 of 5. For photos, Gemini reads sample photos as the reference and Nano reads the same photos | Cloud and device | `only_in_cloud` (role `judge`) and `only_on_device`, task `verify_ai_block` | `ai-block-service.ts` (`verify`) |
+| Handwriting in the Drawing Studio | Reads a picture of the strokes. Digits are read by code first. Gemini Nano is next. The cloud is used only after the person agrees | On device, then cloud on request | `only_on_device`, then `only_in_cloud`, task `extract_data` | `src/features/drawing/handwriting-service.ts` |
+| Close call on how complex a request is | Gemini Nano picks between two levels, only when it is loaded now | On device | `only_on_device`, task `classify`, 40 output tokens | `src/core/classifier/tie-break.ts` |
+| Safety review before publishing to Kalam Bazaar | Gemini judges the listing text and the AI prompts in the app, when the rule-based checks found nothing to flag | Cloud | `only_in_cloud`, task `safety_review`, `gemini-3.5-flash-lite` | `src/core/bazaar/publish.ts`, `src/infrastructure/bazaar/bazaar-service.ts` |
+| Model ids, prompt versions, feature flags | Firebase Remote Config, with Zod-checked values and in-code defaults | Config | `fetchAndActivate` | `src/infrastructure/firebase/remote-config.web.ts` |
+
+Not in this table on purpose: the optional Claude and Nebius specialists (a Cloud Function, off by default, not Firebase AI Logic) and everything deterministic, such as calculations, saving, templates and formulas, which never call a model.
+
+### 4. How each task is routed, and why
+
+[![AI task registry: which task runs where, on which model](docs/diagrams/19-task-registry-and-models.svg)](docs/diagrams/19-task-registry-and-models.svg)
+
+The routing policy is a data table plus two small pure functions, so it runs in tests without a model (`orchestrator.test.ts`, `local-ready.test.ts`). This is the policy table.
+
+`src/core/ai/routing.ts`
+
+```ts
+export const TASK_POLICIES: Readonly<Record<TaskType, TaskPolicy>> = {
+  create_app: { role: 'compiler', onDevice: false, specialist: true, userFacing: false, cloudFallback: false, localWhenReady: true },
+  plan_app: { role: 'compiler', onDevice: false, specialist: true, userFacing: false, cloudFallback: false },
+  modify_app: { role: 'compiler', onDevice: false, specialist: true, userFacing: false, cloudFallback: false },
+  interpret_sketch: { role: 'compiler', onDevice: false, specialist: true, userFacing: false, cloudFallback: false },
+  repair_spec: { role: 'repair', onDevice: false, specialist: true, userFacing: false, cloudFallback: false },
+  verify_ai_block: { role: 'judge', onDevice: false, specialist: false, userFacing: false, cloudFallback: false },
+  safety_review: { role: 'safety', onDevice: false, specialist: false, userFacing: false, cloudFallback: false },
+  generate_patch: { role: 'edit', onDevice: true, specialist: false, userFacing: true, cloudFallback: true },
+  // Template parameters must never wait on the cloud: the deterministic template is the fallback.
+  extract_template_params: { role: 'local_assistant', onDevice: true, specialist: false, userFacing: true, cloudFallback: false },
+  extract_data: { role: 'ai_block', onDevice: true, specialist: false, userFacing: true, cloudFallback: true },
+  classify: { role: 'local_assistant', onDevice: true, specialist: false, userFacing: true, cloudFallback: true },
+  summarize: { role: 'ai_block', onDevice: true, specialist: false, userFacing: true, cloudFallback: true },
+  translate: { role: 'translation', onDevice: true, specialist: false, userFacing: true, cloudFallback: true },
+  voice_action: { role: 'voice', onDevice: true, specialist: false, userFacing: true, cloudFallback: true },
+};
+```
+
+The reasons behind it:
+
+| Task | Placement | Why |
+|---|---|---|
+| `create_app`, `plan_app`, `modify_app`, `interpret_sketch`, `repair_spec` | Cloud (`onDevice: false`). `plan_app` only runs for a consented specialist | Building a whole app, reading a picture and hard repair need a bigger model than Gemini Nano. Kalam does not assume Gemini Nano can build a whole app, so the device may only try a *simple* app, and only after its benchmark passes (`localWhenReady`) |
+| `verify_ai_block`, `safety_review` | Cloud | Both are cloud tasks by design. The AI-step check needs a stronger reference to compare the device model against, and a publishing safety verdict is not left to a small local model |
+| `extract_template_params` | Device only, no cloud fallback | The template defaults are the fallback, so a build never waits on the cloud |
+| `classify`, `summarize`, `translate`, `extract_data`, `voice_action`, `generate_patch` | Device first, one cloud fallback allowed | Small typed jobs with short input and a schema-checked answer. The benchmark gate can still send one of them to the cloud |
+
+Two functions apply the policy to the situation of the moment. First, may the device take this task at all?
+
+```ts
+export function onDeviceEligible(taskType: TaskType, complexity: ComplexityLevel | undefined, localReady?: LocalStatus): boolean {
+  const policy = TASK_POLICIES[taskType];
+  if (policy.onDevice) return localReady !== 'failed';
+  return !!policy.localWhenReady && complexity === 'simple' && localReady === 'ready';
+}
+```
+
+A task that prefers the device keeps it unless its recorded benchmark **failed**. A simple app with no template only gets the device after its benchmark **passed**. An unproven task keeps today's behaviour and never unlocks a new one. Then `planRoute` turns that into a mode:
+
+<details>
+<summary><code>planRoute</code> in full (src/core/ai/routing.ts)</summary>
+
+```ts
+export function planRoute(i: RouteInput): RouteDecision {
+  const policy = TASK_POLICIES[i.taskType];
+  const blocked = cloudBlock(i);
+
+  // Specialists are external cloud providers: same cloud consent + explicit external consent +
+  // a caller-supplied justification. Never a silent fallback (docs/07 §9.4–9.5).
+  if (
+    i.escalationReason && policy.specialist && !blocked && i.requestedMode !== 'only_on_device'
+    && i.settings.allowExternalProviders && i.specialistConfigured
+  ) {
+    return { kind: 'specialist', note: i.escalationReason };
+  }
+
+  const deviceReady = i.onDevice === 'available' && !i.deviceLacks;
+  if (!onDeviceEligible(i.taskType, i.complexity, i.localReady)) {
+    // Nano cannot do this task (docs/07 §4.5), or it failed its benchmark for it (§6.7): cloud or a clear
+    // failure. A caller's only_on_device is a privacy constraint and is never widened to cloud.
+    const benchFailed = policy.onDevice;
+    if (i.requestedMode === 'only_on_device') {
+      return { kind: 'fail', code: 'model_unavailable', intended: 'on_device', message: benchFailed ? AI_COPY.localFailedGate : AI_COPY.taskNeedsCloud };
+    }
+    if (blocked) return { kind: 'fail', ...blocked, intended: 'cloud' };
+    return {
+      kind: 'firebase', mode: 'only_in_cloud',
+      note: i.requestedMode === 'only_in_cloud' ? undefined : benchFailed ? 'on-device model failed its benchmark for this task' : 'task requires cloud reasoning',
+    };
+  }
+
+  // The capability registry says the device model cannot take this input (docs/07 §14.6).
+  if (i.deviceLacks && i.requestedMode === 'only_on_device') {
+    return { kind: 'fail', code: 'unsupported_modality', intended: 'on_device', message: AI_COPY.deviceLacks(i.deviceLacks) };
+  }
+  const notReady = i.deviceLacks ? AI_COPY.deviceLacks(i.deviceLacks) : AI_COPY.deviceNotReady(i.onDevice);
+
+  if (blocked) {
+    // Consent/offline clamp: only the on-device leg is allowed, regardless of the requested mode.
+    if (!deviceReady) return { kind: 'fail', code: blocked.code, intended: 'on_device', message: `${notReady} ${blocked.message}` };
+    return { kind: 'firebase', mode: 'only_on_device', note: i.requestedMode === 'only_on_device' ? undefined : `cloud unavailable (${blocked.code})` };
+  }
+
+  if (i.requestedMode === 'only_on_device' && !deviceReady) {
+    return { kind: 'fail', code: 'model_unavailable', intended: 'on_device', message: notReady };
+  }
+  // Cloud is allowed and the device cannot take this input: do not let the SDK try the device first.
+  if (i.deviceLacks) return { kind: 'firebase', mode: 'only_in_cloud', note: `on-device model lacks ${i.deviceLacks}` };
+  return { kind: 'firebase', mode: i.requestedMode };
+}
+```
+
+</details>
+
+Read as rules:
+
+1. **A consented specialist wins only when asked for.** It needs an explicit reason from the caller, cloud consent, external-provider consent and a configured specialist. Otherwise this step is skipped.
+2. **A task the device cannot or may not do goes to the cloud** as `only_in_cloud`, or fails clearly. A caller's `only_on_device` is a privacy constraint and is **never** widened to the cloud.
+3. **If the capability registry says the device model cannot take the input** (Android and iOS models are text only), the request goes to the cloud when allowed, and the SDK is not allowed to try the device first.
+4. **If the cloud is blocked** (Offline only, cloud consent off, offline, or Firebase not configured), only the device leg is allowed. If the device is not ready, the request fails with a plain message.
+5. **Otherwise the requested mode is passed to the SDK**, which makes the final choice at the call.
+
+The device benchmark gate is computed from recorded runs, never set by hand (`src/core/ai/local-ready.ts`). Measured on Chrome 158 on 2026-11-26: voice commands pass (21 of 23 correct, p95 3.8 s). Classify (83.3% against 85% needed), summarize (60% against 80%) and translate (75% against 90%) failed, so on the web those three go to the cloud. Extract, patch, template parameters and the simple-app attempt have no benchmark yet. The same numbers are in [Verification](#verification).
+
+How the callers ask: the app-build path uses `compileMode()`, which pins sketches, photos, drawings, video and complex apps to the cloud, and the pipeline asks the device first only for a simple request that passed its gate.
+
+```ts
+export function compileMode(input: NormalizedInput, c: TaskClassification): InferenceMode {
+  return hasVisualInput(input) || c.requiresMultimodalReasoning || c.complexity === 'complex'
+    ? 'only_in_cloud'
+    : 'prefer_in_cloud';
+}
+```
+
+### 5. Structured output, validation and repair
+
+Every model result is untrusted until it passes four checks.
+
+**1. A schema goes to the model.** Each request carries a JSON Schema made from its Zod schema (`src/core/ai/json-schema.ts`). `sanitizeJsonSchema` keeps only the keywords Gemini documents as supported. For the cloud, `cloudResponseSchema` also drops array bounds, which made the service reject the compiler schema with a 400 on 2026-11-18, and adds `propertyOrdering` so the model writes a component's `type` before its other properties. The schema is sent as `responseJsonSchema` to the cloud and as `responseConstraint` to Chrome's Prompt API. If the service refuses the schema itself, the request is made once more with the schema in the system instruction.
+
+**2. Zod decides.** The answer is JSON-parsed, with code fences stripped, and then passed to the caller's `parse`. The generation schema may be looser than the Zod schema, because Zod is the final authority. A failure becomes `invalid_output`.
+
+**3. Task rules decide what the answer may do.** Examples from the code: a voice answer naming an action the app does not have is turned into "no action" and never executed (`voice-service.ts`). A formula from "Ask your app" is validated against the app's fields, then calculated by Kalam's own evaluator (`assistant.ts`). A report explanation that contains a number not in the report is rejected (`explain.ts`). Labels a translation did not return stay in the original language (`translate-service.ts`).
+
+**4. An app must pass `validateSpec` before it exists.** For a build, the cloud's output goes through this path (`src/core/compiler/compile.ts`):
+
+| Step | What happens |
+|---|---|
+| Schema | The model returns a compiler IR, checked against `compilerIRSchema` after `normalizeIR` cleans lengths the cloud schema cannot carry |
+| Convert | `irToSpec` builds a KalamSpec |
+| Deterministic repair | `completeSpec` adds and moves the screens and parts a valid app needs. If that makes the app invalid, the unrepaired app is validated instead |
+| Validate | `validateSpec`: JSON size, a security scan, schema, limits, references and formulas |
+| **One** repair call | If it is still invalid, `repair_spec` (role `repair`) gets the exact validator problems and the previous output. There is no second repair |
+| Otherwise | A plain message, the person's description kept, clarifying questions. An invalid spec is never saved, and the previous valid version of an app is always kept |
+
+Untrusted text, such as the person's request, a voice transcript, video notes and an app's own AI instructions, is wrapped in `<untrusted_*>` tags by `wrapUntrusted()` (`src/core/compiler/prompt.ts`), and the prompts say the tagged text is data. A generated app is data too: it runs on a finite action set with no `eval`.
+
+Calls that fail for reasons that may pass are retried on the same provider only: two retries for a rate limit (429), a service error or a network drop, with exponential backoff and full jitter, and one for a timeout. The on-device leg is never retried. Compile and repair calls do not retry on a timeout, because the repair pass is the retry.
+
+```ts
+export const RETRY_LIMITS: Readonly<Partial<Record<AIErrorCode, number>>> = {
+  quota: 2, provider_error: 2, offline: 2, timeout: 1,
+};
+```
+
+### 6. The single cloud fallback rule
+
+When a small job is tried on the device and fails **on the device**, the orchestrator makes **one** Firebase cloud attempt and takes whatever it answers. It is the only fallback in Kalam. The code in `src/core/ai/orchestrator.ts`:
+
+<details>
+<summary>The fallback in full</summary>
+
+```ts
+const localFailure = !first.success && first.source === 'on_device' && first.errorCode !== 'cancelled' && !req.signal?.aborted;
+if (localFailure && decision.kind === 'firebase' && mode === 'prefer_on_device' && (policy.cloudFallback || policy.localWhenReady)) {
+  // planRoute keeps prefer_on_device only when cloud is allowed, so this is the one permitted
+  // fallback (lead decision 2). Whatever the cloud answers is final: no retry, no cascade.
+  const failed = `on-device failed (${first.errorCode ?? 'error'})`;
+  const noticeMissing = !(await noticeOk(settings, ctx));
+  const held = noticeMissing ? undefined : await takeToken();
+  const left = timeLeft();
+  if (noticeMissing) {
+    needsOk = !req.signal?.aborted;
+    notes.push(`${failed}; cloud fallback skipped, the cloud notice is not accepted`);
+  } else if (held === 'quota') {
+    notes.push(`${failed}; cloud fallback skipped by the client rate limit`);
+  } else if (held !== 'cancelled' && !left) {
+    notes.push(`${failed}; no time left for the cloud fallback`);
+  } else if (held !== 'cancelled') {
+    // The failed device attempt is an event of its own, so on-device metrics count it (docs/13 §9.2).
+    await record({
+      ...base, route: 'on_device', provider: first.provider, model: first.model, source: 'on_device', latencyMs: now() - started,
+      success: false, fallbackUsed: false, errorCode: first.errorCode,
+      escalationReason: join(ctx.escalationReason, decision.note), retries: 0, cacheHit: false,
+    });
+    notes.push(`${failed}; one Firebase cloud fallback`);
+    legStarted = now();
+    out = await attempt({ mode: 'only_in_cloud', timeoutMs: left });
+  }
+}
+```
+
+</details>
+
+It happens only when every one of these holds:
+
+- the request asked for `prefer_on_device`. `only_on_device` is never widened, and `only_in_cloud` has no device leg to fall back from;
+- the first attempt failed on the device (not cancelled);
+- the task's policy allows it (`cloudFallback`, or `localWhenReady`);
+- cloud is allowed now: online, cloud consent on, not Offline only, Firebase configured. `planRoute` only keeps `prefer_on_device` when that is so;
+- the one-time cloud notice has been accepted, the client token bucket has a token and there is time left in the run budget (twice the task timeout).
+
+Whatever the cloud answers is final: no retry, no second fallback, no other provider. A failed specialist does not go to Firebase either, and Firebase does not go to a specialist. The failed device attempt and the cloud attempt are two events with one `taskId`, so the Activity page counts the device failure. Do not confuse this with the SDK's own behaviour in `prefer_on_device` mode: if the model is not available at all (not downloaded, no Prompt API), the SDK goes to the cloud without any device attempt, which the provider reports as `fallbackUsed`.
+
+### 7. App Check and security around every cloud call
+
+[![App Check and security boundaries](docs/diagrams/11-app-check-security-boundaries.svg)](docs/diagrams/11-app-check-security-boundaries.svg)
+
+| Platform | Provider in release builds | Development builds | File |
+|---|---|---|---|
+| Web | reCAPTCHA Enterprise, or reCAPTCHA v3 with `EXPO_PUBLIC_APPCHECK_PROVIDER=v3` | SDK debug token, registered in the console | `app-check.web.ts` |
+| Android | Play Integrity, from the native Firebase App Check SDK inside `modules/kalam-nano` | Debug token | `app-check.native.ts`, `native-app-check.native.ts` |
+| iOS | App Attest, with DeviceCheck as fallback, from `modules/kalam-apple`, handed to the JS SDK by a `CustomProvider` | Debug token | `app-check.ios.ts`, `native-app-check.native.ts` |
+
+What guards a cloud call:
+
+1. **App Check.** The provider calls `appCheckReady(8 s)` before a cloud request. A token that does not arrive in time fails the request as `app_check_failed` with a plain message instead of hanging. A 401 or 403 that mentions App Check maps to the same code (`src/infrastructure/firebase/errors.ts`). On the native apps the attestation provider is installed lazily, on the first cloud request, so on-device-only work never reaches Play Integrity or App Attest.
+2. **Consent.** Settings has **Hybrid** and **Offline only**, **Use cloud AI when needed** and **Allow specialist models** (off by default). The first cloud-bound call asks for a one-time notice, and after "Not now" it does not ask again for 10 minutes. The Settings page says what is sent: the description, the words of a voice note, and any photo, video frame or drawing attached. Records are never sent, except the fields an AI step that the person added works on.
+3. **Remote Config is not loaded when cloud is not allowed.** A request pinned to `only_on_device` does not start the Remote Config fetch.
+4. **No provider keys in the bundle.** The client holds only `EXPO_PUBLIC_*` identifiers. The Claude and Nebius keys are Secret Manager secrets used by one Cloud Function, and CI scans the bundle for provider keys.
+5. **Server side.** The Cloud Functions set `enforceAppCheck: true` (`functions/src/index.ts`, `functions/src/bazaar/index.ts`, `functions/src/collab/index.ts`), and the specialist function also uses `consumeAppCheckToken: true`, so each token works once.
+6. **Cost and abuse limits.** Output tokens are capped per role, a token bucket limits cloud calls per task (6 per minute for compile, repair and safety, 30 for the rest), retries are bounded, and a run has a time budget. These protect cost and battery and are not a security boundary, because a modified client can skip them.
+
+Where App Check stands, plainly. **Enforcement for AI Logic is off in the Firebase project used to develop Kalam**, so unregistered clients still work there. Turn it on in your own project after you register your apps. A debug token was sent on every recorded cloud call (scenario E below). The production reCAPTCHA Enterprise path in a real browser, Play Integrity and App Attest have no recorded run. One observation on 2026-11-26: a headless automated browser on the live site gets HTTP 403 from the reCAPTCHA Enterprise token exchange, because reCAPTCHA scores it as a bot, while sign-in and account sync still worked.
+
+### 8. Offline, and when Gemini Nano is not there
+
+Every row below is decided by `planRoute`, `cloudBlock` and the provider, and several were run (see the evidence).
+
+| Situation | What Kalam does |
+|---|---|
+| Offline, building from a template | Builds. A template app needs no model, and Gemini Nano is not asked unless it is loaded |
+| Offline, a task the device may take (voice command, small edit, "Ask") | `planRoute` clamps the request to `only_on_device`. If Nano is ready it answers, with no network |
+| Offline, a cloud-only task (a medium or complex app, a sketch) | Refused as `offline` before anything is sent: "This needs an online model. Your saved apps and local data remain available." Scenario F recorded 0 requests sent while offline |
+| Back online | The next cloud request works (scenario G) |
+| Offline only, or cloud consent off | Same clamp: the device may answer, everything else is refused with the reason. A request pinned to the device never goes to the cloud |
+| Gemini Nano not downloaded (`downloadable`) or downloading | A hybrid request goes to the cloud when allowed. A device-only request fails with `model_unavailable` and says why. The download starts only from a button in Settings, because Chrome needs a user gesture, and its progress is shown |
+| Gemini Nano downloaded but not loaded | The first session after a page load took about 40 s on Chrome 157. Template parameters and the complexity tie-break only use Nano when it is already loaded, and a cold model is warmed in the background for next time |
+| No Prompt API (another browser, an unsupported phone) | Status reads unavailable with the reason, and requests go to the cloud when allowed |
+| A device attempt fails | One cloud fallback, as in [section 6](#6-the-single-cloud-fallback-rule) |
+| Firebase not configured | Templates and saved apps still work. AI tasks fail with a plain "not set up" message |
+| No App Check token within 8 s | `app_check_failed`, with a plain message |
+
+Saved apps open, run and save offline whatever any of these rows say, because the runtime is data plus code and reaches AI only through the orchestrator.
+
+### 9. Evidence: what was run and what passed
+
+Only real runs are counted. The files are in [`docs/evidence`](docs/evidence), written by `scripts/record-evidence.mjs`. Mocked unit tests such as `firebase-provider.test.ts` and `orchestrator.test.ts` check Kalam's own logic around the SDK and are not counted as proof that a model ran.
+
+| What | Result | File |
+|---|---|---|
+| First cloud call through Firebase AI Logic | `gemini-3.8-flash`, `inferenceSource: in_cloud`, 3.4 s, a debug App Check token exchanged | [`cloud-inference-2026-11-18.json`](docs/evidence/cloud-inference-2026-11-18.json) |
+| First Gemini Nano call in Chrome through the SDK | A classify answer and a voice-command answer as schema-shaped JSON | [`on-device-inference-2026-11-18.json`](docs/evidence/on-device-inference-2026-11-18.json) |
+| **Web hybrid matrix** in Chrome 158.0.8127.36 with real Gemini Nano, `firebase` 13.4.0 and `@firebase/ai` 3.1.0 | **Scenarios A to H all pass.** **A** Nano answers (12.8 s). **B** with no local model, the cloud answers (`gemini-3.5-flash-lite`, 4.6 s). **C** and **C2** a model that is not ready makes a device-only request refuse and a hybrid request go to the cloud, once with a simulated signal and once with the real `downloadable` state. **D** after a device failure there is exactly one cloud request. **E** every cloud request carries an App Check header. **F** offline, Nano answers in 1.0 s, and a cloud-only task is refused with 0 requests sent. **G** reconnecting restores the cloud (`gemini-3.8-flash`, 2.6 s). **H** an AI-step check ran 5 of 5 tests on Nano | [`web-matrix-2026-11-26.json`](docs/evidence/web-matrix-2026-11-26.json), from `node scripts/verify-firebase-ai.mjs --web-matrix` |
+| The same paths inside the running app | A template build made no cloud request. A medium and a complex request were compiled by `gemini-3.8-flash`, with one repair call on the complex one. Nano filled template parameters and ran a voice command with no cloud request. A forced device failure was followed by one cloud fallback. Offline, a template app built and a cloud-only task was refused with no request sent. Screenshots show each source on the Activity page | [`web-hybrid-2026-11-26/`](docs/evidence/web-hybrid-2026-11-26) |
+| Device benchmarks, Gemini Nano in Chrome | Voice commands **ready** (21 of 23). Classify, summarize and translate **failed** their gates, and the cloud model on the same cases scored higher, for example 18 of 20 on summarize | `local-ready-*-web-2026-11-26.json`, `provider-*-cloud-2026-11-26.json` |
+| Cloud compiler quality | A 75-case golden set run live: of 42 cases routed to the cloud, 32 were valid on the first pass and 39 after the single repair pass. 25 synthetic photographs of the golden sketches were sent as image parts, and 18 of 25 apps built valid. Valid is not the same as correct | [`live-eval-2026-11-25.json`](docs/evidence/live-eval-2026-11-25.json) |
+| Video as keyframes | Five video cases, with stills standing in for frames of a recorded video, were built through the real pipeline and the cloud model: 5 of 5 valid, 4 on the first pass | [`video-live-2026-11-26.json`](docs/evidence/video-live-2026-11-26.json) |
+| Audio to text in the cloud | A WAV of one spoken sentence came back as text through the transcribe service in 3.9 s | [`audio-transcribe-2026-11-26.json`](docs/evidence/audio-transcribe-2026-11-26.json) |
+| Templates, no model | 20 of 20 template cases valid | [`benchmark-categories-2026-11-26.json`](docs/evidence/benchmark-categories-2026-11-26.json) |
+
+**Not verified.** The list is short and plain:
+
+- Gemini Nano was only seen answering in desktop Chrome. The Android (`kalam-nano`) and iOS (`kalam-apple`) adapters are written and covered by unit tests and CI smoke flows, and this README does not claim a recorded on-device answer from a phone.
+- Play Integrity, App Attest, and the production reCAPTCHA Enterprise path in a real browser have no recorded run, and enforcement for AI Logic is off in the development project.
+- The `create_simple_app` local attempt and the extract, patch and template-parameter tasks have no device benchmark, so they are unproven.
+- Transcribing a recording is not wired into the app screens.
+- No Remote Config template is claimed to be published in the project, so the recorded runs used the in-code model defaults.
+- Sketch results come from synthetic photographs, not hand-drawn ones, and the video run used stills, not a decoded video file.
+
+To run the checks yourself, see [Check the hybrid path by hand](#check-the-hybrid-path-by-hand).
 
 ## Features
 
