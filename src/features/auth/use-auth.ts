@@ -21,7 +21,9 @@ export function useAuthUser(): { user: KalamUser | null; restoring: boolean; con
     return () => { alive = false; clearTimeout(giveUp); };
   }, [auth]);
   const configured = auth.isConfigured();
-  return { user, restoring: configured && restoring, configured };
+  // A saved sign-in is trusted at once (see AuthCache), so a known account never waits on Firebase's session check.
+  const known = !!user && !user.isAnonymous;
+  return { user, restoring: configured && restoring && !known, configured };
 }
 
 /** Name shown on shared apps: never the email address (docs/12 §13.4). */

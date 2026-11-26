@@ -9,7 +9,7 @@ import * as firebaseAuth from 'firebase/auth';
 import { getAuth, initializeAuth, type Auth, type Persistence } from 'firebase/auth';
 import type { AuthService } from '@/core/contracts';
 import { getFirebaseApp } from './app';
-import { createAuthService } from './auth-core';
+import { createAuthCache, createAuthService } from './auth-core';
 import { nativeGoogle, nativeGoogleSignOut } from './auth-google';
 
 // Exported only by the React Native build of firebase/auth, so it is not in the default typings.
@@ -23,6 +23,7 @@ let instance: Auth | undefined;
 export function getAuthService(): AuthService {
   if (service) return service;
   const core = createAuthService({
+    cache: createAuthCache(() => AsyncStorage),
     getAuth: () => {
       if (instance) return instance;
       const app = getFirebaseApp();

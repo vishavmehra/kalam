@@ -29,7 +29,7 @@ import { useSettingsStore } from '@/state/settings-store';
 
 import { AppCard } from './AppCard';
 import { AppDetailsSheet, RenameSheet } from './AppSheets';
-import { shelfView } from './model';
+import { shelfTitleStyle, shelfView } from './model';
 import { shelfSentences } from './read-aloud';
 import { ShelfReadAloud } from './ShelfReadAloud';
 import { shelfRoutes } from './routes';
@@ -171,7 +171,7 @@ export function ShelfScreen() {
         <View style={{ flexDirection: hasRail ? 'row' : 'column', alignItems: hasRail ? 'flex-end' : 'stretch', gap: 16, marginBottom: 28 }}>
           <View style={{ flex: hasRail ? 1 : undefined, gap: 4 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <Text variant="h1">{t('shelf.title')}</Text>
+              <Text variant="h1" style={shelfTitleStyle}>{t('shelf.title')}</Text>
               {/* Phones keep the shelf tools as icons beside the title, so a whole register still shows above the tab bar. */}
               {isPhone ? (
                 <View style={{ flexDirection: 'row', marginEnd: -8 }}>

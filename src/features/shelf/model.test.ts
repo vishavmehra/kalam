@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StoredApp } from '@/core/contracts';
-import { shelfView } from './model';
+import { shelfTitleStyle, shelfView } from './model';
 
 const app = (id: string, name: string, extra: Partial<StoredApp> = {}): StoredApp => ({
   id, createdAt: 1, updatedAt: 1, origin: { route: 'manual' },
@@ -35,5 +35,12 @@ describe('shelfView', () => {
     const before = apps.map((a) => a.id);
     shelfView(apps, { ...all, sort: 'name' });
     expect(apps.map((a) => a.id)).toEqual(before);
+  });
+});
+
+describe('shelfTitleStyle', () => {
+  it('lets the row decide the width, so a stale measured width can never cut "Your shelf" to "Your"', () => {
+    expect(shelfTitleStyle).toEqual({ flex: 1 });
+    for (const fixed of ['width', 'minWidth', 'maxWidth', 'height', 'maxHeight']) expect(shelfTitleStyle).not.toHaveProperty(fixed);
   });
 });

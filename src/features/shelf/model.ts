@@ -20,3 +20,11 @@ export function shelfView(apps: readonly StoredApp[], { query, sort, category, a
   if (sort === 'recent') return found;
   return [...found].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || a.spec.name.localeCompare(b.spec.name));
 }
+
+/**
+ * Style of the shelf title, which sits in a row with the phone's tool icons. It takes the row's leftover width
+ * instead of the width its text was first measured at: Android can measure the heading before its font is in, wrap
+ * the last word onto a second line that the stale one-line height then clips, and show only "Your" after a tab switch.
+ * With a width the row decides, the heading wraps and grows in height when it must, and is never cut.
+ */
+export const shelfTitleStyle = { flex: 1 } as const;

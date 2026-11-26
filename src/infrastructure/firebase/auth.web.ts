@@ -4,7 +4,7 @@ import {
 } from 'firebase/auth';
 import type { AuthService } from '@/core/contracts';
 import { getFirebaseApp } from './app';
-import { authErrorCode, createAuthService } from './auth-core';
+import { authErrorCode, createAuthCache, createAuthService } from './auth-core';
 
 let service: AuthService | undefined;
 let instance: Auth | undefined;
@@ -12,6 +12,7 @@ let instance: Auth | undefined;
 export function getAuthService(): AuthService {
   if (service) return service;
   service = createAuthService({
+    cache: createAuthCache(() => globalThis.localStorage),
     getAuth: () => {
       if (instance) return instance;
       const app = getFirebaseApp();

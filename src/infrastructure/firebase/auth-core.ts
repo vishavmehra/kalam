@@ -71,11 +71,71 @@ export function authErrorCode(e: unknown): AuthErrorCode {
 
 export const fail = (code: AuthErrorCode): AuthResult => ({ ok: false, errorCode: code, message: AUTH_MESSAGES[code] });
 
+/**
+ * The last signed-in account, kept on this device beside Firebase's own saved session. Firebase restores that
+ * session only after a network check (reload of the user), which hangs for about 30 seconds offline. Reading this
+ * copy needs no network, so a person who already signed in is let in at once. It is a hint for what to show,
+ * never proof of identity: servers still see only the real Firebase token, and Firebase's answer replaces it.
+ */
+export interface AuthCache {
+  /** Sync on the web (localStorage), async on devices (AsyncStorage). Never throws. */
+  read: () => KalamUser | null | Promise<KalamUser | null>;
+  /** Saves the signed-in account; null (signed out, guest or unknown) clears it. */
+  write: (u: KalamUser | null) => void;
+}
+
+export interface KeyValueStore {
+  getItem(key: string): string | null | Promise<string | null>;
+  setItem(key: string, value: string): unknown;
+  removeItem(key: string): unknown;
+}
+
+const CACHE_KEY = 'kalam.auth.last-user.v1';
+const text = (v: unknown) => (typeof v === 'string' ? v.slice(0, 320) : null);
+
+/** The stored text is untrusted: anything that is not a plain signed-in account is dropped. */
+export function parseCachedUser(raw: string | null): KalamUser | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as Partial<KalamUser> | null;
+    if (!v || typeof v.uid !== 'string' || !v.uid || v.uid.length > 128 || v.isAnonymous !== false) return null;
+    const providers = Array.isArray(v.providers) ? v.providers.filter((p): p is string => typeof p === 'string').slice(0, 8) : [];
+    return { uid: v.uid, isAnonymous: false, displayName: text(v.displayName), email: text(v.email), providers };
+  } catch {
+    return null;
+  }
+}
+
+export function createAuthCache(store: () => KeyValueStore | undefined): AuthCache {
+  const kv = () => { try { return store(); } catch { return undefined; } };
+  return {
+    read() {
+      try {
+        const raw = kv()?.getItem(CACHE_KEY);
+        return raw && typeof raw === 'object' ? raw.then(parseCachedUser, () => null) : parseCachedUser(raw ?? null);
+      } catch {
+        return null;
+      }
+    },
+    write(u) {
+      try {
+        const s = kv();
+        const done = u && !u.isAnonymous ? s?.setItem(CACHE_KEY, JSON.stringify(u)) : s?.removeItem(CACHE_KEY);
+        if (done && typeof (done as Promise<unknown>).catch === 'function') (done as Promise<unknown>).catch(() => undefined);
+      } catch {
+        /* a full or blocked store only means the next offline start waits for Firebase */
+      }
+    },
+  };
+}
+
 export interface AuthCoreOptions {
   /** Lazily creates the Auth instance (undefined when Firebase is not configured). */
   getAuth: () => Auth | undefined;
   /** Platform Google sign-in. Receives the saved anonymous user from an older build to link when present. */
   google?: (auth: Auth, guest: User | null) => Promise<User>;
+  /** Last signed-in account, so the app opens offline without waiting for Firebase to restore its session. */
+  cache?: AuthCache;
 }
 
 export function createAuthService(opts: AuthCoreOptions): AuthService {
@@ -88,7 +148,20 @@ export function createAuthService(opts: AuthCoreOptions): AuthService {
 
   const emit = (u: User | null) => {
     current = toKalamUser(u);
+    opts.cache?.write(current);
     for (const l of listeners) l(current);
+  };
+
+  /** Trusts the saved sign-in until Firebase answers (its answer, user or none, always wins). */
+  const adopt = (u: KalamUser | null) => {
+    if (!u || restored || current) return;
+    current = u;
+    for (const l of listeners) l(current);
+  };
+  const seedFromCache = () => {
+    const saved = opts.cache?.read();
+    if (saved && 'then' in saved) saved.then(adopt, () => undefined); // not instanceof: React Native may polyfill Promise
+    else adopt(saved ?? null);
   };
 
   /** Starts listening the first time anyone asks; Firebase stays untouched until then. */
@@ -96,6 +169,7 @@ export function createAuthService(opts: AuthCoreOptions): AuthService {
     const a = opts.getAuth();
     if (a && !wired) {
       wired = true;
+      seedFromCache();
       onAuthStateChanged(a, (u) => {
         emit(u);
         if (!restored) { restored = true; resolveReady(); }
@@ -160,6 +234,7 @@ export function createAuthService(opts: AuthCoreOptions): AuthService {
       }),
     async signOut() {
       const a = auth();
+      opts.cache?.write(null); // forgotten at once, so a reload right after signing out cannot open the app
       if (a) await fbSignOut(a);
     },
   };
