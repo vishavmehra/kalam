@@ -4,8 +4,19 @@
 appId: com.kalam.app
 name: Create from the example template
 ---
+# Starts from a fresh launch (one screen in the navigation stack), so a rerun begins in the same place. On iOS the Make
+# tap after onboarding's navigation did nothing in some runs (2026-11-27).
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Your shelf.*"
+    timeout: 120000
+- waitForAnimationToEnd:
+    timeout: 5000
 # The Create tab is called "Make" in the shell (shell.make).
-- tapOn: "Make"
+- tapOn:
+    text: "Make"
+    retryTapIfNoChange: true
 - extendedWaitUntil:
     visible: "Describe the app you want to create.*"
     timeout: 30000
