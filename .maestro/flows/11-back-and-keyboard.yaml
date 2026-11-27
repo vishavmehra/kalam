@@ -12,10 +12,11 @@ name: Back, keyboard and safe areas
 - takeScreenshot: 23-edges-shelf
 - tapOn: "(Create|Make)"
 # Make opens on the input tab used last (it is kept with the draft, so an earlier flow can leave Draw open): choose Type.
+# With text in the draft the tab is named "Type, has input", and iOS exposes only that name.
 - extendedWaitUntil:
-    visible: "Type"
+    visible: "Type(, .*)?"
     timeout: 30000
-- tapOn: "Type"
+- tapOn: "Type(, .*)?"
 - extendedWaitUntil:
     visible: "Describe the app you want to create.*"
     timeout: 30000
