@@ -113,7 +113,7 @@ export function AISection({ settings, set }: { settings: KalamSettings; set: Upd
         <ShareViewsRow />
       </Section>
 
-      <Section title={t('settings.ai.onDevice')} description={t(ios ? 'settings.ai.onDeviceIntroIos' : 'settings.ai.onDeviceIntro')}>
+      <Section title={t('settings.ai.onDevice')} description={t(ios ? 'settings.ai.onDeviceIntroIos' : 'settings.ai.onDeviceIntro')} testID="settings-on-device-ai">
         <StatusRow
           label={t('settings.ai.status')}
           value={error ? t('settings.ai.checkFailed') : od.label}

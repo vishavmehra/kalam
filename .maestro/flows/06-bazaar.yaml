@@ -3,7 +3,15 @@
 appId: com.kalam.app
 name: Bazaar
 ---
-- tapOn: "Bazaar"
+# Starts from a fresh launch, so a second run (the workflow reruns a failed flow once) begins in the same place.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Your shelf.*"
+    timeout: 120000
+- tapOn:
+    text: "Bazaar"
+    retryTapIfNoChange: true
 - extendedWaitUntil:
     visible: "Kalam Bazaar.*"
     timeout: 30000

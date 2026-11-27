@@ -2,16 +2,28 @@
 appId: com.kalam.app
 name: Settings
 ---
-- tapOn: "Settings"
+# Starts from a fresh launch, so a second run (the workflow reruns a failed flow once) begins in the same place.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Your shelf.*"
+    timeout: 120000
+- tapOn:
+    text: "Settings"
+    retryTapIfNoChange: true
 - extendedWaitUntil:
     visible: "(AI and privacy|Access modes).*"
     timeout: 15000
 - takeScreenshot: 10-settings
 - runFlow: ../common/pause.yaml
+# The section by its test id, half on screen is enough: on iOS the page stops with the section's foot behind the tab
+# bar, and the heading text was sometimes missing from the iOS accessibility tree there (2026-11-27).
 - scrollUntilVisible:
-    element: "On-device AI.*"
+    element:
+      id: settings-on-device-ai
     direction: DOWN
     timeout: 30000
+    visibilityPercentage: 50
 - takeScreenshot: 11-settings-on-device-ai
 - runFlow: ../common/pause.yaml
 - runFlow: ../common/pause.yaml
