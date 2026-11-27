@@ -10,7 +10,7 @@ Kalam is an app that makes apps. Type a few lines, photograph a paper sketch, sa
 
 [![Firebase AI Logic](https://img.shields.io/badge/Firebase-AI%20Logic-1C1917?logo=firebase&logoColor=FFCA28)](#where-the-firebase-ai-logic-code-lives) [![Gemini Nano](https://img.shields.io/badge/Gemini%20Nano-on%20device-F2A541?logo=googlegemini&logoColor=1C1917)](#where-the-on-device-model-runs) [![Expo SDK 58](https://img.shields.io/badge/Expo-SDK%2058-1C1917?logo=expo&logoColor=white)](#set-it-up) [![Platforms: Web, Android, iOS](https://img.shields.io/badge/platforms-Web%20%7C%20Android%20%7C%20iOS-B8432C)](#platforms) [![MCP server](https://img.shields.io/badge/MCP-server-1C1917?logo=modelcontextprotocol&logoColor=white)](#mcp-server) [![License: MIT](https://img.shields.io/badge/license-MIT-2ea44f.svg)](LICENSE)
 
-[**Live demo**](https://kalam-hybrid.web.app) · [**Try it now**](#try-it-now) · [**How Kalam uses Firebase AI Logic**](#how-kalam-uses-firebase-ai-logic) · [**Download**](#download) · [How it works](#how-kalam-works) · [Hybrid AI](#hybrid-ai) · [Screenshots](#screenshots) · [Architecture](#architecture) · [Set it up](#set-it-up) · [Privacy and security](#privacy-and-security)
+[**Live demo**](https://kalam-hybrid.web.app) · [**Watch**](#watch) · [**Try it now**](#try-it-now) · [**How Kalam uses Firebase AI Logic**](#how-kalam-uses-firebase-ai-logic) · [**Download**](#download) · [How it works](#how-kalam-works) · [Hybrid AI](#hybrid-ai) · [Screenshots](#screenshots) · [Architecture](#architecture) · [Set it up](#set-it-up) · [Privacy and security](#privacy-and-security)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/hero-dark.webp">
@@ -18,6 +18,15 @@ Kalam is an app that makes apps. Type a few lines, photograph a paper sketch, sa
 </picture>
 
 </div>
+
+## Watch
+
+| Video | Link |
+|---|---|
+| **Demo film** (2:56): the story of Kalam, offline on Android, iOS and the web, hybrid AI with Firebase AI Logic | [youtu.be/haY8Vm5ffis](https://youtu.be/haY8Vm5ffis) |
+| **Full walkthrough** (53:35): every feature end to end, plus the architecture diagrams explained | [youtu.be/JHi_DnExwKo](https://youtu.be/JHi_DnExwKo) |
+
+Want the files? Both videos and their subtitles are in the [videos release](https://github.com/vishavmehra/kalam/releases/tag/videos), ready to download.
 
 ## Try it now
 
