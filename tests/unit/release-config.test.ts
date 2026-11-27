@@ -129,21 +129,22 @@ describe('the release workflow (Android APK and iOS builds on a GitHub Release)'
   });
 });
 
-describe('the mobile smoke workflow (Android emulator and iOS simulator, D04-049, D08-040, D08-054, D09-049, X01-007)', () => {
+describe('the mobile smoke workflow (Android emulator; iOS is built by Release and checked by hand, D04-049, D08-040, D08-054, D09-049, X01-007)', () => {
   const smoke = read('.github/workflows/mobile-smoke.yml');
 
-  it('runs every flow in .maestro/flows on both platforms, so the persistence, offline, drawing and kill flows are covered', () => {
-    expect(smoke).toContain('ios-simulator:');
+  it('runs every flow in .maestro/flows on the Android emulator, so the persistence, offline, drawing and kill flows are covered', () => {
+    // Owner decision 2026-11-27: no iOS job here; release.yml builds iOS for the simulator and as an unsigned device build.
     expect(smoke).toContain('android-emulator:');
-    expect((smoke.match(/for flow in \.maestro\/flows\/\*\.yaml/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect(smoke).not.toContain('ios-simulator:');
+    expect(smoke).toMatch(/for flow in \.maestro\/flows\/\*\.yaml/);
     const flows = readdirSync(join(ROOT, '.maestro/flows')).filter((f) => f.endsWith('.yaml'));
-    for (const prefix of ['01-', '02-', '03-', '04-', '05-', '06-', '07-', '08-', '09-', '10-', '11-']) expect(flows.some((f) => f.startsWith(prefix)), prefix).toBe(true);
+    for (const prefix of ['01-', '02-', '03-', '04-', '05-', '06-', '07-', '08-', '09-', '10-', '11-', '12-']) expect(flows.some((f) => f.startsWith(prefix)), prefix).toBe(true);
   });
 
   it('the flows that save an app open it from the "on your shelf" choice, and use the shell tab name "Make"', () => {
     const create = read('.maestro/flows/02-create-from-template.yaml');
     expect(create).toContain('id: open-saved-app');
-    expect(create).toMatch(/tapOn: "Make"/);
+    expect(create).toMatch(/tapOn:\s*(?:\n\s*text:\s*)?"Make"/);
     expect(read('.maestro/live/ai-built-app.yaml')).toContain('id: open-saved-app');
   });
 });

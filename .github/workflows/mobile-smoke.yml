@@ -1,16 +1,17 @@
-# Mobile smoke test: builds Kalam on free GitHub-hosted runners and walks the main journey with Maestro on an iOS
-# simulator and an Android emulator, so iOS and Android can be checked without a Mac or a phone.
+# Mobile smoke test: builds Kalam's Android release APK on a free GitHub-hosted runner and walks the main journey with
+# Maestro on an Android emulator, so Android can be checked without a phone.
 #
-#   ios-simulator     macOS runner: Expo prebuild, pod install, xcodebuild Release for the iPhone simulator (JS
-#                     bundle embedded), boot a simulator, install, launch, Maestro, screenshots, recordings.
 #   android-emulator  Linux runner with KVM: Expo prebuild, Gradle assembleRelease (signed with the debug key that
 #                     prebuild generates, so it is a test build), Android emulator, Maestro, screenshots, recordings.
+#
+# iOS is not run here (owner decision, 2026-11-27): the iOS simulator build and the unsigned device build come from the
+# Release workflow (release.yml), and the iOS app is checked by hand on the simulator.
 #
 # Flows: every file in .maestro/flows, run in name order in one app session (the first one installs fresh). Each
 # flow gets its own screen recording (one mp4 per flow), so adding or renaming a flow needs no change here.
 #
-# Artifacts per platform: <platform>-screenshots, <platform>-logs, <platform>-demo-recordings, and the built app
-# (ios-simulator-app zip; android-release-apk, which has arm64-v8a and x86_64 code so it also installs on a phone).
+# Artifacts: android-screenshots, android-logs, android-demo-recordings, and android-release-apk (arm64-v8a and x86_64
+# code, so it also installs on a phone).
 #
 # The flows need no cloud AI: they build a deterministic template app on the device. Firebase web config comes from
 # repository variables (not secrets: it ships in every client). No App Check debug token or provider key is used.
@@ -67,151 +68,6 @@ env:
   KALAM_TEST_PASSWORD: ${{ secrets.KALAM_TEST_PASSWORD }}
 
 jobs:
-  ios-simulator:
-    name: iOS simulator
-    # Apple silicon, Xcode 26.6 by default. Expo SDK 58 needs Xcode 26.4 or later.
-    runs-on: macos-26
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-
-      # Booting takes a minute or two, so it runs in the background while the app builds.
-      - name: Pick and boot an iPhone simulator
-        run: |
-          xcodebuild -version
-          mkdir -p "$OUT/screenshots" "$OUT/logs" "$OUT/recordings"
-          pick=$(xcrun simctl list devices available -j | node -e '
-            const d = JSON.parse(require("fs").readFileSync(0, "utf8")).devices;
-            const runtimes = Object.keys(d).filter((k) => k.includes(".iOS-")).sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
-            for (const rt of runtimes) {
-              const phones = d[rt].filter((x) => x.isAvailable && x.name.startsWith("iPhone"));
-              const p = phones.find((x) => x.name === "iPhone 17") ?? phones[0];
-              if (p) { console.log(`${p.udid} ${p.name} (${rt.split(".").pop()})`); break; }
-            }')
-          if [ -z "$pick" ]; then echo "::error::No iPhone simulator is available on this image"; xcrun simctl list devices available; exit 1; fi
-          echo "Simulator: $pick"
-          echo "SIM_UDID=${pick%% *}" >> "$GITHUB_ENV"
-          xcrun simctl boot "${pick%% *}"
-
-      # CI has no iOS Google client id, so the app offers email sign-in there anyway. Linking the GoogleSignIn pods also
-      # breaks the Xcode 26 build ("redefinition of module 'RecaptchaInterop'"), so leave them out of this checkout.
-      - name: Leave out native Google Sign-In on iOS
-        run: |
-          echo "module.exports = { dependencies: { '@react-native-google-signin/google-signin': { platforms: { ios: null } } } };" > react-native.config.js
-          npm pkg set 'expo.autolinking.exclude[0]=@react-native-google-signin/google-signin'
-
-      - name: Generate the native project
-        run: npx expo prebuild --platform ios --clean --no-install
-
-      - name: Install CocoaPods
-        working-directory: ios
-        run: pod install
-
-      - name: Build Release for the simulator
-        run: |
-          ws=$(ls -d ios/*.xcworkspace | head -n 1)
-          scheme=$(basename "$ws" .xcworkspace)
-          # The Expo module scan has a fixed 5 s limit and can miss it on a busy runner; a second build retries it.
-          build() { xcodebuild -workspace "$ws" -scheme "$scheme" -configuration Release -sdk iphonesimulator \
-            -destination "id=$SIM_UDID" -derivedDataPath ios/build \
-            ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build \
-            | tee -a "$OUT/logs/xcodebuild.log" | xcbeautify --renderer github-actions; test "${PIPESTATUS[0]}" -eq 0; }
-          build || build
-          app=$(ls -d ios/build/Build/Products/Release-iphonesimulator/*.app | head -n 1)
-          if [ ! -f "$app/main.jsbundle" ]; then echo "::error::$app has no embedded JS bundle"; exit 1; fi
-          echo "Built $app, JS bundle $(du -h "$app/main.jsbundle" | cut -f1)"
-          echo "APP_PATH=$app" >> "$GITHUB_ENV"
-          echo "BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Info.plist")" >> "$GITHUB_ENV"
-          echo "APP_EXE=$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$app/Info.plist")" >> "$GITHUB_ENV"
-          ditto -c -k --keepParent "$app" "$OUT/Kalam-simulator.app.zip"
-
-      - name: Install Maestro
-        run: |
-          curl -fsSL https://get.maestro.mobile.dev | bash
-          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
-
-      - name: Install, launch and run the flows (recorded)
-        run: |
-          xcrun simctl bootstatus "$SIM_UDID" -b
-          xcrun simctl status_bar "$SIM_UDID" override --time 9:41 --batteryState charged --batteryLevel 100 || true
-          xcrun simctl install "$SIM_UDID" "$APP_PATH"
-          xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
-          sleep 30
-          xcrun simctl io "$SIM_UDID" screenshot "$OUT/screenshots/00-first-launch.png"
-          status=0
-          for flow in .maestro/flows/*.yaml; do
-            name=$(basename "$flow" .yaml)
-            xcrun simctl io "$SIM_UDID" recordVideo --codec=h264 --force "$OUT/recordings/ios-$name.mp4" &
-            rec=$!
-            sleep 2
-            maestro test "$flow" -e KALAM_TEST_EMAIL="$KALAM_TEST_EMAIL" -e KALAM_TEST_PASSWORD="$KALAM_TEST_PASSWORD" --format junit --output "$OUT/logs/maestro-$name.xml" \
-              --test-output-dir "$OUT/maestro" --debug-output "$OUT/maestro-debug/$name" || status=$?
-            # A failed flow runs once more: the iOS simulator now and then drops a tap or loses the Maestro driver
-            # (DeviceUnreachableException), which is not an app failure (2026-11-26). A flow that fails twice stops the run.
-            if [ "$status" != 0 ]; then
-              echo "::warning::Maestro flow $name failed once; running it again"
-              status=0
-              maestro test "$flow" -e KALAM_TEST_EMAIL="$KALAM_TEST_EMAIL" -e KALAM_TEST_PASSWORD="$KALAM_TEST_PASSWORD" --format junit --output "$OUT/logs/maestro-$name.xml" \
-                --test-output-dir "$OUT/maestro" --debug-output "$OUT/maestro-debug/$name" || status=$?
-            fi
-            sleep 1
-            kill -INT "$rec" && wait "$rec" || true
-            if [ "$status" != 0 ]; then
-              echo "::error::Maestro flow $name failed"
-              find "$OUT/maestro-debug/$name" "$OUT/maestro" -name 'step-*.png' ! -name '*demo_pause*' -exec cp {} "$OUT/screenshots/" \; || true
-              break
-            fi
-          done
-          xcrun simctl io "$SIM_UDID" screenshot "$OUT/screenshots/99-final.png" || true
-          find "$OUT/maestro" -name '*.png' ! -name 'step-*' -exec cp {} "$OUT/screenshots/" \; || true
-          ls -l "$OUT/recordings"
-          exit $status
-
-      - name: Collect simulator logs
-        if: always()
-        run: |
-          [ -n "${SIM_UDID:-}" ] || exit 0
-          xcrun simctl spawn "$SIM_UDID" log show --last 60m --style compact \
-            --predicate "process == \"${APP_EXE:-Kalam}\"" > "$OUT/logs/ios-app.log" 2>&1 || true
-          cp ~/Library/Logs/DiagnosticReports/"${APP_EXE:-Kalam}"* "$OUT/logs/" 2>/dev/null || true
-
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: ios-screenshots
-          path: smoke-out/screenshots/
-          if-no-files-found: warn
-          retention-days: 14
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: ios-demo-recordings
-          path: smoke-out/recordings/
-          if-no-files-found: warn
-          retention-days: 14
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: ios-logs
-          path: |
-            smoke-out/logs/
-            smoke-out/maestro-debug/
-            smoke-out/maestro/
-          if-no-files-found: warn
-          retention-days: 14
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: ios-simulator-app
-          path: smoke-out/Kalam-simulator.app.zip
-          if-no-files-found: warn
-          retention-days: 14
-
   android-emulator:
     name: Android emulator
     runs-on: ubuntu-latest
